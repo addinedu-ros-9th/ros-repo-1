@@ -1,0 +1,10 @@
+int32 id
+string title
+string author  
+string publisher
+string category_name
+string location
+float64 price
+int32 stock_quantity
+string isbn
+string cover_image_url

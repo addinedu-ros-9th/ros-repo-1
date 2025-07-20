@@ -1,0 +1,8 @@
+# 요청 (Request)
+string query          # 검색어
+string search_type     # 검색 타입: "title", "author", "publisher"
+---
+# 응답 (Response)
+bool success           # 검색 성공 여부
+string message         # 오류 메시지 (실패 시)
+BookInfo[] books       # 검색된 도서 리스트

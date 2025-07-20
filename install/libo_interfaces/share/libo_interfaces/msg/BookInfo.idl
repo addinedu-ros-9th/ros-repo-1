@@ -1,0 +1,30 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from libo_interfaces/msg/BookInfo.msg
+// generated code does not contain a copyright notice
+
+
+module libo_interfaces {
+  module msg {
+    struct BookInfo {
+      int32 id;
+
+      string title;
+
+      string author;
+
+      string publisher;
+
+      string category_name;
+
+      string location;
+
+      double price;
+
+      int32 stock_quantity;
+
+      string isbn;
+
+      string cover_image_url;
+    };
+  };
+};
