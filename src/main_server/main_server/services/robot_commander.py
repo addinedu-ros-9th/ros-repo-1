@@ -21,8 +21,9 @@ class RobotCommander(Node): # Node 클래스를 상속받아서 우리만의 노
         self.nav.waitUntilNav2Active()
         self.get_logger().info('✅ Nav2 스택이 활성화되었습니다!')
 
-        # 노드가 시작될 때 초기 위치를 설정해줌.
-        # self._set_initial_pose()
+        
+        # self._set_initial_pose() # 노드가 시작될 때 초기 위치를 설정해줌.
+
 
         # AMCL로부터 로봇의 현재 위치를 받아오는 subscriber 생성
         self.create_subscription(
@@ -54,6 +55,10 @@ class RobotCommander(Node): # Node 클래스를 상속받아서 우리만의 노
 
         # --- 3. 피드백 모니터링 루프 ---
         while not self.nav.isTaskComplete(): # 만약 아직 안끝났다면
+            # 이동하는 동안 다른 콜백(예: amcl_callback)이 처리되도록 spin_once를 호출해.
+            # 이렇게 해야 로봇이 움직이는 중에도 현재 위치를 계속 업데이트할 수 있어.
+            rclpy.spin_once(self, timeout_sec=0.1)
+
             feedback = self.nav.getFeedback() # 피드백 ㄱㄱ
             if feedback:
                 self.get_logger().info('남은 거리: {:.2f} 미터.'.format(feedback.distance_remaining))
