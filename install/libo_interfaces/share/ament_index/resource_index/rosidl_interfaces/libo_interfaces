@@ -2,3 +2,5 @@ msg/BookInfo.idl
 msg/BookInfo.msg
 srv/BookSearch.idl
 srv/BookSearch.srv
+srv/Navigate.idl
+srv/Navigate.srv

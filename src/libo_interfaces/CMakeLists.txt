@@ -17,6 +17,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/BookInfo.msg"
   "srv/BookSearch.srv"
+  "srv/Navigate.srv"
   DEPENDENCIES builtin_interfaces
 )
 
