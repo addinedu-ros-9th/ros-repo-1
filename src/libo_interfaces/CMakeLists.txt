@@ -18,6 +18,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/BookInfo.msg"
   "srv/BookSearch.srv"
   "srv/Navigate.srv"
+  "msg/GoalPose.msg"  # 이름 충돌을 피하기 위해 GoalPose.msg로 변경
   DEPENDENCIES builtin_interfaces
 )
 
