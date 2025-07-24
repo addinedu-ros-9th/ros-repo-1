@@ -6,23 +6,20 @@ from libo_interfaces.srv import Navigate
 def main(args=None):
     rclpy.init(args=args)
 
-    # 터미널에서 입력받은 인자가 4개가 아니면 사용법을 알려주고 종료해
-    # (파일이름, x, y, yaw) 이렇게 4개여야 해
-    if len(sys.argv) != 4:
-        print("사용법: ros2 run admin debug_tool <x> <y> <yaw>")
+    if len(sys.argv) != 4: # 터미널에서 입력받은 인자가 4개가 아니면 사용법을 알려주고 종료해
+        print("사용법: ros2 run admin debug_tool <x> <y> <yaw>") # (파일이름, x, y, yaw) 이렇게 4개여야 해
         return
 
-    # 서비스 클라이언트로 사용할 임시 노드를 만들어
-    node = rclpy.create_node('debug_tool_client')
-    # 'navigate' 서비스를 호출할 클라이언트를 생성해
-    client = node.create_client(Navigate, 'navigate')
-
-    # 서비스 서버가 켜질 때까지 1초마다 확인하며 기다려
-    while not client.wait_for_service(timeout_sec=1.0):
+    
+    node = rclpy.create_node('debug_tool_client') # 서비스 클라이언트로 사용할 임시 노드를 만들어
+    
+    client = node.create_client(Navigate, 'navigate') # 'navigate' 서비스를 호출할 클라이언트를 생성해
+    
+    
+    while not client.wait_for_service(timeout_sec=1.0): # 서비스 서버가 켜질 때까지 1초마다 확인하며 기다려
         node.get_logger().info('서비스 연결 대기중... (robot_commander 실행했어?)')
-
-    # 서비스에 보낼 요청 메시지를 만들어
-    request = Navigate.Request()
+    
+    request = Navigate.Request() # 서비스에 보낼 요청 메시지를 만들어
     request.x = float(sys.argv[1]) # 첫 번째 인자를 x 좌표로
     request.y = float(sys.argv[2]) # 두 번째 인자를 y 좌표로
     request.yaw = float(sys.argv[3]) # 세 번째 인자를 yaw 각도로
