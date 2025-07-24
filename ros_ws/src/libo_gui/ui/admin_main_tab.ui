@@ -1,0 +1,709 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWidget</class>
+ <widget class="QWidget" name="MainWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1280</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>LIBO Administrator - Main</string>
+  </property>
+  <property name="styleSheet">
+   <string>QWidget {
+    background-color: #2c3e50;
+    color: white;
+    font-family: Arial;
+}
+
+QFrame {
+    border: 2px solid #34495e;
+    border-radius: 8px;
+    background-color: #34495e;
+}
+
+QPushButton {
+    background-color: #3498db;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-weight: bold;
+    padding: 8px;
+}
+
+QPushButton:hover {
+    background-color: #2980b9;
+}
+
+QPushButton:pressed {
+    background-color: #21618c;
+}
+
+QPushButton#emergency_btn {
+    background-color: #e74c3c;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton#emergency_btn:hover {
+    background-color: #c0392b;
+}
+
+QLabel {
+    color: white;
+    font-size: 12px;
+}
+
+QLabel#title_label {
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    background-color: black;
+    border: 2px solid white;
+    text-align: center;
+    padding: 10px;
+}
+
+QLabel#status_label {
+    font-size: 14px;
+    font-weight: bold;
+    background-color: #2c3e50;
+    border: 2px solid #34495e;
+    padding: 8px;
+}
+
+QLabel#camera_label {
+    background-color: #1a1a1a;
+    border: 2px solid #555555;
+    text-align: center;
+}
+
+QLabel#map_label {
+    background-color: #ffffff;
+    border: 2px solid #34495e;
+}</string>
+  </property>
+  <widget class="QLabel" name="title_label">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>50</y>
+     <width>861</width>
+     <height>50</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>LIBO Administrator</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignCenter</set>
+   </property>
+  </widget>
+  <widget class="QLabel" name="wifi_icon">
+   <property name="geometry">
+    <rect>
+     <x>1090</x>
+     <y>50</y>
+     <width>40</width>
+     <height>40</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string>font-size: 24px;</string>
+   </property>
+   <property name="text">
+    <string>📶</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignCenter</set>
+   </property>
+  </widget>
+  <widget class="QLabel" name="power_icon">
+   <property name="geometry">
+    <rect>
+     <x>1180</x>
+     <y>50</y>
+     <width>40</width>
+     <height>40</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string>font-size: 24px;</string>
+   </property>
+   <property name="text">
+    <string>🔋</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignCenter</set>
+   </property>
+  </widget>
+  <widget class="QProgressBar" name="battery_progress">
+   <property name="geometry">
+    <rect>
+     <x>950</x>
+     <y>70</y>
+     <width>100</width>
+     <height>10</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string>QProgressBar {
+    background-color: #555555;
+    border: 1px solid #333333;
+    border-radius: 5px;
+}
+
+QProgressBar::chunk {
+    background-color: #27ae60;
+    border-radius: 5px;
+}</string>
+   </property>
+   <property name="value">
+    <number>85</number>
+   </property>
+  </widget>
+  <widget class="QFrame" name="capacity_frame">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>260</y>
+     <width>211</width>
+     <height>80</height>
+    </rect>
+   </property>
+   <widget class="QLabel" name="capacity_label">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>191</width>
+      <height>60</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>font-size: 16px; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>carrying capacity: 20 kg</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QFrame" name="robot_status_frame">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>380</y>
+     <width>211</width>
+     <height>200</height>
+    </rect>
+   </property>
+   <widget class="QLabel" name="robot_status_title">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>230</width>
+      <height>30</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>font-size: 16px; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>Robot Status:</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="robot_id_label">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>50</y>
+      <width>80</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Robot ID:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="robot_id_value">
+    <property name="geometry">
+     <rect>
+      <x>100</x>
+      <y>50</y>
+      <width>91</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #3498db; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>Libo_A</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="availability_label">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>80</y>
+      <width>80</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Status:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="availability_value">
+    <property name="geometry">
+     <rect>
+      <x>100</x>
+      <y>80</y>
+      <width>91</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #27ae60; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>Available</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="mode_label">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>110</y>
+      <width>80</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Mode:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="mode_value">
+    <property name="geometry">
+     <rect>
+      <x>100</x>
+      <y>110</y>
+      <width>91</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #f39c12; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>Admin_Mode</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="battery_label">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>140</y>
+      <width>80</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Battery:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="battery_value">
+    <property name="geometry">
+     <rect>
+      <x>100</x>
+      <y>140</y>
+      <width>91</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #27ae60; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>98%</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QLabel" name="map_display">
+   <property name="geometry">
+    <rect>
+     <x>250</x>
+     <y>130</y>
+     <width>651</width>
+     <height>451</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string>background-color: #ecf0f1; color: #2c3e50; font-size: 14px;</string>
+   </property>
+   <property name="text">
+    <string>Navigation Map
+(Map will be displayed here)</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignCenter</set>
+   </property>
+  </widget>
+  <widget class="QFrame" name="front_camera_frame">
+   <property name="geometry">
+    <rect>
+     <x>910</x>
+     <y>130</y>
+     <width>351</width>
+     <height>221</height>
+    </rect>
+   </property>
+   <widget class="QLabel" name="front_camera_title">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>5</y>
+      <width>180</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>font-size: 12px; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>Camera screen (front)</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="front_camera_display">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>30</y>
+      <width>331</width>
+      <height>181</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>background-color: #1a1a1a; color: #ffffff; font-size: 12px;</string>
+    </property>
+    <property name="text">
+     <string>Front Camera
+Feed</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QFrame" name="rear_camera_frame">
+   <property name="geometry">
+    <rect>
+     <x>910</x>
+     <y>360</y>
+     <width>351</width>
+     <height>231</height>
+    </rect>
+   </property>
+   <widget class="QLabel" name="rear_camera_title">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>5</y>
+      <width>180</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>font-size: 12px; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>Camera screen (rear)</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="rear_camera_display">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>30</y>
+      <width>331</width>
+      <height>181</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>background-color: #1a1a1a; color: #ffffff; font-size: 12px;</string>
+    </property>
+    <property name="text">
+     <string>Rear Camera
+Feed</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignCenter</set>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QPushButton" name="emergency_btn">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>130</y>
+     <width>211</width>
+     <height>91</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>emergency stop</string>
+   </property>
+  </widget>
+  <widget class="QFrame" name="waypoint_frame">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>600</y>
+     <width>591</width>
+     <height>120</height>
+    </rect>
+   </property>
+   <widget class="QLabel" name="waypoint_title">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>200</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>font-size: 14px; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>Navigation Waypoints:</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="waypoint_a_btn">
+    <property name="geometry">
+     <rect>
+      <x>50</x>
+      <y>45</y>
+      <width>120</width>
+      <height>40</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Waypoint A</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="waypoint_b_btn">
+    <property name="geometry">
+     <rect>
+      <x>220</x>
+      <y>45</y>
+      <width>120</width>
+      <height>40</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Waypoint B</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="waypoint_c_btn">
+    <property name="geometry">
+     <rect>
+      <x>390</x>
+      <y>45</y>
+      <width>120</width>
+      <height>40</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Waypoint C</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QFrame" name="status_bar_frame">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>730</y>
+     <width>1241</width>
+     <height>50</height>
+    </rect>
+   </property>
+   <widget class="QLabel" name="connection_status">
+    <property name="geometry">
+     <rect>
+      <x>20</x>
+      <y>15</y>
+      <width>200</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #27ae60; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>🟢 Connected to Libo Service</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="robot_connection_status">
+    <property name="geometry">
+     <rect>
+      <x>250</x>
+      <y>15</y>
+      <width>200</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #27ae60; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>🟢 Robot Libo_A Connected</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="timestamp_label">
+    <property name="geometry">
+     <rect>
+      <x>1020</x>
+      <y>15</y>
+      <width>200</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #bdc3c7;</string>
+    </property>
+    <property name="text">
+     <string>Last Update: 2025-01-01 12:00:00</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignRight</set>
+    </property>
+   </widget>
+   <widget class="QLabel" name="robot_connection_status_2">
+    <property name="geometry">
+     <rect>
+      <x>450</x>
+      <y>15</y>
+      <width>200</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #27ae60; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>🟢 Robot Libo_B Connected</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="robot_connection_status_3">
+    <property name="geometry">
+     <rect>
+      <x>660</x>
+      <y>15</y>
+      <width>200</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #27ae60; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>🟢 Robot Libo_C Connected</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QFrame" name="waypoint_frame_2">
+   <property name="geometry">
+    <rect>
+     <x>640</x>
+     <y>600</y>
+     <width>621</width>
+     <height>120</height>
+    </rect>
+   </property>
+   <widget class="QLabel" name="waypoint_title_3">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>200</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>font-size: 14px; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>Select Robot:</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="select_robot_a">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>50</y>
+      <width>181</width>
+      <height>40</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>background-color: #8e44ad; font-size: 14px;</string>
+    </property>
+    <property name="text">
+     <string>Libo_A</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="select_robot_b">
+    <property name="geometry">
+     <rect>
+      <x>230</x>
+      <y>50</y>
+      <width>181</width>
+      <height>40</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>background-color: #8e44ad; font-size: 14px;</string>
+    </property>
+    <property name="text">
+     <string>Libo_B</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="select_robot_c">
+    <property name="geometry">
+     <rect>
+      <x>430</x>
+      <y>50</y>
+      <width>181</width>
+      <height>40</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>background-color: #8e44ad; font-size: 14px;</string>
+    </property>
+    <property name="text">
+     <string>Libo_C</string>
+    </property>
+   </widget>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
