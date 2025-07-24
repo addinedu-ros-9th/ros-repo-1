@@ -5,7 +5,8 @@ import rclpy
 from PyQt5.QtWidgets import QApplication, QWidget
 from PyQt5.QtCore import QTimer
 from PyQt5 import uic
-from libo_interfaces.msg import GoalPose # 우리가 만든 GoalPose 메시지를 임포트해.
+from libo_interfaces.msg import GoalPose # 기존 GoalPose 메시지
+from libo_interfaces.msg import Waypoint # 새로 만든 Waypoint 메시지
 from ament_index_python.packages import get_package_share_directory # 패키지 경로를 찾기 위한 함수를 임포트해.
 
 class DebugToolWindow(QWidget): # QWidget을 상속받는 클래스를 만들어.
@@ -13,6 +14,7 @@ class DebugToolWindow(QWidget): # QWidget을 상속받는 클래스를 만들어
         super().__init__() # 부모 클래스(QWidget)의 초기화 함수를 먼저 호출해.
         self.node = None
         self.publisher = None
+        self.waypoint_publisher = None # 웨이포인트 퍼블리셔를 위한 변수 추가
         self.init_ui() # UI를 초기화하는 함수를 호출해.
         self.init_ros() # ROS2 관련 기능을 초기화하는 함수를 호출해.
         self.setup_connections() # 버튼 클릭 같은 이벤트를 연결하는 함수를 호출해.
@@ -27,6 +29,7 @@ class DebugToolWindow(QWidget): # QWidget을 상속받는 클래스를 만들어
     def init_ros(self):
         self.node = rclpy.create_node('debug_tool_qt_publisher') # 'debug_tool_qt_publisher'라는 이름의 노드를 만들어.
         self.publisher = self.node.create_publisher(GoalPose, '/goal_pose', 10) # '/goal_pose' 토픽에 GoalPose 메시지를 발행할 퍼블리셔를 만들어.
+        self.waypoint_publisher = self.node.create_publisher(Waypoint, '/waypoint_goal', 10) # '/waypoint_goal' 토픽에 Waypoint 메시지를 발행할 퍼블리셔를 만들어.
 
         # QTimer를 사용해서 주기적으로 ROS 이벤트를 처리해. UI가 멈추는 걸 방지하는 가장 좋은 방법이야.
         self.ros_timer = QTimer(self)
@@ -44,6 +47,18 @@ class DebugToolWindow(QWidget): # QWidget을 상속받는 클래스를 만들어
         self.liney.returnPressed.connect(self.on_send_clicked)
         self.lineyaw.returnPressed.connect(self.on_send_clicked)
 
+        # Designer에서 만든 새 버튼들을 send_waypoint 함수와 연결해. (버튼 objectName 확인 필요)
+        self.btnWaypointA1.clicked.connect(lambda: self.send_waypoint("A1"))
+        self.btnWaypointA2.clicked.connect(lambda: self.send_waypoint("A2"))
+        self.btnWaypointB1.clicked.connect(lambda: self.send_waypoint("B1"))
+        self.btnWaypointB2.clicked.connect(lambda: self.send_waypoint("B2"))
+        self.btnWaypointC1.clicked.connect(lambda: self.send_waypoint("C1"))
+        self.btnWaypointC2.clicked.connect(lambda: self.send_waypoint("C2"))
+        self.btnWaypointD1.clicked.connect(lambda: self.send_waypoint("D1"))
+        self.btnWaypointD2.clicked.connect(lambda: self.send_waypoint("D2"))
+        self.btnWaypointBase.clicked.connect(lambda: self.send_waypoint("Base"))
+        self.btnWaypointReception.clicked.connect(lambda: self.send_waypoint("reception"))
+
     def on_send_clicked(self):
         try:
             x_val = round(float(self.linex.text()), 1) # 입력값을 float으로 바꾸고, 소수점 첫째 자리에서 반올림해.
@@ -60,6 +75,13 @@ class DebugToolWindow(QWidget): # QWidget을 상속받는 클래스를 만들어
 
         self.publisher.publish(msg) # 만들어진 메시지를 토픽으로 발행(publish)해.
         self.log.append(f"➡️ 토픽 발행: x={msg.x:.1f}, y={msg.y:.1f}, yaw={msg.yaw:.1f}") # 로그 창에 발행 정보를 표시해.
+
+    def send_waypoint(self, waypoint_id):
+        msg = Waypoint() # Waypoint 메시지 객체를 만들어.
+        msg.waypoint_id = waypoint_id # 전달받은 waypoint_id를 메시지에 담아.
+
+        self.waypoint_publisher.publish(msg) # 만들어진 메시지를 토픽으로 발행(publish)해.
+        self.log.append(f"➡️ 웨이포인트 발행: {msg.waypoint_id}") # 로그 창에 발행 정보를 표시해.
 
     def closeEvent(self, event):
         self.log.append("디버깅 툴 종료 중...")
