@@ -6,6 +6,7 @@ from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped # 메시지
 from rclpy.duration import Duration # 시간 관련 클래스
 from libo_interfaces.srv import Navigate as NavigateSrv # 서비스 임포트
 from libo_interfaces.msg import GoalPose # 이름이 변경된 GoalPose 메시지를 임포트
+from libo_interfaces.msg import Waypoint # 새로 만든 Waypoint 메시지를 임포트
 import math  # 수학 함수 사용을 위한 모듈
 import tf_transformations  # 오일러 → 쿼터니언 변환용 모듈
 import threading # 스레딩 라이브러리 임포트
@@ -46,6 +47,14 @@ class RobotCommander(BasicNavigator): # Node 대신 BasicNavigator를 직접 상
             self.goal_pose_callback,
             10)
         self.get_logger().info("'/goal_pose' 토픽 구독 시작")
+
+        # '/waypoint_goal' 토픽을 구독하는 subscriber 생성
+        self.waypoint_subscription = self.create_subscription(
+            Waypoint,
+            '/waypoint_goal',
+            self.waypoint_callback,
+            10)
+        self.get_logger().info("'/waypoint_goal' 토픽 구독 시작")
 
     def go_to_pose(self, x, y, yaw_degrees): # 로봇을 움직이게 하는 코드!
         """지정한 좌표로 로봇을 이동시키고, 완료될 때까지 결과를 모니터링하는 함수."""
@@ -131,6 +140,10 @@ class RobotCommander(BasicNavigator): # Node 대신 BasicNavigator를 직접 상
         # 별도의 스레드에서 실행해.
         nav_thread = threading.Thread(target=self.go_to_pose, args=(msg.x, msg.y, msg.yaw))
         nav_thread.start()
+
+    def waypoint_callback(self, msg): # 웨이포인트 토픽 메시지를 받았을 때 실행되는 콜백
+        """'/waypoint_goal' 토픽을 구독하여 받은 waypoint_id를 출력하는 콜백 함수"""
+        self.get_logger().info(f"웨이포인트 토픽 받음: ID='{msg.waypoint_id}'")
 
     def _set_initial_pose(self): #로봇의 시작 위치를 설정해줌~
         """로봇의 초기 위치(initial pose)를 설정하는 함수. RViz2에서 2D Pose Estimate를 클릭하는 것과 같다."""
