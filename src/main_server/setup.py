@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'book_search_service = main_server.services.book_search_service:main',
+            'robot_commander = main_server.services.robot_commander:main',
         ],
     },
 )
