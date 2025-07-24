@@ -1,13 +1,13 @@
 // generated from rosidl_generator_c/resource/idl__type_support.c.em
-// with input from libo_interfaces:srv/BookSearch.idl
+// with input from libo_interfaces:srv/Navigate.idl
 // generated code does not contain a copyright notice
 
 #include <string.h>
 
-#include "libo_interfaces/srv/detail/book_search__type_support.h"
-#include "libo_interfaces/srv/detail/book_search__struct.h"
+#include "libo_interfaces/srv/detail/navigate__functions.h"
 #include "rosidl_typesupport_interface/macros.h"
-#include "libo_interfaces/srv/detail/book_search__functions.h"
+#include "libo_interfaces/srv/detail/navigate__struct.h"
+#include "libo_interfaces/srv/detail/navigate__type_support.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -20,7 +20,7 @@ ROSIDL_TYPESUPPORT_INTERFACE__SERVICE_CREATE_EVENT_MESSAGE_SYMBOL_NAME(
   rosidl_typesupport_c,
   libo_interfaces,
   srv,
-  BookSearch
+  Navigate
 )(
   const rosidl_service_introspection_info_t * info,
   rcutils_allocator_t * allocator,
@@ -30,8 +30,8 @@ ROSIDL_TYPESUPPORT_INTERFACE__SERVICE_CREATE_EVENT_MESSAGE_SYMBOL_NAME(
   if (!allocator || !info) {
     return NULL;
   }
-  libo_interfaces__srv__BookSearch_Event * event_msg = (libo_interfaces__srv__BookSearch_Event *)(allocator->allocate(sizeof(libo_interfaces__srv__BookSearch_Event), allocator->state));
-  if (!libo_interfaces__srv__BookSearch_Event__init(event_msg)) {
+  libo_interfaces__srv__Navigate_Event * event_msg = (libo_interfaces__srv__Navigate_Event *)(allocator->allocate(sizeof(libo_interfaces__srv__Navigate_Event), allocator->state));
+  if (!libo_interfaces__srv__Navigate_Event__init(event_msg)) {
     allocator->deallocate(event_msg, allocator->state);
     return NULL;
   }
@@ -42,19 +42,19 @@ ROSIDL_TYPESUPPORT_INTERFACE__SERVICE_CREATE_EVENT_MESSAGE_SYMBOL_NAME(
   event_msg->info.stamp.nanosec = info->stamp_nanosec;
   memcpy(event_msg->info.client_gid, info->client_gid, 16);
   if (request_message) {
-    libo_interfaces__srv__BookSearch_Request__Sequence__init(
+    libo_interfaces__srv__Navigate_Request__Sequence__init(
       &event_msg->request,
       1);
-    if (!libo_interfaces__srv__BookSearch_Request__copy((const libo_interfaces__srv__BookSearch_Request *)(request_message), event_msg->request.data)) {
+    if (!libo_interfaces__srv__Navigate_Request__copy((const libo_interfaces__srv__Navigate_Request *)(request_message), event_msg->request.data)) {
       allocator->deallocate(event_msg, allocator->state);
       return NULL;
     }
   }
   if (response_message) {
-    libo_interfaces__srv__BookSearch_Response__Sequence__init(
+    libo_interfaces__srv__Navigate_Response__Sequence__init(
       &event_msg->response,
       1);
-    if (!libo_interfaces__srv__BookSearch_Response__copy((const libo_interfaces__srv__BookSearch_Response *)(response_message), event_msg->response.data)) {
+    if (!libo_interfaces__srv__Navigate_Response__copy((const libo_interfaces__srv__Navigate_Response *)(response_message), event_msg->response.data)) {
       allocator->deallocate(event_msg, allocator->state);
       return NULL;
     }
@@ -68,7 +68,7 @@ ROSIDL_TYPESUPPORT_INTERFACE__SERVICE_DESTROY_EVENT_MESSAGE_SYMBOL_NAME(
   rosidl_typesupport_c,
   libo_interfaces,
   srv,
-  BookSearch
+  Navigate
 )(
   void * event_msg,
   rcutils_allocator_t * allocator)
@@ -79,9 +79,9 @@ ROSIDL_TYPESUPPORT_INTERFACE__SERVICE_DESTROY_EVENT_MESSAGE_SYMBOL_NAME(
   if (NULL == event_msg) {
     return false;
   }
-  libo_interfaces__srv__BookSearch_Event * _event_msg = (libo_interfaces__srv__BookSearch_Event *)(event_msg);
+  libo_interfaces__srv__Navigate_Event * _event_msg = (libo_interfaces__srv__Navigate_Event *)(event_msg);
 
-  libo_interfaces__srv__BookSearch_Event__fini((libo_interfaces__srv__BookSearch_Event *)(_event_msg));
+  libo_interfaces__srv__Navigate_Event__fini((libo_interfaces__srv__Navigate_Event *)(_event_msg));
   if (_event_msg->request.data) {
     allocator->deallocate(_event_msg->request.data, allocator->state);
   }

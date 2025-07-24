@@ -77,8 +77,11 @@ class MainWindow(QMainWindow):
             self.book_search_widget.hide()
         self.show()
 
-if __name__ == "__main__":
+def main(args=None):
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
     sys.exit(app.exec_())
+
+if __name__ == "__main__":
+    main()

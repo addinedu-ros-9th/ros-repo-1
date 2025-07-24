@@ -4,10 +4,10 @@
 
 #include <string.h>
 
-#include "libo_interfaces/msg/detail/book_info__struct.h"
 #include "libo_interfaces/msg/detail/book_info__type_support.h"
-#include "libo_interfaces/msg/detail/book_info__functions.h"
 #include "rosidl_typesupport_interface/macros.h"
+#include "libo_interfaces/msg/detail/book_info__struct.h"
+#include "libo_interfaces/msg/detail/book_info__functions.h"
 
 #ifdef __cplusplus
 extern "C"

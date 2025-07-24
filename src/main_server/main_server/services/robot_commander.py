@@ -5,8 +5,10 @@ from rclpy.node import Node # ROS 2 노드 클래스
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped # 메시지 타입 임포트
 from rclpy.duration import Duration # 시간 관련 클래스
+from libo_interfaces.srv import Navigate # 우리가 만든 서비스 임포트
 import math  # 수학 함수 사용을 위한 모듈
 import tf_transformations  # 오일러 → 쿼터니언 변환용 모듈
+import threading # 스레딩 라이브러리 임포트
 
 class RobotCommander(Node): # Node 클래스를 상속받아서 우리만의 노드 클래스를 만들어
     def __init__(self):
@@ -32,6 +34,9 @@ class RobotCommander(Node): # Node 클래스를 상속받아서 우리만의 노
             self.amcl_callback,
             10
         )
+        
+        # 'navigate' 라는 이름으로 Navigate 서비스를 생성
+        self.srv = self.create_service(Navigate, 'navigate', self.navigate_callback)
 
     def go_to_pose(self, x, y, yaw_degrees): # 로봇을 움직이게 하는 코드!
         """지정한 좌표로 로봇을 이동시키고, 완료될 때까지 결과를 모니터링하는 함수."""
@@ -77,6 +82,20 @@ class RobotCommander(Node): # Node 클래스를 상속받아서 우리만의 노
         elif result == TaskResult.FAILED:
             self.get_logger().error('❌ 목표 지점 도착 실패!')
 
+    def navigate_callback(self, request, response): # 명령 srv 메세지 받으면 실행
+        """'navigate' 서비스 요청을 받았을 때 실행되는 콜백 함수"""
+        self.get_logger().info(f"서비스 요청 받음: X={request.x}, Y={request.y}, Yaw={request.yaw}")
+
+        # go_to_pose 함수는 완료될 때까지 시간이 걸리므로(blocking),
+        # 서비스 콜백이 멈추지 않도록 별도의 스레드에서 실행합니다.
+        nav_thread = threading.Thread(target=self.go_to_pose, args=(request.x, request.y, request.yaw))
+        nav_thread.start()
+
+        # 클라이언트에게는 일단 명령을 잘 받았다고 즉시 응답합니다.
+        response.success = True
+        response.message = "Navigation 명령 잘 받았고 시작됨!"
+        return response
+
     def _set_initial_pose(self): #로봇의 시작 위치를 설정해줌~
         """로봇의 초기 위치(initial pose)를 설정하는 함수. RViz2에서 2D Pose Estimate를 클릭하는 것과 같다."""
         self.get_logger().info('로봇의 초기 위치를 설정합니다...')
@@ -117,12 +136,6 @@ def main(args=None):
     
     robot_commander_node = RobotCommander() # 우리가 만든 RobotCommander 클래스의 인스턴스를 생성해
 
-    # --- 테스트를 위해 go_to_pose 함수를 직접 호출 ---
-    # 이 노드를 실행하면 로봇이 (0.0, 1.0) 좌표로 이동을 시작할 거야.
-    # 나중에는 이 부분을 서비스나 액션 콜백 안에서 호출하게 될 거야.
-    robot_commander_node.go_to_pose(x=0.0, y=-1.0, yaw_degrees=0.0)
-    # ---------------------------------------------
-    
     try:
         rclpy.spin(robot_commander_node) # 노드가 종료될 때까지 (Ctrl+C) 계속 실행하면서 콜백을 처리해
     except KeyboardInterrupt:

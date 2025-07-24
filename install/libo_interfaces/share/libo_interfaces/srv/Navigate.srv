@@ -1,0 +1,8 @@
+# 요청 (Request): 클라이언트가 서버에게 보내는 데이터
+float32 x     # 목표 x 좌표
+float32 y     # 목표 y 좌표
+float32 yaw   # 목표 yaw 각도 (방향)
+---
+# 응답 (Response): 서버가 클라이언트에게 보내는 결과
+bool success  # 성공 여부
+string message # 결과 메시지
