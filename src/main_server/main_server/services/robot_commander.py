@@ -25,6 +25,21 @@ class RobotCommander(BasicNavigator): # Node 대신 BasicNavigator를 직접 상
         self.waitUntilNav2Active() # self.nav. 대신 self. 사용
         self.get_logger().info('✅ Nav2 스택이 활성화되었습니다!')
 
+        # 웨이포인트 이름과 실제 (x, y, yaw) 좌표를 매핑하는 딕셔너리
+        self.waypoints = {
+            'A1': (1.5, 1.0, 0.0),
+            'A2': (-1.5, 1.0, 0.0),
+            'B1': (0.0, 1.0, 90.0),
+            'B2': (1.5, -1.0, 90.0),
+            'C1': (-1.5, -1.0, 180.0),
+            'C2': (-1.5, 2.0, 180.0),
+            'D1': (-1.5, 0.0, -90.0),
+            'D2': (0.0, -0.5, -90.0),
+            'Base': (0.0, 0.0, 0.0),
+            'reception': (1.0, 0.0, 180.0)
+        }
+        self.get_logger().info("웨이포인트 좌표 초기화 완료.")
+
         
         # self._set_initial_pose() # 노드가 시작될 때 초기 위치를 설정해줌.
 
@@ -143,7 +158,23 @@ class RobotCommander(BasicNavigator): # Node 대신 BasicNavigator를 직접 상
 
     def waypoint_callback(self, msg): # 웨이포인트 토픽 메시지를 받았을 때 실행되는 콜백
         """'/waypoint_goal' 토픽을 구독하여 받은 waypoint_id를 출력하는 콜백 함수"""
-        self.get_logger().info(f"웨이포인트 토픽 받음: ID='{msg.waypoint_id}'")
+        waypoint_id = msg.waypoint_id
+        if waypoint_id in self.waypoints:
+            x, y, yaw = self.waypoints[waypoint_id]
+            self.get_logger().info(f"웨이포인트 토픽 받음: ID='{waypoint_id}' -> 좌표: X={x}, Y={y}, Yaw={yaw}")
+
+            # 이미 다른 네비게이션 작업이 진행 중인 경우, 새 명령을 무시해.
+            if self.is_navigating:
+                self.get_logger().warn('이미 다른 네비게이션 작업을 수행중입니다. 웨이포인트 명령을 무시합니다.')
+                return
+
+            # go_to_pose 함수는 완료될 때까지 시간이 걸리므로(blocking),
+            # 별도의 스레드에서 실행해.
+            nav_thread = threading.Thread(target=self.go_to_pose, args=(x, y, yaw))
+            nav_thread.start()
+
+        else:
+            self.get_logger().warn(f"알 수 없는 웨이포인트 ID입니다: '{waypoint_id}'")
 
     def _set_initial_pose(self): #로봇의 시작 위치를 설정해줌~
         """로봇의 초기 위치(initial pose)를 설정하는 함수. RViz2에서 2D Pose Estimate를 클릭하는 것과 같다."""
