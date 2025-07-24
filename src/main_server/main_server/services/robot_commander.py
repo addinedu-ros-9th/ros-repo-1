@@ -1,89 +1,73 @@
-import rclpy # ROS 2 파이썬 클라이언트 라이브러리 임포트
-from rclpy.node import Node # 노드 클래스 임포트
-from rclpy.action import ActionClient # 액션 클라이언트 임포트
-from geometry_msgs.msg import PoseStamped # 목표 위치 메시지 타입 임포트
-from nav2_msgs.action import NavigateToPose # NavigateToPose 액션 타입 임포트
-import time # 시간 관련 라이브러리 임포트
-from transforms3d.euler import euler2quat # yaw (각도)를 쿼터니언으로 변환하기 위한 라이브러리 (pip install transforms3d 필요)
+#!/usr/bin/env python3
 
-class SimpleNavigator(Node):
+
+import rclpy # ROS 2 파이썬 클라이언트 라이브러리
+from rclpy.node import Node # ROS 2 노드 클래스
+from nav2_simple_commander.robot_navigator import BasicNavigator
+from geometry_msgs.msg import PoseStamped
+import math  # 수학 함수 사용을 위한 모듈
+import tf_transformations  # 오일러 → 쿼터니언 변환용 모듈
+
+
+
+
+class RobotCommander(Node): # Node 클래스를 상속받아서 우리만의 노드 클래스를 만들어
     def __init__(self):
-        super().__init__('simple_navigator_client') # 'simple_navigator_client'라는 이름의 ROS 2 노드 생성
-        
-        # NavigateToPose 액션 서버에 연결할 액션 클라이언트 생성
-        self.action_client = ActionClient(
-            self,
-            NavigateToPose,
-            'navigate_to_pose') # 액션 서버의 이름은 'navigate_to_pose'
+        super().__init__('robot_commander') # 'robot_commander'라는 이름으로 노드를 초기화하고, 부모 클래스의 생성자도 호출해
+        self.get_logger().info('🤖 로봇 커맨더 노드가 시작되었습니다.') # 노드가 시작되면 로그를 남겨
 
-        self.get_logger().info('네비게이션 액션 서버를 기다리는 중...') # 정보 메시지 출력
-        self.action_client.wait_for_server() # 액션 서버가 활성화될 때까지 기다려
+        self.nav = BasicNavigator()
 
-        self.get_logger().info('네비게이션 액션 서버 연결 성공!') # 연결 성공 메시지 출력
+        # Nav2 랑 연결되는거 기다리기~ 다 돼면 알림!
+        self.get_logger().info('Nav2 스택 활성화를 기다립니다...')
+        self.nav.waitUntilNav2Active()
+        self.get_logger().info('✅ Nav2 스택이 활성화되었습니다!')
 
-    def send_goal(self, x, y, yaw_degrees):
-        goal_msg = NavigateToPose.Goal() # NavigateToPose 액션의 Goal 메시지 객체 생성
+        # 노드가 시작될 때 초기 위치를 설정해줌.
+        # self._set_initial_pose()
 
-        # 목표 위치 (PoseStamped) 설정
-        goal_msg.pose.header.frame_id = 'map' # 목표 좌표계는 'map' 프레임
-        goal_msg.pose.header.stamp = self.get_clock().now().to_msg() # 현재 시간 스탬프 설정
 
-        goal_msg.pose.pose.position.x = float(x) # 목표 X 좌표
-        goal_msg.pose.pose.position.y = float(y) # 목표 Y 좌표
-        goal_msg.pose.pose.position.z = 0.0 # Z 좌표는 2D 내비게이션에서는 보통 0
+    def _set_initial_pose(self):
+        """로봇의 초기 위치(initial pose)를 설정하는 함수. RViz2에서 2D Pose Estimate를 클릭하는 것과 같다."""
+        self.get_logger().info('로봇의 초기 위치를 설정합니다...')
 
-        # yaw 각도(도 단위)를 쿼터니언으로 변환
-        # 로봇의 방향을 나타내며, Nav2에서 필수적인 정보
-        quat = euler2quat(0, 0, float(yaw_degrees) * (3.141592653589793 / 180.0))
-        goal_msg.pose.pose.orientation.x = quat[1]
-        goal_msg.pose.pose.orientation.y = quat[2]
-        goal_msg.pose.pose.orientation.z = quat[3]
-        goal_msg.pose.pose.orientation.w = quat[0]
+        initial_yaw = 0.0  # 초기 yaw 각도 설정 (단위: 도)
+        q = self.get_quaternion_from_yaw(initial_yaw)  # yaw 각도를 쿼터니언으로 변환
 
-        self.get_logger().info(f'목표를 보냅니다: X={x}, Y={y}, Yaw={yaw_degrees}도') # 목표 전송 메시지 출력
-        
-        self._send_goal_future = self.action_client.send_goal_async(goal_msg) # 목표를 액션 서버로 전송하고 응답을 비동기적으로 기다려
-        
-        self._send_goal_future.add_done_callback(self.goal_response_callback) # 목표 전송 결과를 기다리는 콜백 함수 등록
+        initial_pose = PoseStamped()  # PoseStamped 메시지 생성
+        initial_pose.header.frame_id = 'map'  # 참조 좌표계는 'map'
+        initial_pose.header.stamp = self.nav.get_clock().now().to_msg()  # 현재 시간
+        initial_pose.pose.position.x = 0.0  # 초기 X 좌표
+        initial_pose.pose.position.y = 0.0  # 초기 Y 좌표
+        initial_pose.pose.position.z = 0.0  # 초기 Z 좌표
+        initial_pose.pose.orientation.x = q[0]  # 쿼터니언 X
+        initial_pose.pose.orientation.y = q[1]  # 쿼터니언 Y
+        initial_pose.pose.orientation.z = q[2]  # 쿼터니언 Z
+        initial_pose.pose.orientation.w = q[3]  # 쿼터니언 W
 
-    def goal_response_callback(self, future):
-        goal_handle = future.result() # 목표 핸들 결과 가져오기
-        if not goal_handle.accepted: # 목표가 액션 서버에 의해 수락되지 않았다면
-            self.get_logger().info('목표가 거부되었습니다!') # 거부 메시지 출력
-            return
+        self.nav.setInitialPose(initial_pose)  # 내비게이터에 초기 위치 설정
+        self.get_logger().info('✅ 초기 위치 설정 완료!')
 
-        self.get_logger().info('목표가 수락되었습니다. 피드백을 기다리는 중...') # 수락 메시지 출력
-        # 목표가 수락되었다면, 결과 수신을 위한 퓨처(future)를 생성
-        self._get_result_future = goal_handle.get_result_async()
-        self._get_result_future.add_done_callback(self.get_result_callback) # 결과 콜백 함수 등록
+    def get_quaternion_from_yaw(self, yaw_degrees):  # yaw 각도로부터 쿼터니언 생성
+        yaw_radians = math.radians(yaw_degrees)  # 도(degree)를 라디안(radian)으로 변환
+        quaternion = tf_transformations.quaternion_from_euler(0, 0, yaw_radians)  # Z축 회전만 적용
+        return quaternion  # 쿼터니언 반환
 
-    def get_result_callback(self, future):
-        result = future.result().result # 최종 결과 가져오기
-        status = future.result().status # 결과 상태 가져오기
-        
-        # 최종 결과에 따라 메시지 출력
-        if status == ActionClient.GoalStatus.SUCCEEDED:
-            self.get_logger().info('목표 달성 성공!') # 성공 메시지 출력
-        else:
-            self.get_logger().info(f'목표 달성 실패: {status}') # 실패 메시지 출력
 
 def main(args=None):
-    rclpy.init(args=args) # ROS 2 시스템 초기화
-    navigator = SimpleNavigator() # SimpleNavigator 객체 생성
-
-    # 예시 목표: (X=1.0, Y=0.0) 위치로 0도 방향을 보며 이동
-    # 이 값을 원하는 목표 좌표로 변경해봐
-    navigator.send_goal(x=1.0, y=0.0, yaw_degrees=0.0)
-
-    # ROS 이벤트 루프를 실행하여 콜백 함수들이 호출될 수 있도록 함
-    # 액션이 완료되거나 Ctrl+C로 종료할 때까지 spin
+    rclpy.init(args=args) # ROS 2 시스템을 초기화해
+    
+    robot_commander_node = RobotCommander() # 우리가 만든 RobotCommander 클래스의 인스턴스를 생성해
+    
     try:
-        rclpy.spin(navigator)
+        rclpy.spin(robot_commander_node) # 노드가 종료될 때까지 (Ctrl+C) 계속 실행하면서 콜백을 처리해
     except KeyboardInterrupt:
-        navigator.get_logger().info('사용자에 의해 노드 종료')
+        robot_commander_node.get_logger().info('사용자에 의해 노드가 종료됩니다.') # Ctrl+C로 종료될 때 메시지를 남겨
     finally:
-        navigator.destroy_node()
-        rclpy.shutdown()
+        # 노드와 rclpy 리소스를 깔끔하게 정리해주는 부분
+        robot_commander_node.destroy_node() # 노드를 파괴해서 리소스를 반환해
+        if rclpy.ok(): # rclpy가 아직 실행 중이라면
+            rclpy.shutdown() # ROS 2 시스템을 완전히 종료해
 
-if __name__ == '__main__':
+if __name__ == '__main__': # 이 스크립트가 직접 실행될 때만 main 함수를 호출해
     main()
