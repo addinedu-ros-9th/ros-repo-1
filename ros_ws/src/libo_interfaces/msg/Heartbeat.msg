@@ -1,0 +1,2 @@
+string sender_id
+builtin_interfaces/Time timestamp

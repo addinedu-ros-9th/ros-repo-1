@@ -1,0 +1,5 @@
+string sender_id
+string availability
+string mode
+float32 battery_level
+builtin_interfaces/Time timestamp
