@@ -24,6 +24,7 @@ setup(
     entry_points={
         'console_scripts': [
             'debug_tool = admin.debug_tool:main',
+            'debug_tool_qt = admin.debug_tool_qt:main',
         ],
     },
 )
