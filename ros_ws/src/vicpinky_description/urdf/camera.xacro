@@ -1,0 +1,162 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:property name="M_PI" value="3.1415926535897931" />
+
+  <xacro:macro name="rgbd_camera" params="
+    prefix:='' 
+    camera_name:='camera' 
+    parent:='base_link' 
+    xyz_offset:='0.1 0 0.645' 
+    rpy_offset:='0 0 0'">
+
+    <!-- Main camera link -->
+    <link name="${prefix}${camera_name}_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://vicpinky_description/meshes/visual/cam_Link.STL" scale="1 1 1"/>
+        </geometry>
+        <material name="camera_material">
+          <color rgba="0.8 0.8 0.8 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.02505 0.090 0.025"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="0.072" />
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <inertia ixx="0.00388" ixy="0.0" ixz="0.0" iyy="0.00049" iyz="0.0" izz="0.00387" />
+      </inertial>
+    </link>
+
+    <!-- Joint connecting camera to parent -->
+    <joint name="${prefix}${camera_name}_joint" type="fixed">
+      <parent link="${prefix}${parent}"/>
+      <child link="${prefix}${camera_name}_link" />
+      <origin xyz="${xyz_offset}" rpy="${rpy_offset}"/>
+    </joint>
+
+    <!-- =========================== -->
+    <!-- DEPTHCLOUD용 프레임 구조 -->
+    <!-- =========================== -->
+    
+    <!-- Depth frame for DepthCloud -->
+    <joint name="${prefix}${camera_name}_depth_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <parent link="${prefix}${camera_name}_link"/>
+      <child link="${prefix}${camera_name}_depth_frame" />
+    </joint>
+    <link name="${prefix}${camera_name}_depth_frame"/>
+
+    <!-- Depth optical frame for DepthCloud - ROS 표준 회전 -->
+    <joint name="${prefix}${camera_name}_depth_optical_joint" type="fixed">
+      <origin xyz="0.03 -0.015 0" rpy="${-M_PI/2} 0 ${-M_PI/2}"/>
+      <parent link="${prefix}${camera_name}_depth_frame"/>
+      <child link="${prefix}${camera_name}_depth_optical_frame" />
+    </joint>
+    <link name="${prefix}${camera_name}_depth_optical_frame"/>
+
+    <!-- Color frame for DepthCloud -->
+    <joint name="${prefix}${camera_name}_color_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <parent link="${prefix}${camera_name}_link"/>
+      <child link="${prefix}${camera_name}_color_frame" />
+    </joint>
+    <link name="${prefix}${camera_name}_color_frame"/>
+
+    <!-- Color optical frame for DepthCloud - ROS 표준 회전 -->
+    <joint name="${prefix}${camera_name}_color_optical_joint" type="fixed">
+      <origin xyz="0.03 0.015 0" rpy="${-M_PI/2} 0 ${-M_PI/2}"/>
+      <parent link="${prefix}${camera_name}_color_frame"/>
+      <child link="${prefix}${camera_name}_color_optical_frame" />
+    </joint>
+    <link name="${prefix}${camera_name}_color_optical_frame"/>
+
+    <!-- =========================== -->
+    <!-- POINTCLOUD2용 별도 프레임 구조 -->
+    <!-- =========================== -->
+    
+    <!-- PointCloud2 전용 베이스 프레임 -->
+    <joint name="${prefix}${camera_name}_pc2_base_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <parent link="${prefix}${camera_name}_link"/>
+      <child link="${prefix}${camera_name}_pc2_base_frame" />
+    </joint>
+    <link name="${prefix}${camera_name}_pc2_base_frame"/>
+
+    <!-- PointCloud2 optical frame - 회전 없음 -->
+    <joint name="${prefix}${camera_name}_pc2_optical_joint" type="fixed">
+      <origin xyz="0.03 -0.015 0" rpy="0 0 0"/>
+      <parent link="${prefix}${camera_name}_pc2_base_frame"/>
+      <child link="${prefix}${camera_name}_pc2_optical_frame" />
+    </joint>
+    <link name="${prefix}${camera_name}_pc2_optical_frame"/>
+
+    <!-- Gazebo sensor configuration -->
+    <gazebo reference="${prefix}${camera_name}_link">
+      <!-- DepthCloud용 센서 (ROS 표준 프레임 사용) -->
+      <sensor name="${prefix}${camera_name}_rgbd_depthcloud" type="rgbd_camera">
+        <always_on>true</always_on>
+        <update_rate>20.0</update_rate>
+        <visualize>false</visualize>
+        
+        <camera>
+          <horizontal_fov>1.5184</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>10.0</far>
+          </clip>
+          <depth_camera>
+            <o>depths</o>
+          </depth_camera>
+        </camera>
+        
+        <topic>${prefix}${camera_name}_dc</topic>
+        <gz_frame_id>${prefix}${camera_name}_color_optical_frame</gz_frame_id>
+        
+        <enable_depth>true</enable_depth>
+        <enable_point_cloud>false</enable_point_cloud>
+      </sensor>
+
+      <!-- PointCloud2용 센서 (회전 없는 프레임 사용) -->
+      <sensor name="${prefix}${camera_name}_rgbd_pointcloud" type="rgbd_camera">
+        <always_on>true</always_on>
+        <update_rate>20.0</update_rate>
+        <visualize>false</visualize>
+        
+        <camera>
+          <horizontal_fov>1.5184</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>10.0</far>
+          </clip>
+          <depth_camera>
+            <o>depths</o>
+          </depth_camera>
+        </camera>
+        
+        <topic>${prefix}${camera_name}</topic>
+        <gz_frame_id>${prefix}${camera_name}_pc2_optical_frame</gz_frame_id>
+        
+        <enable_depth>false</enable_depth>
+        <enable_point_cloud>true</enable_point_cloud>
+      </sensor>
+    </gazebo>
+
+  </xacro:macro>
+</robot>
