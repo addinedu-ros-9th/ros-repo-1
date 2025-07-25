@@ -17,7 +17,6 @@ setup(
     maintainer_email='ajferhcz153@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'state_handler_node = libo_state_handler.state_handler_node:main'
