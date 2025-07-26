@@ -1,0 +1,1496 @@
+<sdf version='1.10'>
+  <world name='house_floor_plan'>
+    <physics name='1ms' type='ignored'>
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1</real_time_factor>
+      <real_time_update_rate>1000</real_time_update_rate>
+    </physics>
+    <plugin name='gz::sim::systems::Physics' filename='gz-sim-physics-system'/>
+    <plugin name='gz::sim::systems::UserCommands' filename='gz-sim-user-commands-system'/>
+    <plugin name='gz::sim::systems::SceneBroadcaster' filename='gz-sim-scene-broadcaster-system'/>
+    <plugin name='gz::sim::systems::Sensors' filename='gz-sim-sensors-system'>
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <scene>
+      <ambient>0.400000006 0.400000006 0.400000006 1</ambient>
+      <background>0.699999988 0.699999988 0.699999988 1</background>
+      <shadows>true</shadows>
+    </scene>
+    <gravity>0 0 -9.8000000000000007</gravity>
+    <magnetic_field>5.5644999999999998e-06 2.2875799999999999e-05 -4.2388400000000002e-05</magnetic_field>
+    <atmosphere type='adiabatic'/>
+    <model name='ground_plane'>
+      <static>true</static>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>100</mu>
+                <mu2>50</mu2>
+              </ode>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <cast_shadows>false</cast_shadows>
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>100 100</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.300000012 0.300000012 0.300000012 1</ambient>
+            <diffuse>0.699999988 0.699999988 0.699999988 1</diffuse>
+            <specular>0.00999999978 0.00999999978 0.00999999978 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <pose>0 0 0 0 0 0</pose>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='wall_left'>
+      <static>true</static>
+      <pose>-8.6999999999999993 0 1.25 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 7.75 2.5</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 7.75 2.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='wall_right'>
+      <static>true</static>
+      <pose>11 0 1.25 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 7.75 2.5</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 7.75 2.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='wall_top'>
+      <static>true</static>
+      <pose>1.1499999999999999 3.9249999999999998 1.25 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>19.699999999999999 0.10000000000000001 2.5</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>19.699999999999999 0.10000000000000001 2.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='wall_bottom'>
+      <static>true</static>
+      <pose>1.1499999999999999 -3.9249999999999998 1.25 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>19.699999999999999 0.10000000000000001 2.5</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>19.699999999999999 0.10000000000000001 2.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='wall_between_lecture_meeting'>
+      <static>true</static>
+      <pose>0 3.6575000000000002 1.25 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 0.63500000000000001 2.5</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 0.63500000000000001 2.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.699999988 0.5 0.300000012 1</ambient>
+            <diffuse>0.699999988 0.5 0.300000012 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='wall_between_lecture_meeting_bottom'>
+      <static>true</static>
+      <pose>0 -0.625 1.25 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 6.5 2.5</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 6.5 2.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.699999988 0.5 0.300000012 1</ambient>
+            <diffuse>0.699999988 0.5 0.300000012 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='wall_between_meeting_storage'>
+      <static>true</static>
+      <pose>2.5499999999999998 2.6400000000000001 1.25 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 2.48 2.5</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 2.48 2.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.699999988 0.5 0.300000012 1</ambient>
+            <diffuse>0.699999988 0.5 0.300000012 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='wall_lecmet'>
+      <static>true</static>
+      <pose>6.75 1.3999999999999999 1.25 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>8.5 0.10000000000000001 2.5</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>8.5 0.10000000000000001 2.5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='road_left'>
+      <static>true</static>
+      <pose>-4.9900000000000002 -0.125 0 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 5.5 0.01</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 5.5 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_top_left'>
+      <static>true</static>
+      <pose>-6.7949999999999999 2.5750000000000002 0 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>3.71 0.10000000000000001 0.01</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>3.71 0.10000000000000001 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_bottom_left'>
+      <static>true</static>
+      <pose>-6.7949999999999999 -2.8250000000000002 0 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>3.71 0.10000000000000001 0.01</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>3.71 0.10000000000000001 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='road_right'>
+      <static>true</static>
+      <pose>-3.5099999999999998 -0.125 0 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 5.5 0.01</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.10000000000000001 5.5 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_top_right'>
+      <static>true</static>
+      <pose>-1.7549999999999999 2.5750000000000002 0 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>3.6000000000000001 0.10000000000000001 0.01</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>3.6099999999999999 0.10000000000000001 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_bottom_right'>
+      <static>true</static>
+      <pose>-1.7549999999999999 -2.8250000000000002 0 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>3.6000000000000001 0.10000000000000001 0.01</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>3.6000000000000001 0.10000000000000001 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='box3'>
+      <static>true</static>
+      <pose>2.9249999999999998 -0.90000000000000002 0.84999999999999998 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.94999999999999996 1.8 1.7</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.94999999999999996 1.8 1.7</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='box2'>
+      <static>true</static>
+      <pose>5.625 -0.90000000000000002 0.84999999999999998 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>0.94999999999999996 1.8 1.7</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>0.94999999999999996 1.8 1.7</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='box1'>
+      <static>true</static>
+      <pose>8.75 -1.175 0.84999999999999998 0 0 0</pose>
+      <link name='link'>
+        <collision name='collision'>
+          <geometry>
+            <box>
+              <size>1.8 0.94999999999999996 1.7</size>
+            </box>
+          </geometry>
+          <surface>
+            <friction>
+              <ode/>
+            </friction>
+            <bounce/>
+            <contact/>
+          </surface>
+        </collision>
+        <visual name='visual'>
+          <geometry>
+            <box>
+              <size>1.8 0.94999999999999996 1.7</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.800000012 0.600000024 0.400000006 1</ambient>
+            <diffuse>0.800000012 0.600000024 0.400000006 1</diffuse>
+            <specular>0.100000001 0.100000001 0.100000001 1</specular>
+          </material>
+        </visual>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+        <pose>0 0 0 0 0 0</pose>
+        <inertial>
+          <pose>0 0 0 0 0 0</pose>
+          <mass>1</mass>
+          <inertia>
+            <ixx>1</ixx>
+            <ixy>0</ixy>
+            <ixz>0</ixz>
+            <iyy>1</iyy>
+            <iyz>0</iyz>
+            <izz>1</izz>
+          </inertia>
+        </inertial>
+        <enable_wind>false</enable_wind>
+      </link>
+      <pose>-8.1845788955688477 2.1776432991027828 0 0 0 -1.5736599388406385</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-7.3044732962274654 2.1765930355933327 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-6.4187476292947592 2.1750736041055729 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-5.5210380992773711 2.1787802934546123 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_2'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-8.1659186629237706 0.75095239725874841 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_2'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-7.2945084343345119 0.74232672345006123 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_2'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-6.4253293434862613 0.73596152977943519 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-5.5266059310797502 0.73300967217323476 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_2_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-8.1837486729075852 -0.77994884209222715 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_2_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-7.3088492652158479 -0.78170068019777017 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_2_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-6.4278012322047333 -0.78725932277273203 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-5.5312906253458989 -0.78787657588608317 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_2_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-8.1605174344052518 -2.158315939001525 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_2_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-7.3059306221250431 -2.1554596235334684 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_2_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-6.4365308200840534 -2.1631367607919576 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_1_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-5.5483927676759626 -2.179902123182103 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-3.0078265407714788 2.1589690452595347 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-1.8580021474501305 2.15723973833301 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-0.69434802617651092 2.1651966674641874 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2_2'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-2.9891775350925034 0.72003489996021941 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2_1_2'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-1.8523583034365827 0.7130905285821123 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2_1_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-0.72076357686993275 0.70016608963908777 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2_2_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-2.9850370091550422 -0.82919768703786678 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2_1_2_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-1.8677040734401424 -0.84781683943239905 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2_1_1_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-0.72855666455065093 -0.86600765686300507 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2_2_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-3.0159118872267978 -2.2026698514700565 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2_1_2_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-1.8551868048828846 -2.2273838035363709 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <model name='desk_1_1_1_2_1_1_1_1_1'>
+      <link name='link'>
+        <visual name='visual'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </visual>
+        <collision name='collision'>
+          <geometry>
+            <mesh>
+              <uri>file:///home/robolee/dev_ws/vicpinky_ws/src/vicpinky_gazebo/models/desk/meshes/desk.obj</uri>
+            </mesh>
+          </geometry>
+        </collision>
+      </link>
+      <pose>-0.7350735826328475 -2.2238115715120905 0 0 0 -1.5736599388406383</pose>
+      <static>false</static>
+      <self_collide>false</self_collide>
+    </model>
+    <light name='sun' type='directional'>
+      <pose>0 0 10 0 0 0</pose>
+      <cast_shadows>true</cast_shadows>
+      <intensity>1</intensity>
+      <direction>-0.5 0.10000000000000001 -0.90000000000000002</direction>
+      <diffuse>0.800000012 0.800000012 0.800000012 1</diffuse>
+      <specular>0.200000003 0.200000003 0.200000003 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <linear>0.01</linear>
+        <constant>0.90000000000000002</constant>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <spot>
+        <inner_angle>0</inner_angle>
+        <outer_angle>0</outer_angle>
+        <falloff>0</falloff>
+      </spot>
+    </light>
+  </world>
+</sdf>
