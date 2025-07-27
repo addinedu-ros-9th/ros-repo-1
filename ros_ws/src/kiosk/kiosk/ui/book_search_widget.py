@@ -6,9 +6,14 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5 import uic
+import requests
+from urllib.parse import urlparse
 
 # ROS2 클라이언트 import 추가
 from kiosk.ros_communication.book_search_client import BookSearchClient
+from kiosk.ros_communication.escort_request_client import EscortRequestClient
+# 책 상세 정보 팝업창 import 추가
+from kiosk.ui.book_detail_popup import BookDetailPopup
 
 class BookSearchWidget(QWidget):
     # 홈 버튼 클릭 시그널 정의
@@ -21,6 +26,10 @@ class BookSearchWidget(QWidget):
         self.search_client = BookSearchClient()
         self.search_client.search_completed.connect(self.on_search_results)
         
+        # 에스코팅 요청 클라이언트 초기화
+        self.escort_client = EscortRequestClient()
+        self.escort_client.escort_request_completed.connect(self.on_escort_response)
+        
         self.init_ui()
         self.setup_connections()
     
@@ -32,9 +41,6 @@ class BookSearchWidget(QWidget):
         
         # 윈도우 설정
         self.setWindowTitle("LIBO Book Search")
-        
-        # 리보 상태 초기화
-        self.update_libo_status("대기중", "#2ecc71")
         
         print("✅ BookSearch UI 로드 완료")
     
@@ -49,11 +55,6 @@ class BookSearchWidget(QWidget):
         self.searchLineEdit.returnPressed.connect(self.on_search_clicked)
         
         print("✅ 시그널-슬롯 연결 완료")
-    
-    def update_libo_status(self, status_text, color):
-        """리보 상태 업데이트"""
-        self.liboStatusLabel.setText(status_text)
-        self.liboStatusLabel.setStyleSheet(f"color: {color}; border: none;")
     
     def on_search_clicked(self):
         """검색 버튼 클릭"""
@@ -82,7 +83,6 @@ class BookSearchWidget(QWidget):
         # 검색 중 상태 표시
         self.searchButton.setText("검색중...")
         self.searchButton.setEnabled(False)
-        self.update_libo_status("검색중", "#f39c12")
         
         # ROS2 서비스 호출
         self.search_client.search_books(search_text, search_type)
@@ -92,7 +92,6 @@ class BookSearchWidget(QWidget):
         # UI 상태 복원
         self.searchButton.setText("검색")
         self.searchButton.setEnabled(True)
-        self.update_libo_status("대기중", "#2ecc71")
         
         if success:
             print(f"✅ 검색 성공: {len(books)}권 발견")
@@ -130,16 +129,34 @@ class BookSearchWidget(QWidget):
         # 스페이서 추가
         layout.addStretch()
 
+    def load_image_from_url(self, url):
+        """URL에서 이미지 로드"""
+        if not url:
+            return None
+        
+        try:
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            
+            # QPixmap으로 이미지 로드
+            pixmap = QPixmap()
+            pixmap.loadFromData(response.content)
+            
+            return pixmap
+        except Exception as e:
+            print(f"❌ 이미지 로드 실패: {url} - {e}")
+            return None
+
     def create_book_item_widget(self, book):
-        """개별 책 아이템 위젯 생성 (간소화 버전)"""
+        """개별 책 아이템 위젯 생성 (이미지 표시 개선)"""
         widget = QWidget()
-        widget.setFixedHeight(150)  # 높이 줄임
+        widget.setFixedHeight(250)  # 높이 증가
         widget.setStyleSheet("""
             QWidget {
                 border: 1px solid #bdc3c7;
                 border-radius: 8px;
                 background-color: white;
-                margin: 5px;
+                margin: 8px;
             }
             QWidget:hover {
                 background-color: #ecf0f1;
@@ -148,60 +165,111 @@ class BookSearchWidget(QWidget):
         """)
         
         layout = QHBoxLayout(widget)
-        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setContentsMargins(20, 20, 20, 20)  # 여백 증가
+        layout.setSpacing(25)  # 간격 증가
         
-        # 책 표지
-        cover_label = QLabel("📖")
-        cover_label.setFixedSize(80, 90)
+        # 책 표지 이미지
+        cover_label = QLabel()
+        cover_label.setFixedSize(120, 150)  # 크기 증가
         cover_label.setAlignment(Qt.AlignCenter)
         cover_label.setStyleSheet("""
             background-color: #f8f9fa; 
             border: 1px solid #dee2e6;
-            border-radius: 4px;
-            font-size: 28px;
+            border-radius: 6px;
         """)
         
-        # 책 정보 (제목, 저자, 가격만)
+        # 이미지 URL에서 로드
+        cover_url = book.get('cover_image_url', '')
+        if cover_url:
+            pixmap = self.load_image_from_url(cover_url)
+            if pixmap:
+                # 이미지 크기 조정
+                scaled_pixmap = pixmap.scaled(110, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                cover_label.setPixmap(scaled_pixmap)
+            else:
+                # 이미지 로드 실패 시 기본 아이콘
+                cover_label.setText("📖")
+                cover_label.setStyleSheet("""
+                    background-color: #f8f9fa; 
+                    border: 1px solid #dee2e6;
+                    border-radius: 6px;
+                    font-size: 32px;
+                """)
+        else:
+            # URL이 없으면 기본 아이콘
+            cover_label.setText("📖")
+            cover_label.setStyleSheet("""
+                background-color: #f8f9fa; 
+                border: 1px solid #dee2e6;
+                border-radius: 6px;
+                font-size: 32px;
+            """)
+        
+        # 책 정보 (더 넓은 공간 활용)
         info_widget = QWidget()
+        info_widget.setMinimumWidth(800)  # 최소 너비 설정
         info_layout = QVBoxLayout(info_widget)
-        info_layout.setSpacing(8)
+        info_layout.setSpacing(12)  # 간격 증가
         info_layout.setContentsMargins(0, 0, 0, 0)
         
-        # 제목
+        # 제목 (더 큰 폰트, 줄바꿈 허용)
         title_label = QLabel(f"📚 {book['title']}")
-        title_label.setFont(QFont("Arial", 15, QFont.Bold))
-        title_label.setStyleSheet("color: #2c3e50;")
+        title_label.setFont(QFont("Arial", 16, QFont.Bold))
+        title_label.setStyleSheet("color: #2c3e50; line-height: 1.2;")
         title_label.setWordWrap(True)  # 긴 제목 줄바꿈
+        title_label.setMinimumHeight(50)  # 최소 높이 설정
+        title_label.setMinimumWidth(600)  # 최소 너비 설정
         
         # 저자
         author_label = QLabel(f"✍️ {book['author']}")
-        author_label.setFont(QFont("Arial", 12))
+        title_label.setFont(QFont("Arial", 16, QFont.Bold))
         author_label.setStyleSheet("color: #34495e;")
+        title_label.setMinimumHeight(50)  # 최소 높이 설정
+        title_label.setMinimumWidth(600)  # 최소 너비 설정
+        
+        # 출판사
+        publisher_label = QLabel(f"🏢 {book['publisher']}")
+        title_label.setFont(QFont("Arial", 16, QFont.Bold))
+        publisher_label.setStyleSheet("color: #7f8c8d;")
+        title_label.setMinimumHeight(50)  # 최소 높이 설정
+        title_label.setMinimumWidth(600)  # 최소 너비 설정
         
         # 가격
         price_label = QLabel(f"💰 {int(book['price']):,}원")
-        price_label.setFont(QFont("Arial", 13, QFont.Bold))
+        title_label.setFont(QFont("Arial", 16, QFont.Bold))
         price_label.setStyleSheet("color: #27ae60;")
+        title_label.setMinimumHeight(50)  # 최소 높이 설정
+        title_label.setMinimumWidth(600)  # 최소 너비 설정
+
+        # 위치
+        location_label = QLabel(f"📍 {book['location']}구역")
+        title_label.setFont(QFont("Arial", 16, QFont.Bold))
+        location_label.setStyleSheet("color: #e67e22;")
+        title_label.setMinimumHeight(50)  # 최소 높이 설정
+        title_label.setMinimumWidth(600)  # 최소 너비 설정
         
-        # 재고 상태 표시 (간단한 아이콘으로)
+        # 재고 상태 표시
         stock_icon = "✅" if book['stock_quantity'] > 0 else "❌"
-        stock_status_label = QLabel(stock_icon)
-        stock_status_label.setFont(QFont("Arial", 16))
+        stock_status_label = QLabel(f"{stock_icon} {book['stock_quantity']}권")
+        stock_status_label.setFont(QFont("Arial", 13, QFont.Bold))
         stock_status_label.setAlignment(Qt.AlignRight)
+        stock_status_label.setStyleSheet("color: #27ae60;" if book['stock_quantity'] > 0 else "color: #e74c3c;")
         
         # 레이아웃에 추가
         info_layout.addWidget(title_label)
         info_layout.addWidget(author_label)
+        info_layout.addWidget(publisher_label)
         info_layout.addWidget(price_label)
-        info_layout.addStretch()  # 여백 추가
+        info_layout.addWidget(location_label)
+        info_layout.addStretch()
         
         # 상단 레이아웃 (재고 상태 아이콘 우측 상단에)
         top_layout = QHBoxLayout()
-        top_layout.addWidget(info_widget)
-        top_layout.addWidget(stock_status_label, alignment=Qt.AlignTop)
+        top_layout.addWidget(info_widget, 1)  # stretch factor 1
+        top_layout.addWidget(stock_status_label, 0, alignment=Qt.AlignTop | Qt.AlignRight)
         
         layout.addWidget(cover_label)
-        layout.addLayout(top_layout)
+        layout.addLayout(top_layout, 1)  # stretch factor 1로 더 많은 공간 할당
         
         # 클릭 이벤트
         widget.mousePressEvent = lambda event: self.on_book_item_clicked(book)
@@ -212,18 +280,58 @@ class BookSearchWidget(QWidget):
         """책 아이템 클릭"""
         print(f"📖 선택된 책: {book['title']} ({book['location']}구역)")
         
-        # 선택된 책 정보 표시
-        QMessageBox.information(
-            self, 
-            "선택된 도서", 
-            f"제목: {book['title']}\n"
-            f"저자: {book['author']}\n"
-            f"위치: {book['location']}구역\n"
-            f"재고: {book['stock_quantity']}권\n\n"
-            f"지도에서 위치를 확인하세요!"
-        )
-        
-        # TODO: 지도에서 해당 위치 표시 (빨간색 깜빡임)
+        # 책 상세 정보 팝업창 표시
+        try:
+            popup = BookDetailPopup(book, self)
+            popup.escort_requested.connect(self.on_escort_requested)
+            popup.exec_()
+        except Exception as e:
+            print(f"❌ 팝업창 표시 중 오류: {e}")
+            QMessageBox.warning(self, "오류", f"팝업창을 표시할 수 없습니다: {str(e)}")
+    
+    def on_escort_requested(self, escort_data):
+        """에스코팅 요청 처리"""
+        try:
+            print(f"🚀 에스코팅 요청 수신: {escort_data}")
+            
+            # ROS2 서비스를 통해 에스코팅 요청
+            robot_id = escort_data.get('robot_id', 'robot_01')
+            book_title = escort_data.get('book_title', '')
+            book_location = escort_data.get('book_location', '')
+            
+            success = self.escort_client.request_escort(robot_id, book_title, book_location)
+            
+            if not success:
+                QMessageBox.warning(self, "오류", "에스코팅 요청을 전송할 수 없습니다.")
+            
+        except Exception as e:
+            print(f"❌ 에스코팅 요청 처리 중 오류: {e}")
+            QMessageBox.warning(self, "오류", f"에스코팅 요청 처리 중 오류가 발생했습니다: {str(e)}")
+    
+    def on_escort_response(self, success, message, escort_id):
+        """에스코팅 요청 응답 처리"""
+        try:
+            if success:
+                QMessageBox.information(
+                    self,
+                    "에스코팅 요청",
+                    f"리보를 호출했습니다.\n"
+                    f"에스코팅 ID: {escort_id}\n"
+                    f"메시지: {message}\n\n"
+                    f"잠시만 기다려주세요."
+                )
+                print(f"✅ 에스코팅 요청 성공: escort_id={escort_id}")
+            else:
+                QMessageBox.warning(
+                    self,
+                    "에스코팅 요청 실패",
+                    f"에스코팅 요청이 실패했습니다.\n"
+                    f"오류: {message}"
+                )
+                print(f"❌ 에스코팅 요청 실패: {message}")
+                
+        except Exception as e:
+            print(f"❌ 에스코팅 응답 처리 중 오류: {e}")
     
     def on_home_clicked(self):
         """홈 버튼 클릭"""
@@ -239,14 +347,8 @@ class BookSearchWidget(QWidget):
         """리보 호출 버튼 클릭"""
         print("🤖 리보 호출 요청")
         
-        # 리보 상태 업데이트
-        self.update_libo_status("호출중", "#f39c12")
-        
         # TODO: ROS2로 리보 호출 신호 전송
         QMessageBox.information(self, "리보 호출", "리보를 호출했습니다.\n잠시만 기다려주세요.")
-        
-        # 3초 후 대기 상태로 복귀 (임시)
-        QTimer.singleShot(3000, lambda: self.update_libo_status("대기중", "#2ecc71"))
     
     def on_order_clicked(self):
         """주문 문의 버튼 클릭"""
@@ -258,6 +360,8 @@ class BookSearchWidget(QWidget):
         """윈도우 종료 시 리소스 정리"""
         if hasattr(self, 'search_client'):
             self.search_client.cleanup()
+        if hasattr(self, 'escort_client'):
+            self.escort_client.cleanup()
         event.accept()
 
 if __name__ == "__main__":

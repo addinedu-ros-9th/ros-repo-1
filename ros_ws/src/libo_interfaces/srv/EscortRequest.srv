@@ -1,0 +1,9 @@
+# 요청 (Request)
+string robot_id        # 로봇 ID (robot_01)
+string book_title      # 도서 제목
+string book_location   # 도서 위치 코드 (D3, D5)
+---
+# 응답 (Response)
+bool success           # 요청 수락 여부
+string message         # 응답 메시지
+string escort_id       # 에스코팅 세션 ID 

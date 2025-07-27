@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'book_search_service = main_server.services.book_search_service:main',
             'robot_commander = main_server.services.robot_commander:main',
+            'aladin_book_register = main_server.services.aladin_book_register:main',
         ],
     },
 )

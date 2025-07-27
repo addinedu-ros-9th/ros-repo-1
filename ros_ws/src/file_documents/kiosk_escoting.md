@@ -1,11 +1,12 @@
 지켜야 할 것
 인터페이스 명세서 지키기
 kiosk gui와 main_server는 ros2통신
-코드 한번에 막 하지 말고 질문을 하면 한단계씩만 설명하기
-kiosk 쪽 폴더만 건들고 이외의 폴더 코드 함부로 수정하지 않기
+코드 한번에 전부 다 하지 말고 질문을 하면 한단계씩만 설명하기
+코드 수정은 내가 ok 하면 그때 수정
 인터페이스 명세서가 뭔가 부족하다고 생각하면 추가 인터페이스 필요하다고 알려줘야함
 그리고 이 작업에 대한 먼저 각 단계마다 데이터 흐름 과시퀀스 다이어그램 작성(plant_uml)해주기
 일단은 gazebo시뮬레이션으로 연습할 예정
+그리고 우리 환경은 우분투 24.04이고 ros2 jazzy를 사용하고 있고 gazebo harmonic을 사용하고 있다는 것을 명심해
 
 
 ## 해야할 것
@@ -434,6 +435,68 @@ kiosk에서 도서 조회를 했을때 밑바닥부터 시작하는 딥러닝 1(
 오른쪽에는 책에 대한 세부정보 표시
 오른쪽 밑에는 에스코팅 요청 버튼이 있을 수 있도록 
 
+2단계 시퀀스 다이어 그램
+
+@startuml 2단계_키오스크_도서검색_정보조회
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+
+title 2단계: 키오스크에서 도서 검색 및 정보 조회
+
+actor "사용자" as User
+participant "Kiosk UI" as KioskUI
+participant "BookSearchWidget" as BookWidget
+participant "BookSearchClient" as SearchClient
+participant "Main Server" as MainServer
+database "MySQL DB" as DB
+
+User -> KioskUI: 키오스크 메인 화면
+activate KioskUI
+
+User -> KioskUI: "Book Search" 버튼 클릭
+KioskUI -> BookWidget: BookSearchWidget 생성 및 표시
+activate BookWidget
+
+User -> BookWidget: 검색어 입력\n("딥러닝")
+User -> BookWidget: "검색" 버튼 클릭
+activate BookWidget
+
+BookWidget -> SearchClient: 도서 검색 요청\n(query: "딥러닝", search_type: "title")
+activate SearchClient
+
+SearchClient -> MainServer: /book_search 서비스 호출
+activate MainServer
+
+MainServer -> DB: SELECT * FROM books\nWHERE title LIKE '%딥러닝%'
+activate DB
+DB --> MainServer: 검색 결과 반환
+deactivate DB
+
+MainServer --> SearchClient: BookSearch.srv 응답\n(도서 목록)
+deactivate MainServer
+
+SearchClient --> BookWidget: 검색 결과 시그널
+deactivate SearchClient
+
+BookWidget -> BookWidget: 검색 결과 UI 업데이트\n(도서 목록 표시)
+deactivate BookWidget
+
+User -> BookWidget: "밑바닥부터 시작하는 딥러닝 1" 클릭
+BookWidget -> BookWidget: 도서 상세 정보 팝업 표시
+note right of BookWidget
+  팝업 내용:
+  - 왼쪽: 지도 + 책 위치 (빨간 원)
+  - 오른쪽: 도서 상세 정보
+  - 하단: 에스코팅 요청 버튼
+end note
+
+deactivate BookWidget
+deactivate KioskUI
+@enduml
+
 ## 3단계: 책 서적 위치까지 에스코팅
 팝업창에서 에스코팅 요청 버튼을 누르면 키오스크는 libo를 호출했습니다라고 팝업창 띄움 그리고 5초뒤에 키오스크느 메인화면으로 이동
 libo는 키오스크 위치로 와서 "서적 위치까지 에스코팅을 시작하겠습니다"라는 터미널에 메세지를 남기고 서적 위치로 에스코팅 하기
@@ -442,5 +505,107 @@ libo는 키오스크 위치로 와서 "서적 위치까지 에스코팅을 시�
 base 좌표: 'E3': (0.05, -0.34, 0.0),
 
 
+3단계 시쿼스 다이어그램
+@startuml 3단계_에스코팅요청_로봇호출
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+
+title 3단계: 에스코팅 요청 및 로봇 호출
+
+actor "사용자" as User
+participant "BookSearchWidget" as BookWidget
+participant "Kiosk UI" as KioskUI
+participant "EscortRequestClient" as EscortClient
+participant "Libo Service" as LiboService
+participant "Libo Operator" as LiboOperator
+
+User -> BookWidget: "에스코팅 요청" 버튼 클릭
+activate BookWidget
+
+BookWidget -> EscortClient: 에스코팅 요청\n(robot_id: "robot_01", book_title: "밑바닥부터 시작하는 딥러닝 1", book_location: "D3")
+activate EscortClient
+
+EscortClient -> LiboService: /escort_request 서비스 호출
+activate LiboService
+
+LiboService -> LiboService: 에스코팅 요청 검증
+LiboService -> LiboService: escort_id 생성
+LiboService --> EscortClient: EscortRequest.srv 응답\n(success: true, escort_id: "escort_001")
+deactivate LiboService
+
+EscortClient --> BookWidget: 에스코팅 요청 완료
+deactivate EscortClient
+
+BookWidget -> BookWidget: "리보를 호출했습니다" 팝업 표시
+BookWidget -> BookWidget: 5초 후 메인 화면으로 이동
+deactivate BookWidget
+
+BookWidget -> KioskUI: 메인 화면 복귀
+activate KioskUI
+
+LiboService -> LiboService: 에스코팅 시작 처리
+LiboService -> LiboService: "서적 위치까지 에스코팅을 시작하겠습니다" 터미널 메시지
+
+LiboService -> LiboOperator: 키오스크 위치로 이동 명령\n(waypoint: "B1")
+activate LiboOperator
+
+LiboOperator -> LiboOperator: 키오스크 위치로 이동\n(B1: 5.57, 4.90, 0.0)
+LiboOperator --> LiboService: 키오스크 도착 알림
+
+LiboService -> LiboOperator: 서적 위치로 에스코팅\n(waypoint: "D3")
+LiboOperator -> LiboOperator: 서적 위치로 이동\n(D3: 0.03, 0.96, 0.0)
+
+deactivate LiboOperator
+deactivate KioskUI
+@enduml
+
+
 ## 4단계: 에스코팅 완료
 해당 위치까지 도착했으면 에스코팅을 완료했습니다라고 터미널에 메세지를 남기고 1초후 또 이용해 주세요 라고 터미널에 메세지 남기고 3초뒤에 base로 복귀
+
+4단계 시퀀스 다이어그램
+@startuml 4단계_에스코팅완료_복귀
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+skinparam maxmessagesize 60
+
+title 4단계: 에스코팅 완료 및 복귀
+
+participant "Libo Operator" as LiboOperator
+participant "Libo Service" as LiboService
+participant "Admin GUI" as AdminGUI
+
+LiboOperator -> LiboService: 서적 위치 도착 알림\n(waypoint: "D3")
+activate LiboService
+
+LiboService -> LiboService: "에스코팅을 완료했습니다" 터미널 메시지
+LiboService -> LiboService: 1초 대기
+LiboService -> LiboService: "또 이용해 주세요" 터미널 메시지
+LiboService -> LiboService: 3초 대기
+
+LiboService -> LiboOperator: Base 위치로 복귀 명령\n(waypoint: "E3")
+activate LiboOperator
+
+LiboOperator -> LiboOperator: Base 위치로 이동\n(E3: 0.05, -0.34, 0.0)
+LiboOperator --> LiboService: Base 도착 알림
+
+LiboService -> LiboService: 에스코팅 세션 종료
+LiboService -> AdminGUI: /escort_complete 토픽 발행\n(escort_id: "escort_001", final_location: "D3")
+
+note right of LiboService
+  에스코팅 완료 처리:
+  1. 서적 위치 도착 확인
+  2. 완료 메시지 출력
+  3. 1초 대기 후 안내 메시지
+  4. 3초 대기 후 Base 복귀
+  5. 에스코팅 세션 종료
+end note
+
+deactivate LiboOperator
+deactivate LiboService
+@enduml

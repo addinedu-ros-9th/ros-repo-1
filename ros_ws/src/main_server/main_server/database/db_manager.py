@@ -1,3 +1,8 @@
+# DB 매니저 확장 (db_manager.py)
+# 도서 등록 메서드 추가 (register_book)
+# ISBN 중복 검사
+# ISBN으로 도서 조회 기능
+
 import pymysql
 from typing import List, Dict, Optional
 
@@ -86,6 +91,99 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ 연결 테스트 실패: {e}")
             return False
+    
+    def register_book(self, book_data: Dict) -> bool:
+        """
+        도서 등록 (1단계용) - 중복 시 재고 증가
+        
+        Args:
+            book_data: 등록할 도서 정보 딕셔너리
+            
+        Returns:
+            bool: 등록 성공 여부
+        """
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다.")
+            return False
+        
+        try:
+            # 중복 검사 (ISBN 기준)
+            isbn = book_data.get('isbn', '')
+            if isbn:
+                with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                    cursor.execute("SELECT id, stock_quantity FROM books WHERE isbn = %s", (isbn,))
+                    existing_book = cursor.fetchone()
+                    
+                    if existing_book:
+                        # 기존 도서가 있으면 재고 증가
+                        current_stock = existing_book['stock_quantity']
+                        new_stock = current_stock + book_data.get('stock_quantity', 1)
+                        
+                        update_sql = "UPDATE books SET stock_quantity = %s WHERE isbn = %s"
+                        cursor.execute(update_sql, (new_stock, isbn))
+                        
+                        print(f"�� 기존 도서 재고 증가: {book_data.get('title', 'N/A')}")
+                        print(f"   기존 재고: {current_stock}권 → 새로운 재고: {new_stock}권")
+                        return True
+            
+            # 새로운 도서 등록
+            insert_sql = """
+            INSERT INTO books (
+                title, author, publisher, category_name, location,
+                price, stock_quantity, isbn, cover_image_url
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+            
+            values = (
+                book_data.get('title', ''),
+                book_data.get('author', ''),
+                book_data.get('publisher', ''),
+                book_data.get('category_name', ''),
+                book_data.get('location', ''),
+                book_data.get('price', 0),
+                book_data.get('stock_quantity', 1),
+                book_data.get('isbn', ''),
+                book_data.get('cover_image_url', '')
+            )
+            
+            with self.connection.cursor() as cursor:
+                cursor.execute(insert_sql, values)
+                
+            print(f"✅ 새 도서 등록 성공: {book_data.get('title', 'N/A')}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ 도서 등록 실패: {e}")
+            return False
+    
+    def get_book_by_isbn(self, isbn: str) -> Optional[Dict]:
+        """
+        ISBN으로 도서 조회
+        
+        Args:
+            isbn: 조회할 도서의 ISBN
+            
+        Returns:
+            도서 정보 딕셔너리 또는 None
+        """
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다.")
+            return None
+        
+        try:
+            with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                cursor.execute("""
+                    SELECT id, title, author, publisher, category_name, location,
+                           price, stock_quantity, isbn, cover_image_url
+                    FROM books WHERE isbn = %s
+                """, (isbn,))
+                result = cursor.fetchone()
+                
+            return result
+            
+        except Exception as e:
+            print(f"❌ 도서 조회 실패: {e}")
+            return None
     
     def close(self):
         """데이터베이스 연결 종료"""
