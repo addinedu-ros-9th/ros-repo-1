@@ -4,6 +4,7 @@ import os
 import rclpy
 from PyQt5.QtWidgets import QApplication, QWidget
 from PyQt5.QtCore import QTimer
+from PyQt5.QtGui import QPixmap  # QPixmap을 임포트해
 from PyQt5 import uic
 from libo_interfaces.msg import GoalPose # 기존 GoalPose 메시지
 from libo_interfaces.msg import Waypoint # 새로 만든 Waypoint 메시지
@@ -16,6 +17,7 @@ class DebugToolWindow(QWidget): # QWidget을 상속받는 클래스를 만들어
         self.publisher = None
         self.waypoint_publisher = None # 웨이포인트 퍼블리셔를 위한 변수 추가
         self.init_ui() # UI를 초기화하는 함수를 호출해.
+        self.load_image()  # 이미지를 로드하는 함수 추가
         self.init_ros() # ROS2 관련 기능을 초기화하는 함수를 호출해.
         self.setup_connections() # 버튼 클릭 같은 이벤트를 연결하는 함수를 호출해.
 
@@ -25,6 +27,23 @@ class DebugToolWindow(QWidget): # QWidget을 상속받는 클래스를 만들어
         # share 디렉토리 안의 ui 폴더에서 UI 파일을 찾아.
         ui_file = os.path.join(package_share_dir, 'ui', 'debug_tool.ui')
         uic.loadUi(ui_file, self)
+
+    def load_image(self): # 맵 이미지를 불러와서 화면에 띄어줌
+        # 패키지의 share 디렉토리에서 이미지 파일 경로를 가져와
+        package_share_dir = get_package_share_directory('admin')
+        image_path = os.path.join(package_share_dir, 'resource', 'map_bg.png')
+        
+        # 이미지 파일이 존재하는지 확인
+        if os.path.exists(image_path):
+            pixmap = QPixmap(image_path)
+            if not pixmap.isNull():
+                self.label.setPixmap(pixmap)
+                self.label.setScaledContents(True)
+                self.log.append("✅ 이미지 로드 완료")
+            else:
+                self.log.append("❌ 이미지 로드 실패: 파일 형식 오류")
+        else:
+            self.log.append(f"❌ 이미지 파일을 찾을 수 없음: {image_path}")
 
     def init_ros(self):
         self.node = rclpy.create_node('debug_tool_qt_publisher') # 'debug_tool_qt_publisher'라는 이름의 노드를 만들어.
