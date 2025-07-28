@@ -62,7 +62,7 @@
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>40</height>
+          <height>30</height>
          </size>
         </property>
         <property name="styleSheet">
@@ -70,7 +70,7 @@
     color: #2c3e50;
     background-color: #ecf0f1;
     border-radius: 5px;
-    padding: 5px;
+    padding: 3px;
 }</string>
         </property>
        </widget>
@@ -88,6 +88,7 @@
     border: 1px solid #dee2e6;
     border-radius: 8px;
     background-color: #f8f9fa;
+    padding: 10px;
 }</string>
         </property>
         <property name="text">
@@ -111,10 +112,16 @@
         <property name="alignment">
          <set>Qt::AlignCenter</set>
         </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>25</height>
+         </size>
+        </property>
         <property name="styleSheet">
          <string notr="true">QLabel {
     color: #7f8c8d;
-    padding: 10px;
+    padding: 3px;
 }</string>
         </property>
        </widget>

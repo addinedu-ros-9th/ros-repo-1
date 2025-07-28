@@ -16,7 +16,7 @@ class DatabaseManager:
         """GCP MySQL 데이터베이스 연결"""
         try:
             self.connection = pymysql.connect(
-                host='34.47.96.177',           # GCP DB 공개 IP 주소
+                host='34.47.118.222',          # GCP DB 공개 IP 주소 (업데이트됨)
                 port=3306,
                 user='root',                   # 또는 생성한 사용자명
                 password='qwer1234!@#$',       # DB 비밀번호
@@ -62,7 +62,7 @@ class DatabaseManager:
             SELECT 
                 id, title, author, publisher, category_name, location,
                 price, stock_quantity, isbn, cover_image_url
-            FROM books
+            FROM book
             WHERE {where_clause}
             ORDER BY title ASC
             """
@@ -84,7 +84,7 @@ class DatabaseManager:
         """데이터베이스 연결 테스트"""
         try:
             with self.connection.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) as total FROM books")
+                cursor.execute("SELECT COUNT(*) as total FROM book")
                 result = cursor.fetchone()
                 print(f"📚 총 도서 수: {result[0]}권")
                 return True
@@ -111,7 +111,7 @@ class DatabaseManager:
             isbn = book_data.get('isbn', '')
             if isbn:
                 with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
-                    cursor.execute("SELECT id, stock_quantity FROM books WHERE isbn = %s", (isbn,))
+                    cursor.execute("SELECT id, stock_quantity FROM book WHERE isbn = %s", (isbn,))
                     existing_book = cursor.fetchone()
                     
                     if existing_book:
@@ -119,7 +119,7 @@ class DatabaseManager:
                         current_stock = existing_book['stock_quantity']
                         new_stock = current_stock + book_data.get('stock_quantity', 1)
                         
-                        update_sql = "UPDATE books SET stock_quantity = %s WHERE isbn = %s"
+                        update_sql = "UPDATE book SET stock_quantity = %s WHERE isbn = %s"
                         cursor.execute(update_sql, (new_stock, isbn))
                         
                         print(f"�� 기존 도서 재고 증가: {book_data.get('title', 'N/A')}")
@@ -128,7 +128,7 @@ class DatabaseManager:
             
             # 새로운 도서 등록
             insert_sql = """
-            INSERT INTO books (
+            INSERT INTO book (
                 title, author, publisher, category_name, location,
                 price, stock_quantity, isbn, cover_image_url
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -175,7 +175,7 @@ class DatabaseManager:
                 cursor.execute("""
                     SELECT id, title, author, publisher, category_name, location,
                            price, stock_quantity, isbn, cover_image_url
-                    FROM books WHERE isbn = %s
+                    FROM book WHERE isbn = %s
                 """, (isbn,))
                 result = cursor.fetchone()
                 

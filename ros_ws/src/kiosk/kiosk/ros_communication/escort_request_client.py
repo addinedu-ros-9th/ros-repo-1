@@ -88,11 +88,30 @@ class EscortRequestClient(QObject):
         """리소스 정리"""
         try:
             if self.node:
-                self.node.destroy_node()
-            rclpy.shutdown()
-            print("✅ EscortRequestClient 리소스 정리 완료")
+                # 노드가 유효한지 확인
+                try:
+                    if hasattr(self.node, 'get_name') and self.node.get_name():
+                        self.node.destroy_node()
+                except Exception as e:
+                    print(f"⚠️ escort_client node 정리 중 오류: {e}")
+                finally:
+                    self.node = None
         except Exception as e:
-            print(f"❌ EscortRequestClient 리소스 정리 중 오류: {e}")
+            print(f"⚠️ escort_client cleanup 중 오류: {e}")
+        
+        try:
+            if self.client:
+                self.client.destroy()
+                self.client = None
+        except Exception as e:
+            print(f"⚠️ escort_client client 정리 중 오류: {e}")
+        
+        try:
+            rclpy.shutdown()
+        except Exception as e:
+            print(f"⚠️ rclpy shutdown 중 오류: {e}")
+        
+        print("✅ EscortRequestClient 리소스 정리 완료")
 
 # 테스트용 코드
 if __name__ == "__main__":

@@ -28,7 +28,7 @@ class BookDataParser:
         
         # 위치 매핑 (카테고리별 기본 위치)
         self.location_mapping = {
-            '컴퓨터': 'D3',  # 컴퓨터 서적은 D3 또는 D5
+            '컴퓨터': 'A',
             '언어': 'B',
             '소설': 'C'
         }
@@ -58,7 +58,12 @@ class BookDataParser:
             description = book_info.get('description', '')
             
             # 카테고리 결정
+            print(f"\n🔍 카테고리 결정 중...")
+            print(f"   제목: {title}")
+            print(f"   알라딘 카테고리: {book_info.get('categoryName', 'N/A')}")
+            
             category = self._determine_category(book_info)
+            print(f"   결정된 카테고리: {category}")
             
             # 위치 결정
             location = self._determine_location(category)
@@ -148,7 +153,20 @@ class BookDataParser:
         Returns:
             str: 결정된 카테고리
         """
-        # 1. 제목 기반 카테고리 추정
+        # 1. 알라딘 API의 categoryName 정보 활용
+        category_name = book_info.get('categoryName', '')
+        if category_name:
+            print(f"📋 알라딘 카테고리: {category_name}")
+            
+            # 알라딘 카테고리를 우리 카테고리로 매핑
+            if '소설' in category_name or '시' in category_name or '희곡' in category_name:
+                return '소설'
+            elif '컴퓨터' in category_name or '프로그래밍' in category_name or 'IT' in category_name:
+                return '컴퓨터'
+            elif '언어' in category_name or '외국어' in category_name or '영어' in category_name:
+                return '언어'
+        
+        # 2. 제목 기반 카테고리 추정 (fallback)
         title = book_info.get('title', '').lower()
         
         # 컴퓨터 관련 키워드
@@ -174,8 +192,8 @@ class BookDataParser:
             if keyword in title:
                 return '소설'
         
-        # 2. 기본값 (컴퓨터로 설정)
-        return '컴퓨터'
+        # 3. 기본값 (소설로 설정 - 더 일반적인 카테고리)
+        return '소설'
     
     def _determine_location(self, category: str) -> str:
         """
@@ -234,7 +252,7 @@ def main():
     aladin = AladinAPIClient("ttbleeshun08062356001")
     
     # 도서 검색
-    book_info = aladin.search_specific_book("밑바닥부터 시작하는 딥러닝 1")
+    book_info = aladin.search_specific_book("ROS2 혼자공부하는 로봇SW 직접 만들고 코딩하자")
     
     if book_info:
         # 파서 생성

@@ -25,19 +25,9 @@ class BookDetailPopup(QDialog):
         
         # 위치별 좌표 매핑 (waypoint.png 이미지 기준 - 778x416 크기)
         self.location_coordinates = {
-            'A': (100, 50),    # A구역 (강의실) - A1, A2 위치
-            'B': (100, 100),   # B구역 (언어) - B1 위치 (키오스크 근처)
-            'C': (100, 150),   # C구역 (소설) - C1 위치 (관리자 PC 근처)
-            'D': (300, 150),   # D구역 (컴퓨터) - D3, D5 위치 (컴퓨터 서적)
-            'E': (100, 250),   # E구역 (기타) - E3 위치 (Base)
-            # 세부 위치 좌표 추가
-            'A1': (80, 40),    # A1 위치
-            'A2': (120, 40),   # A2 위치
-            'B1': (80, 90),    # B1 위치 (키오스크)
-            'C1': (80, 140),   # C1 위치 (관리자 PC)
-            'D3': (403, 283),  # D3 위치 (컴퓨터 서적)
-            'D5': (320, 140),  # D5 위치 (컴퓨터 서적)
-            'E3': (80, 240),   # E3 위치 (Base)
+            'A': (318, 328),   
+            'B': (514, 329),  
+            'C': (623, 241),
         }
         
         self.init_ui()
@@ -71,7 +61,7 @@ class BookDetailPopup(QDialog):
         """지도 이미지 로드 및 윈도우 크기 조정"""
         try:
             # 지도 이미지 파일 경로 (waypoint.png 사용)
-            map_file = '/home/robolee/dev_ws/ros-repo-1/ros_ws/src/waypoint.png'
+            map_file = '/home/robolee/dev_ws/ros-repo-1/ros_ws/src/waypoint3.png'
             
             if not os.path.exists(map_file):
                 print(f"❌ 지도 이미지 파일을 찾을 수 없습니다: {map_file}")
@@ -108,17 +98,17 @@ class BookDetailPopup(QDialog):
                 # 지도 비율 계산
                 map_ratio = map_width / map_height
                 
-                # 지도 라벨 크기 설정 (최소 600x400)
-                map_label_width = max(600, int(400 * map_ratio))
-                map_label_height = max(400, int(600 / map_ratio))
+                # 지도 라벨 크기 설정 (더 크게 조정)
+                map_label_width = max(700, int(400 * map_ratio))  # 최소 너비 증가
+                map_label_height = max(800, int(600 / map_ratio))  # 최소 높이 증가
                 
                 # 지도 라벨 크기 조정
                 self.mapLabel.setMinimumSize(map_label_width, map_label_height)
                 self.mapLabel.setMaximumSize(map_label_width, map_label_height)
                 
                 # 전체 윈도우 크기 조정
-                total_width = map_label_width + 600  # 지도 + 정보 패널
-                total_height = max(map_label_height + 100, 800)  # 최소 높이 800
+                total_width = map_label_width + 700  # 지도 + 정보 패널 (패널 크기도 약간 증가)
+                total_height = max(map_label_height + 150, 1000)  # 최소 높이 증가
                 
                 self.resize(total_width, total_height)
                 
@@ -139,10 +129,19 @@ class BookDetailPopup(QDialog):
         if self.map_image is None:
             return
         
-        # 지도 크기에 맞게 조정
+        # 지도 라벨 크기 가져오기 (패딩 고려)
+        label_width = self.mapLabel.width()
+        label_height = self.mapLabel.height()
+        
+        # 패딩을 고려한 실제 사용 가능한 크기 계산
+        padding = 20  # 패딩 값
+        available_width = label_width - (padding * 2)
+        available_height = label_height - (padding * 2)
+        
+        # 지도 이미지를 사용 가능한 크기에 맞게 조정
         scaled_map = self.map_image.scaled(
-            self.mapLabel.width(), 
-            self.mapLabel.height(), 
+            available_width, 
+            available_height, 
             Qt.KeepAspectRatio, 
             Qt.SmoothTransformation
         )
@@ -192,7 +191,8 @@ class BookDetailPopup(QDialog):
         
         painter.end()
         
-        # 지도 표시
+        # 지도 라벨에 가운데 정렬로 표시
+        self.mapLabel.setAlignment(Qt.AlignCenter)
         self.mapLabel.setPixmap(scaled_map)
         
         # 위치 정보 업데이트

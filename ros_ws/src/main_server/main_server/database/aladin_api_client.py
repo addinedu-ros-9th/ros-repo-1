@@ -200,7 +200,115 @@ class AladinAPIClient:
             print(f"❌ API 연결 테스트 실패: {e}")
             return False
 
-# 사용 예시
+    def search_specific_book_with_author(self, book_title: str, author: str = None) -> Optional[Dict]:
+        """
+        제목과 저자로 특정 도서 검색 (더 정확한 검색)
+        
+        Args:
+            book_title (str): 검색할 도서 제목
+            author (str): 저자명 (선택사항)
+            
+        Returns:
+            dict: 도서 정보 또는 None
+        """
+        print(f"�� 알라딘 API에서 도서 검색: {book_title}")
+        if author:
+            print(f"   저자: {author}")
+        
+        # 1. 제목으로 먼저 검색
+        result = self.search_books(
+            query=book_title,
+            query_type="Title",
+            search_target="Book",
+            max_results=10,  # 더 많은 결과 검색
+            cover="Big",
+            output="JS"
+        )
+        
+        if not result or 'item' not in result:
+            print(f"❌ '{book_title}' 검색 결과가 없습니다.")
+            return None
+        
+        books = result['item']
+        
+        # 2. 저자가 제공된 경우, 저자명으로 필터링
+        if author:
+            print(f"�� 저자명으로 필터링: {author}")
+            filtered_books = []
+            
+            for book in books:
+                book_author = book.get('author', '').lower()
+                search_author = author.lower()
+                
+                # 저자명이 포함되어 있는지 확인
+                if search_author in book_author or book_author in search_author:
+                    filtered_books.append(book)
+            
+            if filtered_books:
+                books = filtered_books
+                print(f"✅ 저자명으로 필터링된 결과: {len(books)}개")
+            else:
+                print(f"⚠️ 저자명으로 필터링된 결과가 없습니다. 전체 결과에서 선택합니다.")
+        
+        # 3. 첫 번째 결과 반환 (가장 정확한 매치)
+        book_info = books[0] if books else None
+        
+        if book_info:
+            print(f"✅ 도서 발견: {book_info.get('title', 'N/A')}")
+            print(f"   저자: {book_info.get('author', 'N/A')}")
+            print(f"   출판사: {book_info.get('publisher', 'N/A')}")
+            print(f"   ISBN13: {book_info.get('isbn13', 'N/A')}")
+            print(f"   가격: {book_info.get('priceSales', 'N/A')}원")
+        
+        return book_info
+
+    def get_book_category_info(self, book_title: str, author: str = None) -> Optional[Dict]:
+        """
+        도서의 카테고리 정보 조회
+        
+        Args:
+            book_title (str): 검색할 도서 제목
+            author (str): 저자명 (선택사항)
+            
+        Returns:
+            dict: 도서 정보 (카테고리 포함) 또는 None
+        """
+        print(f"📚 도서 카테고리 정보 조회: {book_title}")
+        if author:
+            print(f"   저자: {author}")
+        
+        # 도서 검색
+        book_info = self.search_specific_book_with_author(book_title, author)
+        
+        if not book_info:
+            print("❌ 도서를 찾을 수 없습니다.")
+            return None
+        
+        # 카테고리 정보 출력
+        print("\n📋 도서 카테고리 정보:")
+        print("-" * 50)
+        
+        # 알라딘 API에서 제공하는 카테고리 관련 필드들
+        category_fields = {
+            'categoryName': '카테고리명',
+            'categoryId': '카테고리 ID',
+            'categoryIdPath': '카테고리 경로',
+            'subInfo': '부가정보 (카테고리 포함)'
+        }
+        
+        for field, description in category_fields.items():
+            value = book_info.get(field, 'N/A')
+            print(f"{description}: {value}")
+        
+        # 전체 도서 정보도 출력 (디버깅용)
+        print("\n📖 전체 도서 정보:")
+        print("-" * 50)
+        for key, value in book_info.items():
+            print(f"{key}: {value}")
+        
+        return book_info
+
+
 def main():
     """테스트용 메인 함수"""
     # API 키 설정 (실제 사용시 환경변수나 설정파일에서 로드)
@@ -214,18 +322,19 @@ def main():
         print("❌ API 연결 실패. TTBKey를 확인해주세요.")
         return
     
-    # 특정 도서 검색 테스트
-    book_info = aladin.search_specific_book("밑바닥부터 시작하는 딥러닝 1")
+    # 카테고리 정보 확인 테스트
+    test_book = {"title": "디지털 포트리스2", "author": "댄 브라운"}
+    
+    print("\n" + "="*60)
+    print("📚 도서 카테고리 정보 확인 테스트")
+    print("="*60)
+    
+    book_info = aladin.get_book_category_info(test_book['title'], test_book['author'])
     
     if book_info:
-        print("\n📚 검색된 도서 정보:")
-        print(f"제목: {book_info.get('title', 'N/A')}")
-        print(f"저자: {book_info.get('author', 'N/A')}")
-        print(f"출판사: {book_info.get('publisher', 'N/A')}")
-        print(f"ISBN13: {book_info.get('isbn13', 'N/A')}")
-        print(f"가격: {book_info.get('priceSales', 'N/A')}원")
-        print(f"표지 URL: {book_info.get('cover', 'N/A')}")
-        print(f"설명: {book_info.get('description', 'N/A')[:100]}...")
+        print("\n✅ 카테고리 정보 조회 완료!")
+    else:
+        print("\n❌ 카테고리 정보 조회 실패")
 
 if __name__ == "__main__":
-    main() 
+    main()

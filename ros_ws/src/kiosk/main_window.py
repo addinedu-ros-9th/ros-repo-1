@@ -51,6 +51,9 @@ class MainWindow(QMainWindow):
             self.book_search_widget = BookSearchWidget()
             # 홈 버튼 시그널 연결 (한 번만)
             self.book_search_widget.home_requested.connect(self.show_main_window)
+        else:
+            # 기존 위젯이 있으면 초기화
+            self.book_search_widget.reset_widget()
         
         # 현재 윈도우 숨기고 책 검색 윈도우 표시
         self.hide()

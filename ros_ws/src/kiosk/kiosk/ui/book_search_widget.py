@@ -5,6 +5,7 @@ import os
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
+from PyQt5.QtWidgets import QScrollArea
 from PyQt5 import uic
 import requests
 from urllib.parse import urlparse
@@ -32,6 +33,11 @@ class BookSearchWidget(QWidget):
         
         self.init_ui()
         self.setup_connections()
+        
+        # 초기화 시 빈 화면으로 시작 (자동 검색 제거)
+        self.show_empty_state()
+        
+        print("✅ BookSearchWidget 초기화 완료")
     
     def init_ui(self):
         """UI 파일 로드"""
@@ -51,17 +57,47 @@ class BookSearchWidget(QWidget):
         self.robotCallButton.clicked.connect(self.on_robot_call_clicked)
         self.orderButton.clicked.connect(self.on_order_clicked)
         
-        # 엔터키로도 검색 가능
+        # 엔터키로도 검색 가능 (스크롤 방지)
         self.searchLineEdit.returnPressed.connect(self.on_search_clicked)
         
+        # 검색 라인 에디터에서 엔터키 이벤트 차단
+        self.searchLineEdit.installEventFilter(self)
+        
         print("✅ 시그널-슬롯 연결 완료")
+    
+    def show_empty_state(self):
+        """빈 상태 표시 (초기 화면)"""
+        layout = self.bookListWidget.layout()
+        if layout is None:
+            layout = QVBoxLayout(self.bookListWidget)
+        
+        # 기존 위젯들 완전히 제거
+        self.clear_book_list_widget()
+        
+        # 빈 상태 메시지 표시
+        empty_label = QLabel("🔍 검색어를 입력하고 검색 버튼을 눌러주세요.\n또는 '전체 조회' 버튼을 눌러 모든 도서를 확인하세요.")
+        empty_label.setAlignment(Qt.AlignCenter)
+        empty_label.setStyleSheet("""
+            color: #7f8c8d; 
+            font-size: 16px; 
+            padding: 40px; 
+            line-height: 1.5;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            margin: 20px;
+        """)
+        layout.addWidget(empty_label)
+        
+        print("✅ 빈 상태 표시 완료")
     
     def on_search_clicked(self):
         """검색 버튼 클릭"""
         search_text = self.searchLineEdit.text().strip()
         
+        # 검색어가 없으면 모든 책 조회
         if not search_text:
-            QMessageBox.warning(self, "검색 오류", "검색어를 입력해주세요.")
+            print("🔍 전체 도서 목록 조회")
+            self.search_all_books()
             return
         
         print(f"🔍 검색어: {search_text}")
@@ -80,17 +116,90 @@ class BookSearchWidget(QWidget):
         
         print(f"🔍 검색 타입: {search_type}")
         
+        # 검색 시작 시 스크롤을 맨 위로 이동
+        self.scroll_to_top()
+        
         # 검색 중 상태 표시
         self.searchButton.setText("검색중...")
         self.searchButton.setEnabled(False)
         
         # ROS2 서비스 호출
-        self.search_client.search_books(search_text, search_type)
+        try:
+            print(f"🚀 검색 요청 전송: {search_text} ({search_type})")
+            self.search_client.search_books(search_text, search_type)
+        except Exception as e:
+            print(f"❌ 검색 요청 중 오류: {e}")
+            self.searchButton.setText("검색")
+            self.searchButton.setEnabled(True)
+            QMessageBox.warning(self, "검색 오류", f"검색 요청 중 오류가 발생했습니다: {str(e)}")
+    
+    def search_all_books(self):
+        """전체 도서 목록 조회"""
+        # 검색 시작 시 스크롤을 맨 위로 이동
+        self.scroll_to_top()
+        
+        # 검색 중 상태 표시
+        self.searchButton.setText("조회중...")
+        self.searchButton.setEnabled(False)
+        
+        # 빈 검색어로 모든 책 조회 (검색 타입은 title로 설정)
+        try:
+            print("🚀 전체 도서 조회 요청 전송")
+            self.search_client.search_books("", "title")
+        except Exception as e:
+            print(f"❌ 전체 도서 조회 중 오류: {e}")
+            self.searchButton.setText("전체 조회")
+            self.searchButton.setEnabled(True)
+            QMessageBox.warning(self, "조회 오류", f"전체 도서 조회 중 오류가 발생했습니다: {str(e)}")
+    
+    def reset_widget(self):
+        """위젯 초기화"""
+        try:
+            # 검색 라인 에디터 초기화
+            self.searchLineEdit.clear()
+            
+            # 검색 버튼 초기화
+            self.searchButton.setText("전체 조회")
+            self.searchButton.setEnabled(True)
+            
+            # 검색 결과 리스트 초기화
+            self.clear_book_list_widget()
+            
+            # 기본 검색 타입 설정 (제목)
+            self.titleRadioButton.setChecked(True)
+            
+            # 빈 상태로 표시
+            self.show_empty_state()
+            
+            print("✅ 위젯 초기화 완료")
+            
+        except Exception as e:
+            print(f"❌ 위젯 초기화 중 오류: {e}")
+    
+    def show_widget(self):
+        """위젯 표시 시 빈 상태로 시작"""
+        # 위젯이 표시될 때 빈 상태로 시작
+        QTimer.singleShot(100, self.show_empty_state)
+    
+    def on_show_event(self, event):
+        """위젯이 표시될 때 호출되는 이벤트"""
+        # 위젯이 표시될 때 빈 상태로 시작
+        QTimer.singleShot(100, self.show_empty_state)
+        super().showEvent(event)
 
     def on_search_results(self, success, message, books):
         """검색 결과 처리"""
+        print(f"📥 검색 결과 수신: success={success}, message={message}, books_count={len(books) if books else 0}")
+        
+        # 검색어 확인하여 버튼 텍스트 결정
+        search_text = self.searchLineEdit.text().strip()
+        if not search_text:
+            button_text = "전체 조회"
+        else:
+            button_text = "검색"
+        
         # UI 상태 복원
-        self.searchButton.setText("검색")
+        self.searchButton.setText(button_text)
         self.searchButton.setEnabled(True)
         
         if success:
@@ -102,24 +211,38 @@ class BookSearchWidget(QWidget):
 
     def display_search_results(self, books):
         """검색 결과를 UI에 표시"""
-        # 기존 결과 초기화
+        # 기존 결과 완전 초기화
         layout = self.bookListWidget.layout()
         if layout is None:
             layout = QVBoxLayout(self.bookListWidget)
         
-        # 기존 위젯들 제거
-        for i in reversed(range(layout.count())):
-            child = layout.itemAt(i)
-            if child.widget():
-                child.widget().setParent(None)
+        # 기존 위젯들 완전히 제거
+        self.clear_book_list_widget()
+        
+        # 검색어 확인
+        search_text = self.searchLineEdit.text().strip()
+        is_all_books = not search_text
         
         # 검색 결과가 없으면 메시지 표시
         if not books:
-            no_result_label = QLabel("검색 결과가 없습니다.")
+            if is_all_books:
+                no_result_label = QLabel("등록된 도서가 없습니다.\n관리자에게 문의해주세요.")
+            else:
+                no_result_label = QLabel(f"'{search_text}'에 대한 검색 결과가 없습니다.\n다른 검색어를 시도해보세요.")
             no_result_label.setAlignment(Qt.AlignCenter)
-            no_result_label.setStyleSheet("color: #7f8c8d; font-size: 16px; padding: 20px;")
+            no_result_label.setStyleSheet("color: #7f8c8d; font-size: 16px; padding: 20px; line-height: 1.5;")
             layout.addWidget(no_result_label)
             return
+        
+        # 결과 개수 표시
+        if is_all_books:
+            result_count_label = QLabel(f"📚 전체 {len(books)}권의 도서")
+        else:
+            result_count_label = QLabel(f"🔍 '{search_text}' 검색 결과: {len(books)}권")
+        
+        result_count_label.setAlignment(Qt.AlignCenter)
+        result_count_label.setStyleSheet("color: #2c3e50; font-size: 14px; font-weight: bold; padding: 10px; background-color: #ecf0f1; border-radius: 5px; margin: 5px;")
+        layout.addWidget(result_count_label)
         
         # 검색 결과 표시
         for book in books:
@@ -128,6 +251,9 @@ class BookSearchWidget(QWidget):
         
         # 스페이서 추가
         layout.addStretch()
+        
+        # 스크롤을 맨 위로 이동
+        self.scroll_to_top()
 
     def load_image_from_url(self, url):
         """URL에서 이미지 로드"""
@@ -165,8 +291,8 @@ class BookSearchWidget(QWidget):
         """)
         
         layout = QHBoxLayout(widget)
-        layout.setContentsMargins(20, 20, 20, 20)  # 여백 증가
-        layout.setSpacing(25)  # 간격 증가
+        layout.setContentsMargins(5, 5, 5, 5)  # 여백 증가
+        layout.setSpacing(50)  # 간격 증가
         
         # 책 표지 이미지
         cover_label = QLabel()
@@ -209,7 +335,7 @@ class BookSearchWidget(QWidget):
         info_widget = QWidget()
         info_widget.setMinimumWidth(800)  # 최소 너비 설정
         info_layout = QVBoxLayout(info_widget)
-        info_layout.setSpacing(12)  # 간격 증가
+        info_layout.setSpacing(0)  # 간격 증가
         info_layout.setContentsMargins(0, 0, 0, 0)
         
         # 제목 (더 큰 폰트, 줄바꿈 허용)
@@ -217,36 +343,36 @@ class BookSearchWidget(QWidget):
         title_label.setFont(QFont("Arial", 16, QFont.Bold))
         title_label.setStyleSheet("color: #2c3e50; line-height: 1.2;")
         title_label.setWordWrap(True)  # 긴 제목 줄바꿈
-        title_label.setMinimumHeight(50)  # 최소 높이 설정
+        title_label.setMinimumHeight(60)  # 최소 높이 설정
         title_label.setMinimumWidth(600)  # 최소 너비 설정
         
         # 저자
         author_label = QLabel(f"✍️ {book['author']}")
-        title_label.setFont(QFont("Arial", 16, QFont.Bold))
+        author_label.setFont(QFont("Arial", 14))
         author_label.setStyleSheet("color: #34495e;")
-        title_label.setMinimumHeight(50)  # 최소 높이 설정
-        title_label.setMinimumWidth(600)  # 최소 너비 설정
+        author_label.setMinimumHeight(35)
+        author_label.setMinimumWidth(600)
         
         # 출판사
         publisher_label = QLabel(f"🏢 {book['publisher']}")
-        title_label.setFont(QFont("Arial", 16, QFont.Bold))
+        publisher_label.setFont(QFont("Arial", 14))
         publisher_label.setStyleSheet("color: #7f8c8d;")
-        title_label.setMinimumHeight(50)  # 최소 높이 설정
-        title_label.setMinimumWidth(600)  # 최소 너비 설정
+        publisher_label.setMinimumHeight(35)
+        publisher_label.setMinimumWidth(600)
         
         # 가격
         price_label = QLabel(f"💰 {int(book['price']):,}원")
-        title_label.setFont(QFont("Arial", 16, QFont.Bold))
+        price_label.setFont(QFont("Arial", 14))
         price_label.setStyleSheet("color: #27ae60;")
-        title_label.setMinimumHeight(50)  # 최소 높이 설정
-        title_label.setMinimumWidth(600)  # 최소 너비 설정
+        price_label.setMinimumHeight(35)
+        price_label.setMinimumWidth(600)
 
         # 위치
         location_label = QLabel(f"📍 {book['location']}구역")
-        title_label.setFont(QFont("Arial", 16, QFont.Bold))
+        location_label.setFont(QFont("Arial", 14))
         location_label.setStyleSheet("color: #e67e22;")
-        title_label.setMinimumHeight(50)  # 최소 높이 설정
-        title_label.setMinimumWidth(600)  # 최소 너비 설정
+        location_label.setMinimumHeight(35)
+        location_label.setMinimumWidth(600)
         
         # 재고 상태 표시
         stock_icon = "✅" if book['stock_quantity'] > 0 else "❌"
@@ -275,6 +401,50 @@ class BookSearchWidget(QWidget):
         widget.mousePressEvent = lambda event: self.on_book_item_clicked(book)
         
         return widget
+
+    def clear_book_list_widget(self):
+        """책 리스트 위젯 완전 초기화"""
+        layout = self.bookListWidget.layout()
+        if layout:
+            # 모든 위젯 제거
+            while layout.count():
+                child = layout.takeAt(0)
+                if child.widget():
+                    child.widget().deleteLater()
+                elif child.layout():
+                    self.clear_layout(child.layout())
+    
+    def clear_layout(self, layout):
+        """레이아웃 내의 모든 위젯 재귀적으로 제거"""
+        while layout.count():
+            child = layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                self.clear_layout(child.layout())
+    
+    def scroll_to_top(self):
+        """스크롤을 맨 위로 이동"""
+        try:
+            # 스크롤 영역 찾기
+            scroll_area = self.bookListWidget.parent()
+            while scroll_area and not isinstance(scroll_area, QScrollArea):
+                scroll_area = scroll_area.parent()
+            
+            if scroll_area:
+                scroll_area.verticalScrollBar().setValue(0)
+                print("✅ 스크롤을 맨 위로 이동")
+        except Exception as e:
+            print(f"⚠️ 스크롤 이동 중 오류: {e}")
+    
+    def eventFilter(self, obj, event):
+        """이벤트 필터 - 엔터키 스크롤 방지"""
+        if obj == self.searchLineEdit and event.type() == QEvent.KeyPress:
+            if event.key() == Qt.Key_Return or event.key() == Qt.Key_Enter:
+                # 엔터키 이벤트를 처리하고 다른 위젯으로 전파하지 않음
+                self.on_search_clicked()
+                return True
+        return super().eventFilter(obj, event)
 
     def on_book_item_clicked(self, book):
         """책 아이템 클릭"""
@@ -337,9 +507,25 @@ class BookSearchWidget(QWidget):
         """홈 버튼 클릭"""
         print("🏠 홈으로 이동 요청")
         
-        # ROS2 리소스 정리
-        if hasattr(self, 'search_client'):
-            self.search_client.cleanup()
+        # 위젯 초기화
+        self.reset_widget()
+        
+        # ROS2 리소스 정리 (안전하게)
+        try:
+            if hasattr(self, 'search_client') and self.search_client:
+                # 스레드가 실행 중이면 먼저 중단
+                if self.search_client.isRunning():
+                    self.search_client.quit()
+                    self.search_client.wait(1000)  # 1초 대기
+                self.search_client.cleanup()
+        except Exception as e:
+            print(f"⚠️ search_client 정리 중 오류: {e}")
+        
+        try:
+            if hasattr(self, 'escort_client') and self.escort_client:
+                self.escort_client.cleanup()
+        except Exception as e:
+            print(f"⚠️ escort_client 정리 중 오류: {e}")
         
         self.home_requested.emit()  # 시그널 발생
     
@@ -358,10 +544,22 @@ class BookSearchWidget(QWidget):
 
     def closeEvent(self, event):
         """윈도우 종료 시 리소스 정리"""
-        if hasattr(self, 'search_client'):
-            self.search_client.cleanup()
-        if hasattr(self, 'escort_client'):
-            self.escort_client.cleanup()
+        try:
+            if hasattr(self, 'search_client') and self.search_client:
+                # 스레드가 실행 중이면 먼저 중단
+                if self.search_client.isRunning():
+                    self.search_client.quit()
+                    self.search_client.wait(1000)  # 1초 대기
+                self.search_client.cleanup()
+        except Exception as e:
+            print(f"⚠️ search_client 정리 중 오류: {e}")
+            
+        try:
+            if hasattr(self, 'escort_client') and self.escort_client:
+                self.escort_client.cleanup()
+        except Exception as e:
+            print(f"⚠️ escort_client 정리 중 오류: {e}")
+            
         event.accept()
 
 if __name__ == "__main__":
