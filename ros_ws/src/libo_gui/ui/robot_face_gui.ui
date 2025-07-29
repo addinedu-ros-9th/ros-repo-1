@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1920</width>
+    <height>1080</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Robot Face GUI</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QWidget" name="face_widget" native="true">
+      <property name="minimumSize">
+       <size>
+        <width>1400</width>
+        <height>900</height>
+       </size>
+      </property>
+      <property name="styleSheet">
+       <string>background-color: black;</string>
+      </property>
+     </widget>
+    </item>
+         <item>
+      <widget class="QLabel" name="status_label">
+       <property name="text">
+        <string>상태: normal</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+       <property name="maximumHeight">
+        <number>100</number>
+       </property>
+       <property name="minimumHeight">
+        <number>100</number>
+       </property>
+       <property name="styleSheet">
+        <string>color: white; font-size: 24px; font-weight: bold; background-color: #333; padding: 5px;</string>
+       </property>
+      </widget>
+     </item>
+    <item>
+     <layout class="QHBoxLayout" name="button_layout">
+      <item>
+       <widget class="QPushButton" name="normal_button">
+        <property name="text">
+         <string>Normal</string>
+        </property>
+        <property name="styleSheet">
+         <string>QPushButton {
+    background-color: #444;
+    color: white;
+    border: 2px solid #666;
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 14px;
+}
+QPushButton:hover {
+    background-color: #555;
+}
+QPushButton:pressed {
+    background-color: #333;
+}</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="happy_button">
+        <property name="text">
+         <string>Happy</string>
+        </property>
+        <property name="styleSheet">
+         <string>QPushButton {
+    background-color: #444;
+    color: white;
+    border: 2px solid #666;
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 14px;
+}
+QPushButton:hover {
+    background-color: #555;
+}
+QPushButton:pressed {
+    background-color: #333;
+}</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="sad_button">
+        <property name="text">
+         <string>Sad</string>
+        </property>
+        <property name="styleSheet">
+         <string>QPushButton {
+    background-color: #444;
+    color: white;
+    border: 2px solid #666;
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 14px;
+}
+QPushButton:hover {
+    background-color: #555;
+}
+QPushButton:pressed {
+    background-color: #333;
+}</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="thinking_button">
+        <property name="text">
+         <string>Thinking</string>
+        </property>
+        <property name="styleSheet">
+         <string>QPushButton {
+    background-color: #444;
+    color: white;
+    border: 2px solid #666;
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 14px;
+}
+QPushButton:hover {
+    background-color: #555;
+}
+QPushButton:pressed {
+    background-color: #333;
+}</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QPushButton" name="error_button">
+        <property name="text">
+         <string>Error</string>
+        </property>
+        <property name="styleSheet">
+         <string>QPushButton {
+    background-color: #444;
+    color: white;
+    border: 2px solid #666;
+    border-radius: 5px;
+    padding: 10px;
+    font-size: 14px;
+}
+QPushButton:hover {
+    background-color: #555;
+}
+QPushButton:pressed {
+    background-color: #333;
+}</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1920</width>
+     <height>22</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui> 
