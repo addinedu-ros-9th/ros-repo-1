@@ -63,6 +63,14 @@
             <param name='log_level' value="$(var log_level)"/>
             <param name='use_sim_time' value="$(var use_sim_time)"/>
 
+            <!--핑키위치 초기설정 맵상 E3좌표-->
+            <param name="set_initial_pose" value="true"/>
+            <param name="initial_pose.x" value="0.05"/>   
+            <param name="initial_pose.y" value="-0.34"/>    
+            <param name="initial_pose.z" value="0.0"/>
+            <param name="initial_pose.yaw" value="0.0"/>   
+            <!--핑키위치 초기설정 맵상 E3좌표-->
+
             <remap from="/tf" to="tf"/>
             <remap from="/tf_static" to="tf_static"/>
         </node>
