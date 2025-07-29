@@ -1,3 +1,6 @@
+# .vscode
+.vscode/
+
 ### ROS2 ###
 install/
 log/
