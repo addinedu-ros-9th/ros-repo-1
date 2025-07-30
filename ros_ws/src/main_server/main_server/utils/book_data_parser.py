@@ -28,9 +28,9 @@ class BookDataParser:
         
         # 위치 매핑 (카테고리별 기본 위치)
         self.location_mapping = {
-            '컴퓨터': 'A',
-            '언어': 'B',
-            '소설': 'C'
+            '컴퓨터': 'D5',
+            '언어': 'D7',
+            '소설': 'C8'
         }
     
     def parse_aladin_response(self, book_info: Dict) -> Optional[Dict]:

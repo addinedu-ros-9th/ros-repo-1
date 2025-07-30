@@ -41,9 +41,19 @@ class BookSearchWidget(QWidget):
     
     def init_ui(self):
         """UI 파일 로드"""
-        # UI 파일 경로 
-        ui_file = os.path.join(os.path.dirname(__file__), '..', 'ui_files', 'bookSearch.ui')
-        uic.loadUi(ui_file, self)
+        # UI 파일 경로 - ROS2 패키지 설치 경로에서 찾기
+        try:
+            # 먼저 현재 디렉토리 기준으로 시도
+            ui_file = os.path.join(os.path.dirname(__file__), '..', 'ui_files', 'bookSearch.ui')
+            if not os.path.exists(ui_file):
+                # ROS2 패키지 설치 경로에서 찾기
+                import ament_index_python
+                ui_file = os.path.join(ament_index_python.get_package_share_directory('kiosk'), 'ui_files', 'bookSearch.ui')
+            uic.loadUi(ui_file, self)
+        except Exception as e:
+            print(f"UI 파일 로드 실패: {e}")
+            print(f"시도한 경로: {ui_file}")
+            raise
         
         # 윈도우 설정
         self.setWindowTitle("LIBO Book Search")
@@ -276,7 +286,7 @@ class BookSearchWidget(QWidget):
     def create_book_item_widget(self, book):
         """개별 책 아이템 위젯 생성 (이미지 표시 개선)"""
         widget = QWidget()
-        widget.setFixedHeight(250)  # 높이 증가
+        widget.setFixedHeight(250)  # 높이 증가 - 더 큰 이미지에 맞춤
         widget.setStyleSheet("""
             QWidget {
                 border: 1px solid #bdc3c7;
@@ -292,11 +302,11 @@ class BookSearchWidget(QWidget):
         
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(5, 5, 5, 5)  # 여백 증가
-        layout.setSpacing(50)  # 간격 증가
+        layout.setSpacing(20)  # 간격 감소 - 책 표지와 정보 사이 간격 줄임
         
         # 책 표지 이미지
         cover_label = QLabel()
-        cover_label.setFixedSize(120, 150)  # 크기 증가
+        cover_label.setFixedSize(150, 200)  # 크기 증가
         cover_label.setAlignment(Qt.AlignCenter)
         cover_label.setStyleSheet("""
             background-color: #f8f9fa; 
@@ -309,8 +319,8 @@ class BookSearchWidget(QWidget):
         if cover_url:
             pixmap = self.load_image_from_url(cover_url)
             if pixmap:
-                # 이미지 크기 조정
-                scaled_pixmap = pixmap.scaled(110, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                # 이미지 크기 조정 - 여백 없이 전체 크기 사용
+                scaled_pixmap = pixmap.scaled(150, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 cover_label.setPixmap(scaled_pixmap)
             else:
                 # 이미지 로드 실패 시 기본 아이콘
@@ -319,7 +329,7 @@ class BookSearchWidget(QWidget):
                     background-color: #f8f9fa; 
                     border: 1px solid #dee2e6;
                     border-radius: 6px;
-                    font-size: 32px;
+                    font-size: 48px;
                 """)
         else:
             # URL이 없으면 기본 아이콘
@@ -328,7 +338,7 @@ class BookSearchWidget(QWidget):
                 background-color: #f8f9fa; 
                 border: 1px solid #dee2e6;
                 border-radius: 6px;
-                font-size: 32px;
+                font-size: 48px;
             """)
         
         # 책 정보 (더 넓은 공간 활용)

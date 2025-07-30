@@ -262,6 +262,42 @@ class AladinAPIClient:
         
         return book_info
 
+    def search_specific_book_by_isbn(self, isbn: str) -> Optional[Dict]:
+        """
+        ISBN으로 특정 도서 검색
+        
+        Args:
+            isbn (str): 검색할 도서의 ISBN
+            
+        Returns:
+            dict: 도서 정보 또는 None
+        """
+        print(f"🔍 ISBN으로 도서 검색: {isbn}")
+        
+        # ISBN으로 상세 정보 조회
+        result = self.lookup_book(
+            item_id=isbn,
+            item_id_type="ISBN13",
+            cover="Big",
+            output="JS"
+        )
+        
+        if not result or 'item' not in result:
+            print(f"❌ ISBN '{isbn}' 검색 결과가 없습니다.")
+            return None
+        
+        # 첫 번째 결과 반환
+        book_info = result['item'][0] if result['item'] else None
+        
+        if book_info:
+            print(f"✅ 도서 발견: {book_info.get('title', 'N/A')}")
+            print(f"   저자: {book_info.get('author', 'N/A')}")
+            print(f"   출판사: {book_info.get('publisher', 'N/A')}")
+            print(f"   ISBN13: {book_info.get('isbn13', 'N/A')}")
+            print(f"   가격: {book_info.get('priceSales', 'N/A')}원")
+        
+        return book_info
+
     def get_book_category_info(self, book_title: str, author: str = None) -> Optional[Dict]:
         """
         도서의 카테고리 정보 조회

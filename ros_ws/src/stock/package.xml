@@ -1,16 +1,15 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>main_server</name>
+  <name>stock</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="leesh20806@gmail.com">robolee</maintainer>
-  <license>TODO: License declaration</license>
+  <description>Stock management package for book inventory</description>
+  <maintainer email="your_email@example.com">Your Name</maintainer>
+  <license>TODO</license>
 
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>libo_interfaces</depend>
-  <depend>tf_transformations</depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
@@ -20,4 +19,4 @@
   <export>
     <build_type>ament_python</build_type>
   </export>
-</package>
+</package> 
