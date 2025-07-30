@@ -10,6 +10,10 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/ui_files', ['kiosk/ui_files/main_window_kiosk.ui']),
+        ('share/' + package_name + '/ui_files', ['kiosk/ui_files/book_detail_popup.ui']),
+        ('share/' + package_name + '/ui_files', ['kiosk/ui_files/bookSearch.ui']),
+        ('share/' + package_name + '/ui_files', ['kiosk/ui_files/book_corner_widget.ui']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -20,7 +24,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'main_ui = main_window:main' # main_window.py의 main 함수를 main_ui라는 이름으로 실행할 수 있게 등록
+            'main_ui = kiosk.ui.main_window:main' # main_window.py의 main 함수를 main_ui라는 이름으로 실행할 수 있게 등록
         ],
     },
 )

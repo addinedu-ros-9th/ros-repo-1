@@ -26,13 +26,13 @@
     <widget class="QWidget" name="leftPanel">
      <property name="minimumSize">
       <size>
-       <width>800</width>
+       <width>500</width>
        <height>0</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>800</width>
+       <width>500</width>
        <height>16777215</height>
       </size>
      </property>
@@ -80,7 +80,7 @@
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>800</height>
+          <height>500</height>
          </size>
         </property>
         <property name="styleSheet">
@@ -88,7 +88,7 @@
     border: 1px solid #dee2e6;
     border-radius: 8px;
     background-color: #f8f9fa;
-    padding: 10px;
+    padding: 2px;
 }</string>
         </property>
         <property name="text">
@@ -133,7 +133,7 @@
     <widget class="QWidget" name="rightPanel">
      <property name="minimumSize">
       <size>
-       <width>700</width>
+       <width>300</width>
        <height>0</height>
       </size>
      </property>
@@ -142,7 +142,7 @@
     background-color: white;
     border: 2px solid #bdc3c7;
     border-radius: 10px;
-    padding: 20px;
+    padding: 5px;
 }</string>
      </property>
      <layout class="QVBoxLayout" name="infoLayout">
@@ -176,13 +176,13 @@
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>300</height>
+          <height>280</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>
-          <height>300</height>
+          <height>280</height>
          </size>
         </property>
         <property name="styleSheet">
@@ -190,7 +190,7 @@
     border: 2px solid #bdc3c7;
     border-radius: 8px;
     background-color: #f8f9fa;
-    padding: 10px;
+    padding: 2px;
 }</string>
         </property>
         <property name="text">

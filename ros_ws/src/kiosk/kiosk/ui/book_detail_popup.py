@@ -19,15 +19,15 @@ class BookDetailPopup(QDialog):
         
         self.book_info = book_info
         self.map_image = None
-        self.book_location = book_info.get('location', 'A')
+        self.book_location = book_info.get('location', 'D5')
         self.is_resizing = False  # 리사이징 중복 방지 플래그
         self.resize_timer = None  # 리사이즈 타이머
         
         # 위치별 좌표 매핑 (waypoint.png 이미지 기준 - 778x416 크기)
         self.location_coordinates = {
-            'A': (318, 328),   
-            'B': (514, 329),  
-            'C': (623, 241),
+            'D5': (308, 526),   
+            'D7': (649, 527),  
+            'C8': (999, 507),
         }
         
         self.init_ui()
@@ -40,9 +40,19 @@ class BookDetailPopup(QDialog):
     
     def init_ui(self):
         """UI 초기화"""
-        # UI 파일 로드
-        ui_file = os.path.join(os.path.dirname(__file__), '..', 'ui_files', 'book_detail_popup.ui')
-        uic.loadUi(ui_file, self)
+        # UI 파일 로드 - ROS2 패키지 설치 경로에서 찾기
+        try:
+            # 먼저 현재 디렉토리 기준으로 시도
+            ui_file = os.path.join(os.path.dirname(__file__), '..', 'ui_files', 'book_detail_popup.ui')
+            if not os.path.exists(ui_file):
+                # ROS2 패키지 설치 경로에서 찾기
+                import ament_index_python
+                ui_file = os.path.join(ament_index_python.get_package_share_directory('kiosk'), 'ui_files', 'book_detail_popup.ui')
+            uic.loadUi(ui_file, self)
+        except Exception as e:
+            print(f"UI 파일 로드 실패: {e}")
+            print(f"시도한 경로: {ui_file}")
+            raise
         
         # 윈도우 설정
         self.setWindowTitle("도서 상세 정보")
@@ -98,17 +108,17 @@ class BookDetailPopup(QDialog):
                 # 지도 비율 계산
                 map_ratio = map_width / map_height
                 
-                # 지도 라벨 크기 설정 (더 크게 조정)
-                map_label_width = max(700, int(400 * map_ratio))  # 최소 너비 증가
-                map_label_height = max(800, int(600 / map_ratio))  # 최소 높이 증가
+                # 지도 라벨 크기 설정 (지도 크기 유지하면서 조정)
+                map_label_width = max(480, int(280 * map_ratio))  # 지도 크기 더욱 줄임
+                map_label_height = max(580, int(420 / map_ratio))  # 지도 높이 더욱 줄임
                 
                 # 지도 라벨 크기 조정
                 self.mapLabel.setMinimumSize(map_label_width, map_label_height)
                 self.mapLabel.setMaximumSize(map_label_width, map_label_height)
                 
                 # 전체 윈도우 크기 조정
-                total_width = map_label_width + 700  # 지도 + 정보 패널 (패널 크기도 약간 증가)
-                total_height = max(map_label_height + 150, 1000)  # 최소 높이 증가
+                total_width = map_label_width + 100  # 지도 + 정보 패널 (패널 크기 최소화)
+                total_height = max(map_label_height + 80, 680)  # 최소 높이 최소화
                 
                 self.resize(total_width, total_height)
                 
@@ -300,8 +310,8 @@ class BookDetailPopup(QDialog):
                 """)
                 return
             
-            # 이미지 크기 조정 (최대 220x300)
-            scaled_pixmap = pixmap.scaled(220, 300, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            # 이미지 크기 조정 (최대 200x280)
+            scaled_pixmap = pixmap.scaled(200, 280, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             
             # 표지 이미지 표시
             self.bookCoverLabel.setPixmap(scaled_pixmap)
@@ -310,7 +320,7 @@ class BookDetailPopup(QDialog):
                     border: 2px solid #bdc3c7;
                     border-radius: 8px;
                     background-color: white;
-                    padding: 10px;
+                    padding: 5px;
                 }
             """)
             
@@ -325,7 +335,7 @@ class BookDetailPopup(QDialog):
                     border: 2px solid #bdc3c7;
                     border-radius: 8px;
                     background-color: #f8f9fa;
-                    padding: 10px;
+                    padding: 5px;
                     font-size: 48px;
                     color: #7f8c8d;
                 }

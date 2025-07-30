@@ -1,0 +1,7 @@
+opencv-python>=4.5.0
+imutils>=0.5.4
+pyzbar>=0.1.8
+numpy>=1.19.0
+PyQt5>=5.15.0
+pymysql>=1.0.0
+requests>=2.25.0 
