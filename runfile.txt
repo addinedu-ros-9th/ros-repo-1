@@ -1,10 +1,14 @@
-1. 터미널 1: 메인 서버 실행
+1. 터미널 1: 메인 서버(책찾기 기능) 실행
 ros2 run main_server book_search_service
 
 2. 터미널 2: 키오스크 GUI 실행
-cd /home/robolee/dev_ws/ros-repo-1/ros_ws
-source setup_env.sh
-python3 src/kiosk/main_window.py
+ros2 run kiosk main_ui
 
-알라딘 api에서 책등록
-ros2 run main_server aladin_book_register
+3. 입고 gui 실행
+ros2 run stock stock_gui
+
+4. admin gui 실행
+
+5. libo_gui 실행
+ros2 run libo_gui robot_face_gui 
+
