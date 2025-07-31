@@ -16,6 +16,7 @@ find_package(rosidl_default_generators REQUIRED)
 # 메시지 및 서비스 파일 추가
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/BookInfo.msg"
+  "msg/Heartbeat.msg"
   "srv/BookSearch.srv"
   "srv/Navigate.srv"
   "srv/EscortRequest.srv"

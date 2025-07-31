@@ -24,7 +24,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'main_ui = kiosk.ui.main_window:main' # main_window.py의 main 함수를 main_ui라는 이름으로 실행할 수 있게 등록
+            'main_ui = kiosk.ui.main_window:main', # main_window.py의 main 함수를 main_ui라는 이름으로 실행할 수 있게 등록
+            'taskrequest_test_tool = kiosk.ros_communication.taskrequest_test_tool:main', # taskrequest_test_tool 추가
         ],
     },
 )
