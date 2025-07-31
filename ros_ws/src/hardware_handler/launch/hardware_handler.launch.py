@@ -5,8 +5,8 @@ def generate_launch_description():
     return LaunchDescription([
         Node(
             package='hardware_handler',
-            executable='depth_cam_sender',
-            name='depth_cam_sender',
+            executable='cam_sender',
+            name='cam_sender',
             output='screen'
         ),
         Node(

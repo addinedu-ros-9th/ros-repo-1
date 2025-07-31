@@ -10,6 +10,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/launch',
+            ['launch/hardware_handler.launch.py']),        
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -17,14 +19,13 @@ setup(
     maintainer_email='ajferhcz153@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'io_controller_node = nodes.io_controller_node:main',
-            'depth_cam_sender = nodes.depth_cam_sender:main',
-            'mic_streamer = nodes.mic_streamer:main',
-            'speaker_node = nodes.speaker_node:main',
-            'rgb_led_controller = nodes.rgb_led_controller:main',            
+            'io_controller_node = hardware_handler.nodes.io_controller_node:main',
+            'cam_sender = hardware_handler.nodes.cam_sender:main',
+            'mic_streamer = hardware_handler.nodes.mic_streamer:main',
+            'speaker_node = hardware_handler.nodes.speaker_node:main',
+            'rgb_led_controller = hardware_handler.nodes.rgb_led_controller:main',            
         ],
     },
 )
