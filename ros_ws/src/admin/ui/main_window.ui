@@ -24,83 +24,7 @@
     <normaloff>.</normaloff>.</iconset>
   </property>
   <property name="styleSheet">
-   <string>QMainWindow {
-    background-color: #2c3e50;
-}
-
-QTabWidget {
-    background-color: #2c3e50;
-    border: none;
-}
-
-QTabWidget::pane {
-    border: 2px solid #34495e;
-    border-radius: 8px;
-    background-color: #2c3e50;
-    top: -2px;
-}
-
-QTabBar::tab {
-    background-color: #34495e;
-    color: white;
-    padding: 12px 24px;
-    margin-right: 2px;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-    font-size: 14px;
-    font-weight: bold;
-    min-width: 120px;
-}
-
-QTabBar::tab:selected {
-    background-color: #3498db;
-    color: white;
-}
-
-QTabBar::tab:hover {
-    background-color: #2980b9;
-}
-
-QTabBar::tab:!selected {
-    margin-top: 4px;
-}
-
-QStatusBar {
-    background-color: #34495e;
-    color: white;
-    border-top: 1px solid #2c3e50;
-    font-size: 12px;
-}
-
-QMenuBar {
-    background-color: #34495e;
-    color: white;
-    border-bottom: 1px solid #2c3e50;
-}
-
-QMenuBar::item {
-    background-color: transparent;
-    padding: 6px 12px;
-}
-
-QMenuBar::item:selected {
-    background-color: #3498db;
-    border-radius: 4px;
-}
-
-QMenu {
-    background-color: #34495e;
-    color: white;
-    border: 1px solid #2c3e50;
-}
-
-QMenu::item {
-    padding: 6px 20px;
-}
-
-QMenu::item:selected {
-    background-color: #3498db;
-}</string>
+   <string/>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="QTabWidget" name="tabWidget">
@@ -146,11 +70,7 @@ QMenu::item:selected {
        </rect>
       </property>
       <property name="styleSheet">
-       <string>QFrame {
-    background-color: #34495e;
-    border: 2px solid #2c3e50;
-    border-radius: 8px;
-}</string>
+       <string/>
       </property>
       <widget class="QLabel" name="log_title">
        <property name="geometry">
@@ -162,7 +82,7 @@ QMenu::item:selected {
         </rect>
        </property>
        <property name="styleSheet">
-        <string>color: white; font-size: 18px; font-weight: bold;</string>
+        <string/>
        </property>
        <property name="text">
         <string>System Logs</string>
@@ -178,17 +98,7 @@ QMenu::item:selected {
         </rect>
        </property>
        <property name="styleSheet">
-        <string>QPushButton {
-    background-color: #3498db;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #2980b9;
-}</string>
+        <string/>
        </property>
        <property name="text">
         <string>All</string>
@@ -204,17 +114,7 @@ QPushButton:hover {
         </rect>
        </property>
        <property name="styleSheet">
-        <string>QPushButton {
-    background-color: #27ae60;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #219a52;
-}</string>
+        <string/>
        </property>
        <property name="text">
         <string>Info</string>
@@ -230,17 +130,7 @@ QPushButton:hover {
         </rect>
        </property>
        <property name="styleSheet">
-        <string>QPushButton {
-    background-color: #f39c12;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #e67e22;
-}</string>
+        <string/>
        </property>
        <property name="text">
         <string>Warning</string>
@@ -256,17 +146,7 @@ QPushButton:hover {
         </rect>
        </property>
        <property name="styleSheet">
-        <string>QPushButton {
-    background-color: #e74c3c;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #c0392b;
-}</string>
+        <string/>
        </property>
        <property name="text">
         <string>Error</string>
@@ -282,17 +162,7 @@ QPushButton:hover {
         </rect>
        </property>
        <property name="styleSheet">
-        <string>QPushButton {
-    background-color: #95a5a6;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #7f8c8d;
-}</string>
+        <string/>
        </property>
        <property name="text">
         <string>Clear Logs</string>
@@ -308,31 +178,7 @@ QPushButton:hover {
         </rect>
        </property>
        <property name="styleSheet">
-        <string>QTextEdit {
-    background-color: #1a1a1a;
-    color: #00ff00;
-    border: 1px solid #555555;
-    border-radius: 4px;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    padding: 10px;
-}
-
-QScrollBar:vertical {
-    background-color: #2c3e50;
-    width: 12px;
-    border-radius: 6px;
-}
-
-QScrollBar::handle:vertical {
-    background-color: #3498db;
-    border-radius: 6px;
-    min-height: 20px;
-}
-
-QScrollBar::handle:vertical:hover {
-    background-color: #2980b9;
-}</string>
+        <string/>
        </property>
        <property name="readOnly">
         <bool>true</bool>
@@ -409,11 +255,7 @@ p, li { white-space: pre-wrap; }
   </widget>
   <widget class="QStatusBar" name="statusbar">
    <property name="styleSheet">
-    <string>QStatusBar {
-    background-color: #34495e;
-    color: white;
-    border-top: 1px solid #2c3e50;
-}</string>
+    <string/>
    </property>
   </widget>
   <action name="actionNew_Session">
