@@ -1,3 +1,6 @@
+# Google Cloud TTS ignore
+data/*.json
+
 # .vscode
 .vscode/
 
