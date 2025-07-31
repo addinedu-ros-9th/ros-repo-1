@@ -17,6 +17,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/BookInfo.msg"
   "msg/Heartbeat.msg"
+  "msg/OverallStatus.msg"  # OverallStatus 메시지 추가
   "srv/BookSearch.srv"
   "srv/Navigate.srv"
   "srv/EscortRequest.srv"

@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 from libo_interfaces.srv import TaskRequest
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
+from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 import time  # 시간 관련 기능
 import uuid  # 고유 ID 생성
 
@@ -72,11 +73,18 @@ class TaskManager(Node):
         # 로봇 목록을 저장할 딕셔너리 (robot_id를 키로 사용)
         self.robots = {}  # 로봇들을 저장할 딕셔너리
         
+        # OverallStatus 퍼블리셔 생성
+        self.status_publisher = self.create_publisher(OverallStatus, 'robot_status', 10)  # OverallStatus 토픽 퍼블리셔
+        
         # 로봇 상태 체크 타이머 (1초마다 실행)
         self.robot_check_timer = self.create_timer(1.0, self.check_robot_timeouts)  # 1초마다 로봇 타임아웃 체크
         
+        # 로봇 상태 발행 타이머 (1초마다 실행)
+        self.status_timer = self.create_timer(1.0, self.publish_robot_status)  # 1초마다 로봇 상태 발행
+        
         self.get_logger().info('🎯 Task Manager 시작됨 - task_request 서비스 대기 중...')
         self.get_logger().info('💓 Heartbeat 구독 시작됨 - heartbeat 토픽 모니터링 중...')
+        self.get_logger().info('📡 OverallStatus 발행 시작됨 - robot_status 토픽으로 1초마다 발행...')
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -101,6 +109,21 @@ class TaskManager(Node):
             
         except Exception as e:  # 예외 발생 시 처리
             self.get_logger().error(f'❌ Heartbeat 처리 중 오류: {e}')  # 에러 로그
+    
+    def publish_robot_status(self):  # 로봇 상태 발행
+        """1초마다 현재 활성 로봇들의 OverallStatus 발행"""
+        for robot_id in self.robots.keys():  # 현재 활성 로봇들에 대해 반복
+            status_msg = OverallStatus()  # OverallStatus 메시지 생성
+            status_msg.timestamp = self.get_clock().now().to_msg()  # 현재 시간 설정
+            status_msg.robot_id = robot_id  # 로봇 ID 설정
+            status_msg.is_available = True  # 기본값: 사용 가능
+            status_msg.battery = 255  # 기본값: 알 수 없음 (255로 표시)
+            status_msg.book_weight = 0.0  # 기본값: 무게 없음
+            status_msg.position_x = 0.0  # 기본값: 위치 알 수 없음
+            status_msg.position_y = 0.0  # 기본값: 위치 알 수 없음
+            status_msg.position_yaw = 0.0  # 기본값: 방향 알 수 없음
+            
+            self.status_publisher.publish(status_msg)  # 메시지 발행
     
     def task_request_callback(self, request, response):  # 키오스크로부터 받은 작업 요청을 처리
         """TaskRequest 서비스 콜백"""
