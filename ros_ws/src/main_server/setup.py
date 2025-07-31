@@ -10,6 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/launch', ['launch/weight_sensor.launch.py']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -24,6 +25,9 @@ setup(
             'robot_commander = main_server.services.robot_commander:main',
             'aladin_book_register = main_server.services.aladin_book_register:main',
             'task_manager = main_server.services.task_manager:main',
+            'weight_subscriber = main_server.ros_communication.weight_subscriber:main',
+            'weight_test_publisher = main_server.ros_communication.weight_test_publisher:main',
+            'led_status_publisher = main_server.led_status_publisher:main',
         ],
     },
 )
