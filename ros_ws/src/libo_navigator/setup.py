@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'main_server'
+package_name = 'libo_navigator'
 
 setup(
     name=package_name,
@@ -13,17 +13,16 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='robolee',
-    maintainer_email='leesh20806@gmail.com',
+    maintainer='nmd',
+    maintainer_email='kwoo230@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'book_search_service = main_server.services.book_search_service:main',
-            'robot_commander = main_server.services.robot_commander:main',
-            'aladin_book_register = main_server.services.aladin_book_register:main',
-            'task_manager = main_server.services.task_manager:main',
+            'navigator_node = libo_navigator.navigator_node:main',
+
         ],
     },
 )
+
