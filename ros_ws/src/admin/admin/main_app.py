@@ -4,6 +4,7 @@
 import sys
 import os
 import rclpy
+import time  # 시간 추적용 추가
 from PyQt5.QtWidgets import QApplication, QMainWindow
 from PyQt5.QtCore import QTimer
 from PyQt5 import uic
@@ -11,17 +12,18 @@ from ament_index_python.packages import get_package_share_directory
 
 from admin.tabs.task_request_tab import TaskRequestTab # 우리가 만든 TaskRequestTab을 임포트
 from admin.tabs.heartbeat_monitor_tab import HeartbeatMonitorTab # 새로 만든 HeartbeatMonitorTab을 임포트
-from std_msgs.msg import String  # 임시로 String 메시지 사용
+from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 임포트 (String 대신)
 
 class AdminWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.ros_node = rclpy.create_node('admin_gui_node') # GUI 전체에서 사용할 ROS 노드 생성
-        self.robot_status_text = "No robots detected..."  # 로봇 상태 텍스트
+        self.robot_status_dict = {}  # 로봇 상태를 저장할 딕셔너리 (문자열 대신)
         self.init_ui() # UI 파일을 로드하고 초기화하는 함수를 호출
         self.init_tabs() # 탭들을 초기화하고 추가하는 함수를 호출
-        self.init_robot_status_subscriber()  # String 구독자 초기화
+        self.init_robot_status_subscriber()  # OverallStatus 구독자 초기화
         self.init_timer() # ROS 통신을 위한 타이머 시작
+        self.init_robot_timeout_timer()  # 로봇 타임아웃 체크 타이머 추가
 
     def init_ui(self):
         package_share_dir = get_package_share_directory('admin') # 'admin' 패키지 공유 디렉토리 경로를 찾음
@@ -37,47 +39,52 @@ class AdminWindow(QMainWindow):
         self.heartbeat_monitor_tab = HeartbeatMonitorTab(self.ros_node) # HeartbeatMonitorTab 객체를 생성하고 메인 노드를 전달
         self.tabWidget.addTab(self.heartbeat_monitor_tab, "💓 Heartbeat 모니터") # 'tabWidget'에 새 탭을 추가
 
-    def init_robot_status_subscriber(self):  # String 구독자 초기화
+    def init_robot_status_subscriber(self):  # OverallStatus 구독자 초기화
         """robot_status 토픽을 구독해서 로봇 상태를 실시간 업데이트"""
         self.robot_status_subscription = self.ros_node.create_subscription(
-            String,  # 메시지 타입
+            OverallStatus,  # 메시지 타입을 OverallStatus로 변경
             'robot_status',  # 토픽 이름
             self.robot_status_callback,  # 콜백 함수
             10  # QoS depth
         )
 
-    def robot_status_callback(self, msg):  # 로봇 상태 메시지 수신 콜백
-        """String 메시지를 받았을 때 GUI 업데이트"""
+    def robot_status_callback(self, msg):  # OverallStatus 메시지 수신 콜백
+        """OverallStatus 메시지를 받았을 때 GUI 업데이트"""
         try:
-            self.robot_status_text = msg.data  # 받은 문자열 저장
+            # 로봇별로 상태 정보 저장 (마지막 수신 시간도 포함)
+            self.robot_status_dict[msg.robot_id] = {
+                'id': msg.robot_id,  # 로봇 ID
+                'available': msg.is_available,  # 사용 가능 여부
+                'battery': msg.battery,  # 배터리 잔량
+                'position': f"({msg.position_x:.1f}, {msg.position_y:.1f})",  # 위치 정보
+                'last_seen': time.time()  # 마지막 수신 시간 추가
+            }
             self.update_robot_status_display()  # GUI 업데이트
             
         except Exception as e:
             print(f"로봇 상태 처리 중 오류: {e}")
 
     def update_robot_status_display(self):  # 로봇 상태 표시 업데이트
-        """로봇 상태 위젯의 라벨들을 업데이트"""
+        """활성 로봇들의 상태를 위젯에 표시"""
         try:
-            if "No active robots" in self.robot_status_text:
-                self.robot_count_label.setText("Count: 0")  # 로봇 수 0
-                self.robot_list_label.setText("No robots detected...")  # 로봇 없을 때
+            # 로봇 개수 업데이트
+            robot_count = len(self.robot_status_dict)  # 활성 로봇 개수
+            self.robot_count_label.setText(f"Count: {robot_count}")  # 카운트 라벨 업데이트
+            
+            # 로봇 목록 텍스트 생성
+            if robot_count == 0:  # 로봇이 없다면
+                status_text = "활성 로봇 없음"
             else:
-                # "Active robots: libo_a, libo_b" 형태에서 로봇 추출
-                if "Active robots:" in self.robot_status_text:
-                    robot_part = self.robot_status_text.split("Active robots: ")[1]
-                    robot_list = [r.strip() for r in robot_part.split(",")]
-                    robot_count = len(robot_list)
-                    
-                    self.robot_count_label.setText(f"Count: {robot_count}")  # 로봇 수 업데이트
-                    
-                    # 각 로봇을 새 줄로 표시
-                    robot_display = "\n".join([f"{robot}: ✅ 🔋?" for robot in robot_list])
-                    self.robot_list_label.setText(robot_display)  # 로봇 리스트 업데이트
-                else:
-                    self.robot_list_label.setText(self.robot_status_text)  # 원본 텍스트 그대로 표시
+                status_lines = []  # 로봇 정보 저장할 리스트
+                for robot_id, status in self.robot_status_dict.items():  # 각 로봇에 대해
+                    availability = "사용가능" if status['available'] else "사용중"  # 가용성 표시
+                    status_lines.append(f"🤖 {robot_id}: {availability}")  # 로봇 정보 추가
+                status_text = "\n".join(status_lines)  # 줄바꿈으로 연결
+                
+            self.robot_list_label.setText(status_text)  # 목록 라벨 업데이트
                 
         except Exception as e:
-            print(f"로봇 상태 표시 업데이트 중 오류: {e}")
+            print(f"로봇 상태 표시 중 오류: {e}")
 
     def init_timer(self):
         self.ros_timer = QTimer(self) # QTimer 객체 생성
@@ -93,6 +100,30 @@ class AdminWindow(QMainWindow):
         # heartbeat_monitor_tab에 node가 존재하면 그것도 스핀
         if hasattr(self, 'heartbeat_monitor_tab') and hasattr(self.heartbeat_monitor_tab, 'node'):
             rclpy.spin_once(self.heartbeat_monitor_tab.node, timeout_sec=0)
+
+    def init_robot_timeout_timer(self):  # 로봇 타임아웃 체크 타이머 초기화
+        """5초마다 비활성 로봇들을 제거하는 타이머"""
+        self.robot_timeout_timer = QTimer(self)  # 타이머 생성
+        self.robot_timeout_timer.timeout.connect(self.check_robot_timeouts)  # 타임아웃 체크 함수 연결
+        self.robot_timeout_timer.start(3000)  # 3초마다 실행
+
+    def check_robot_timeouts(self):  # 비활성 로봇 제거
+        """3 이상 메시지가 안 온 로봇들을 제거"""
+        current_time = time.time()  # 현재 시간
+        timeout_seconds = 3 # 타임아웃 시간 (5초)
+        
+        robots_to_remove = []  # 제거할 로봇들 리스트
+        for robot_id, status in self.robot_status_dict.items():  # 각 로봇 확인
+            time_since_last_seen = current_time - status['last_seen']  # 마지막 수신 후 경과 시간
+            if time_since_last_seen > timeout_seconds:  # 타임아웃됐다면
+                robots_to_remove.append(robot_id)  # 제거 목록에 추가
+                
+        for robot_id in robots_to_remove:  # 타임아웃된 로봇들 제거
+            del self.robot_status_dict[robot_id]  # 딕셔너리에서 제거
+            print(f"🚫 로봇 {robot_id} 제거됨 (타임아웃)")  # 디버그 출력
+            
+        if robots_to_remove:  # 제거된 로봇이 있다면
+            self.update_robot_status_display()  # GUI 업데이트
 
     def closeEvent(self, event):
         self.task_request_tab.shutdown() # TaskRequest 탭의 정리 함수 호출
