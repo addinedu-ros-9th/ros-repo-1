@@ -9,6 +9,25 @@ import uuid  # 고유 ID 생성
 import json  # JSON 파일 저장용
 import hashlib  # 파일 해시 계산용 (변경사항 체크용)
 
+class Robot:  # 로봇 정보를 담는 클래스
+    def __init__(self, robot_id):  # Robot 객체 초기화
+        self.robot_id = robot_id  # 로봇 ID 저장
+        self.last_heartbeat_time = time.time()  # 마지막 하트비트 수신 시간
+        self.is_active = True  # 활성 상태 (기본값: 활성)
+    
+    def update_heartbeat(self):  # 하트비트 업데이트
+        """하트비트를 받았을 때 호출되는 메서드"""
+        self.last_heartbeat_time = time.time()  # 마지막 하트비트 시간 업데이트
+        self.is_active = True  # 활성 상태로 설정
+
+    def check_timeout(self, timeout_seconds=3):  # 타임아웃 체크
+        """지정된 시간(기본 3초) 이내에 하트비트가 수신되었는지 확인하는 메서드"""
+        current_time = time.time()  # 현재 시간을 가져옴
+        time_since_last_heartbeat = current_time - self.last_heartbeat_time  # 마지막 하트비트를 받은 후 얼마나 시간이 지났는지 계산
+        if time_since_last_heartbeat > timeout_seconds:  # 지정된 시간보다 오래되었다면
+            self.is_active = False  # 로봇을 비활성 상태로 변경
+        return self.is_active  # 현재 로봇의 활성 상태를 반환 (True 또는 False)
+
 class Task:  # 작업 정보를 담는 클래스
     def __init__(self, robot_id, task_type, call_location, goal_location):  # Task 객체 초기화
         self.task_id = str(uuid.uuid4())[:8]  # 고유한 작업 ID 생성 (8자리)
@@ -65,6 +84,9 @@ class TaskManager(Node):
         # 작업 목록을 저장할 리스트
         self.tasks = []  # 생성된 작업들을 저장할 리스트
         
+        # 로봇 목록을 저장할 딕셔너리 (robot_id를 키로 사용)
+        self.robots = {}  # 로봇들을 저장할 딕셔너리
+        
         # 작업 목록 저장 파일 경로
         self.tasks_file = "/tmp/current_tasks.json"  # 임시 파일에 저장
         
@@ -77,8 +99,22 @@ class TaskManager(Node):
         # 파일 해시 저장 (변경사항 체크용)
         self.last_heartbeat_hash = None  # 마지막 Heartbeat 로그 해시
         
+        # 로봇 상태 체크 타이머 (1초마다 실행)
+        self.robot_check_timer = self.create_timer(1.0, self.check_robot_timeouts)  # 1초마다 로봇 타임아웃 체크
+        
         self.get_logger().info('🎯 Task Manager 시작됨 - task_request 서비스 대기 중...')
         self.get_logger().info('💓 Heartbeat 구독 시작됨 - heartbeat 토픽 모니터링 중...')
+    
+    def check_robot_timeouts(self):  # 로봇 타임아웃 체크
+        """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
+        inactive_robots = []  # 비활성 로봇 ID를 저장할 리스트
+        for robot_id, robot in self.robots.items():  # 현재 등록된 모든 로봇에 대해 반복
+            if not robot.check_timeout():  # 로봇의 타임아웃 여부를 확인
+                inactive_robots.append(robot_id)  # 타임아웃된 로봇을 리스트에 추가
+        
+        for robot_id in inactive_robots:  # 비활성 로봇 리스트에 있는 모든 로봇에 대해 반복
+            del self.robots[robot_id]  # 로봇 목록에서 해당 로봇을 제거
+            self.get_logger().info(f'🤖 로봇 <{robot_id}> 제거됨 (사유: Heartbeat 타임아웃)')  # 로봇 제거 로그 출력
     
     def calculate_heartbeat_hash(self):  # Heartbeat 로그 해시 계산
         """현재 Heartbeat 로그의 해시를 계산"""
@@ -110,8 +146,13 @@ class TaskManager(Node):
                 self.save_heartbeat_logs()  # 로그 파일 저장
                 self.last_heartbeat_hash = current_hash  # 해시 업데이트
             
-            # 터미널에 로그 출력
-            self.get_logger().info(f'💓 Heartbeat 수신 | Sender: {msg.sender_id} | Time: {current_time} | Timestamp: {msg.timestamp.sec}.{msg.timestamp.nanosec}')  # Heartbeat 수신 로그
+
+            # sender_id가 로봇인 경우에만 Robot 객체를 생성하거나 업데이트
+            if msg.sender_id in self.robots:  # 이미 등록된 로봇이라면
+                self.robots[msg.sender_id].update_heartbeat()  # 하트비트 시간만 갱신해줌
+            else:  # 처음 보는 로봇이라면
+                self.robots[msg.sender_id] = Robot(msg.sender_id)  # 새로운 로봇 객체를 생성해서 목록에 추가
+                self.get_logger().info(f'🤖 새로운 로봇 <{msg.sender_id}> 감지됨')  # 새로운 로봇 감지 로그 출력
             
         except Exception as e:  # 예외 발생 시 처리
             self.get_logger().error(f'❌ Heartbeat 처리 중 오류: {e}')  # 에러 로그
@@ -123,6 +164,8 @@ class TaskManager(Node):
                 json.dump(self.heartbeat_logs, f, indent=2)  # JSON 형태로 저장 (들여쓰기 2칸)
         except Exception as e:
             self.get_logger().error(f'❌ Heartbeat 로그 저장 실패: {e}')  # 저장 실패 시 에러 로그
+    
+
     
     def save_tasks_to_file(self):  # 작업 목록을 파일에 저장
         """현재 작업 목록을 JSON 파일에 저장"""
