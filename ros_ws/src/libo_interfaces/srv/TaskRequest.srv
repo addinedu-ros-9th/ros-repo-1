@@ -1,0 +1,9 @@
+# 요청 (Request)
+string robot_id         # 로봇 번호 (예: libo_a, libo_b)
+string task_type        # 작업 타입 (예: "escort", "assist", "delivery")
+string call_location    # 호출지 waypoint (A2, D3)
+string goal_location    # 목적지 waypoint (A1, E2)
+---
+# 응답 (Response)
+bool success            # 요청 수락 여부
+string message          # 응답 메시지
