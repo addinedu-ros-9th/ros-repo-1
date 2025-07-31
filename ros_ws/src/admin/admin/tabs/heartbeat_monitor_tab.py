@@ -1,71 +1,95 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import json # JSON 파일을 다루기 위한 모듈
 import time # 시간 관련 기능을 사용하기 위한 모듈
-import hashlib # 파일의 해시 값을 계산하기 위한 모듈
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QLabel # PyQt5 위젯들
-from PyQt5.QtCore import QTimer # 일정 시간마다 반복 작업을 실행하기 위한 타이머
+import rclpy # ROS2 파이썬 클라이언트 라이브러리
+from rclpy.node import Node # ROS2 노드 클래스
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem, QLabel, QHBoxLayout # PyQt5 위젯들
+from PyQt5.QtCore import pyqtSignal, QObject # PyQt의 시그널, 기본 객체
+from libo_interfaces.msg import Heartbeat # Heartbeat 메시지 타입 임포트
 
-class HeartbeatMonitorTab(QWidget): # QWidget을 상속받아 하트비트 모니터링 탭을 정의
-    def __init__(self, parent=None):
-        super().__init__(parent) # 부모 클래스의 초기화 함수를 호출
-        self.heartbeat_log_file = "/tmp/heartbeat_log.json" # 감시할 하트비트 로그 파일의 경로
-        self.last_heartbeat_hash = None # 파일의 변경 여부를 확인하기 위해 마지막으로 읽은 파일의 해시 값을 저장할 변수
-        self.init_ui() # UI를 초기화하는 함수 호출
-        self.setup_timer() # 데이터를 주기적으로 업데이트하는 타이머를 설정하는 함수 호출
+class RosSignalBridge(QObject): # Qt의 시그널을 사용하기 위해 QObject를 상속받는 중간 다리 역할 클래스
+    heartbeat_received_signal = pyqtSignal(object) # Heartbeat 메시지를 전달할 시그널
+
+class HeartbeatSubscriberNode(Node): # ROS2 통신(구독)을 전담할 별도의 노드 클래스
+    def __init__(self, signal_bridge): # 시그널을 발생시킬 bridge 객체를 외부에서 받음
+        super().__init__('heartbeat_monitor_subscriber_node') # 노드 이름 초기화
+        self.signal_bridge = signal_bridge # 전달받은 bridge 객체를 저장
+        self.get_logger().info('💓 Heartbeat 구독 노드 생성됨. "heartbeat" 토픽을 구독합니다.')
+
+        qos_profile = rclpy.qos.QoSProfile( # QoS 프로파일 생성
+            reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT, # 신뢰성 정책: 최선 노력
+            durability=rclpy.qos.DurabilityPolicy.VOLATILE, # 내구성 정책: 휘발성
+            history=rclpy.qos.HistoryPolicy.KEEP_LAST, # 히스토리 정책: 마지막 N개만 유지
+            depth=10 # 히스토리 깊이(큐 사이즈)
+        )
+
+        self.subscription = self.create_subscription( # 토픽 구독자 생성
+            Heartbeat, 'heartbeat', self.listener_callback, qos_profile)
+
+    def listener_callback(self, msg):
+        self.signal_bridge.heartbeat_received_signal.emit(msg) # 받은 메시지를 시그널로 GUI에 전달
+
+class HeartbeatMonitorTab(QWidget): # 하트비트 모니터링 탭을 정의하는 클래스
+    def __init__(self, ros_node, parent=None):
+        super().__init__(parent)
+        self.main_ros_node = ros_node # 메인 GUI의 ROS 노드 (스핀용)
+        
+        self.signal_bridge = RosSignalBridge() # 통신용 시그널 다리 생성
+        self.node = HeartbeatSubscriberNode(self.signal_bridge) # 통신 전용 노드 생성
+        
+        self.heartbeat_log = []  # 데이터를 딕셔너리가 아닌 **리스트**로 변경하여 모든 로그를 축적
+        self.start_time = time.time() # 탭이 생성된 시간을 기록 (경과 시간의 기준점)
+        
+        self.init_ui() # UI 초기화
+        
+        self.signal_bridge.heartbeat_received_signal.connect(self.add_log_entry) # 시그널을 로그 추가 함수에 연결
 
     def init_ui(self):
-        layout = QVBoxLayout(self) # 위젯들을 수직으로 배치할 레이아웃 생성
+        main_layout = QHBoxLayout(self) # 전체 레이아웃을 가로로 변경 (2/5 내용, 3/5 빈 공간)
         
-        title_label = QLabel('💓 실시간 Heartbeat 로그') # 탭의 제목 라벨 생성
-        layout.addWidget(title_label) # 레이아웃에 제목 라벨 추가
+        content_container = QWidget() # 내용을 담을 컨테이너 위젯 생성
+        content_layout = QVBoxLayout(content_container) # 컨테이너 내부는 기존처럼 수직 레이아웃
 
-        self.heartbeat_table = QTableWidget() # 하트비트 로그를 표시할 테이블 위젯 생성
-        self.heartbeat_table.setColumnCount(4) # 테이블에 4개의 열(column)을 설정
-        self.heartbeat_table.setHorizontalHeaderLabels(['Sender ID', 'Received Time', 'Timestamp', 'Age (초)']) # 각 열의 제목을 설정
-        layout.addWidget(self.heartbeat_table) # 레이아웃에 테이블 위젯 추가
+        title_label = QLabel('💓 Heartbeat 수신 로그 (실시간 누적)') # 제목
+        content_layout.addWidget(title_label) # 컨테이너에 제목 추가
 
-    def setup_timer(self):
-        self.timer = QTimer() # QTimer 객체 생성
-        self.timer.timeout.connect(self.load_heartbeat_logs) # 타이머가 만료될 때마다 load_heartbeat_logs 함수가 호출되도록 연결
-        self.timer.start(1000) # 1000ms (1초) 간격으로 타이머를 시작
+        self.heartbeat_table = QTableWidget() # 테이블 위젯 생성
+        self.heartbeat_table.setColumnCount(3) # 열 개수는 3개로 유지
+        self.heartbeat_table.setHorizontalHeaderLabels(['Sender ID', '경과 시간 (초)', 'Timestamp']) # 헤더 순서를 [ID, 경과시간, 타임스탬프]로 변경
+        content_layout.addWidget(self.heartbeat_table) # 컨테이너에 테이블 추가
 
-    def calculate_file_hash(self, file_path): # 파일의 내용으로 MD5 해시 값을 계산하는 함수
-        try:
-            with open(file_path, 'rb') as f: # 파일을 바이너리 읽기 모드로 열기
-                file_content = f.read() # 파일 전체 내용을 읽음
-                return hashlib.md5(file_content).hexdigest() # 내용의 MD5 해시를 계산하여 16진수 문자열로 반환
-        except FileNotFoundError: # 파일을 찾을 수 없을 경우
-            return None # None을 반환
+        main_layout.addWidget(content_container, 2) # 메인 레이아웃의 왼쪽에 내용 컨테이너를 2의 비율로 추가
+        main_layout.addStretch(3) # 메인 레이아웃의 오른쪽에 3의 비율로 빈 공간 추가
 
-    def load_heartbeat_logs(self): # 하트비트 로그 파일을 읽어 테이블을 업데이트하는 함수
-        try:
-            current_hash = self.calculate_file_hash(self.heartbeat_log_file) # 현재 로그 파일의 해시 값을 계산
-            if current_hash == self.last_heartbeat_hash: # 이전에 읽은 해시와 동일하다면 (파일 내용 변경 없음)
-                return # 함수를 종료하여 불필요한 업데이트를 방지
+    def add_log_entry(self, msg):
+        # 새 메시지가 도착하면, 로그 리스트에 추가하고 테이블을 다시 그림
+        log_entry = { # 로그 항목을 딕셔너리로 구성
+            'msg': msg, # 원본 메시지
+            'received_time': time.time() # GUI가 받은 정확한 시간
+        }
+        self.heartbeat_log.append(log_entry) # 리스트의 맨 뒤에 새 로그 추가
+        
+        # 테이블의 맨 아래에 새로운 행만 추가하여 성능을 최적화
+        row_position = self.heartbeat_table.rowCount() # 현재 행의 개수 = 새로 추가될 행의 인덱스
+        self.heartbeat_table.insertRow(row_position) # 맨 아래에 새 행 삽입
 
-            with open(self.heartbeat_log_file, 'r') as f: # 로그 파일을 읽기 모드로 열기
-                heartbeat_data = json.load(f) # JSON 형식의 데이터를 파이썬 객체로 변환
+        # 새 행에 데이터를 채움
+        elapsed_time = log_entry['received_time'] - self.start_time # 경과 시간 계산
+        timestamp = log_entry['msg'].timestamp # 메시지의 타임스탬프
+        timestamp_str = f"{timestamp.sec}.{timestamp.nanosec:09d}" # 타임스탬프를 문자열로 변환
+
+        self.heartbeat_table.setItem(row_position, 0, QTableWidgetItem(log_entry['msg'].sender_id)) # 0번 열: Sender ID
+        self.heartbeat_table.setItem(row_position, 1, QTableWidgetItem(f"{elapsed_time:.2f}")) # 1번 열: 경과 시간 (소수점 둘째자리까지)
+        self.heartbeat_table.setItem(row_position, 2, QTableWidgetItem(timestamp_str)) # 2번 열: 타임스탬프
             
-            self.heartbeat_table.setRowCount(len(heartbeat_data)) # 데이터의 개수만큼 테이블의 행 수를 설정
-            
-            for row, heartbeat in enumerate(reversed(heartbeat_data)): # 최신 로그가 맨 위에 오도록 데이터를 뒤집어서 반복
-                self.heartbeat_table.setItem(row, 0, QTableWidgetItem(heartbeat['sender_id'])) # 0번 열에 'sender_id'를 표시
-                self.heartbeat_table.setItem(row, 1, QTableWidgetItem(heartbeat['received_time_str'])) # 1번 열에 수신 시간을 문자열로 표시
-                
-                timestamp_str = heartbeat.get('received_time_str', 'N/A') # 'received_time_str' 키가 없을 경우를 대비해 기본값 설정
-                self.heartbeat_table.setItem(row, 2, QTableWidgetItem(timestamp_str)) # 2번 열에 타임스탬프를 표시
-                
-                age = time.time() - heartbeat['received_time'] # 현재 시간과 로그 기록 시간의 차이를 계산하여 경과 시간을 구함
-                age_str = f"{age:.1f}" # 경과 시간을 소수점 첫째 자리까지의 문자열로 변환
-                self.heartbeat_table.setItem(row, 3, QTableWidgetItem(age_str)) # 3번 열에 경과 시간을 표시
-            
-            self.heartbeat_table.resizeColumnsToContents() # 각 열의 너비를 내용물에 맞게 자동으로 조절
-            self.last_heartbeat_hash = current_hash # 현재 파일의 해시 값을 마지막 해시로 저장
-            
-        except FileNotFoundError: # 파일을 찾을 수 없는 예외가 발생하면
-            self.heartbeat_table.setRowCount(0) # 테이블의 모든 데이터를 지움
-        except Exception as e: # 그 외 다른 예외가 발생하면
-            print(f"❌ Heartbeat 로그 로드 실패: {e}") # 콘솔에 에러 메시지를 출력
-            self.heartbeat_table.setRowCount(0) # 테이블의 모든 데이터를 지움 
+        self.heartbeat_table.scrollToBottom() # 새 로그가 추가되면 자동으로 스크롤을 맨 아래로 내림
+        
+        # 컬럼 너비 자동 조절 후, 특정 컬럼 너비 수동 조정
+        self.heartbeat_table.resizeColumnsToContents() # 먼저 모든 열의 너비를 내용에 맞춤
+        current_ts_width = self.heartbeat_table.columnWidth(2) # 현재 타임스탬프 열(2번 인덱스)의 너비를 가져옴
+        self.heartbeat_table.setColumnWidth(2, current_ts_width * 2) # 해당 열의 너비를 2배로 설정
+
+    def shutdown(self): # 이 탭이 닫힐 때 호출될 정리 함수
+        print("Heartbeat 모니터 탭 종료 중...")
+        self.node.destroy_node() # 이 탭이 사용하던 노드를 안전하게 종료 

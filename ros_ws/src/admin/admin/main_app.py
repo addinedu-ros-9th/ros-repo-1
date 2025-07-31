@@ -31,7 +31,7 @@ class AdminWindow(QMainWindow):
         self.tabWidget.addTab(self.task_request_tab, "🚀 Task Request 테스트") # 'tabWidget'에 새 탭을 추가
 
         # Heartbeat Monitor 탭 추가
-        self.heartbeat_monitor_tab = HeartbeatMonitorTab() # HeartbeatMonitorTab 객체를 생성
+        self.heartbeat_monitor_tab = HeartbeatMonitorTab(self.ros_node) # HeartbeatMonitorTab 객체를 생성하고 메인 노드를 전달
         self.tabWidget.addTab(self.heartbeat_monitor_tab, "💓 Heartbeat 모니터") # 'tabWidget'에 새 탭을 추가
 
     def init_timer(self):
@@ -44,10 +44,14 @@ class AdminWindow(QMainWindow):
         # task_request_tab에 client_node가 존재하면 그것도 스핀
         if hasattr(self, 'task_request_tab') and hasattr(self.task_request_tab, 'client_node'):
             rclpy.spin_once(self.task_request_tab.client_node, timeout_sec=0)
+        
+        # heartbeat_monitor_tab에 node가 존재하면 그것도 스핀
+        if hasattr(self, 'heartbeat_monitor_tab') and hasattr(self.heartbeat_monitor_tab, 'node'):
+            rclpy.spin_once(self.heartbeat_monitor_tab.node, timeout_sec=0)
 
     def closeEvent(self, event):
         self.task_request_tab.shutdown() # TaskRequest 탭의 정리 함수 호출
-        # self.heartbeat_monitor_tab.shutdown() # 만약 Heartbeat 탭에 종료 시 처리할 내용이 있다면 추가
+        self.heartbeat_monitor_tab.shutdown() # Heartbeat 탭의 정리 함수도 호출
         self.ros_node.destroy_node() # 메인 ROS 노드 종료
         rclpy.shutdown() # ROS2 시스템 전체 종료
         event.accept() # 창 닫기 이벤트 수락
