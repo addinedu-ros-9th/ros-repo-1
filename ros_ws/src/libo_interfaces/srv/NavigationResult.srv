@@ -1,0 +1,6 @@
+# 요청 (Request)
+string result  # 예: "SUCCEEDED", "FAILED", "CANCELED"
+---
+# 응답 (Response)
+bool success
+string message

@@ -14,15 +14,12 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
-from libo_interfaces.srv import SetGoal  # 커스텀 서비스 메시지 import
+from libo_interfaces.srv import SetGoal, CancelNavigation, NavigationResult  # 커스텀 서비스 메시지 import
 # ROS2 메시지 타입들
 from geometry_msgs.msg import PoseStamped, Pose, PoseWithCovarianceStamped
 from nav2_msgs.action import FollowWaypoints
 from nav2_msgs.msg import Costmap
 from std_msgs.msg import String
-
- # 커스텀 서비스 메시지 import
-from libo_interfaces.srv import SetGoal
 
 # 기타 필요한 라이브러리들
 import numpy as np
@@ -106,6 +103,18 @@ class LiboNavigator(Node):
             'set_navigation_goal',
             self.set_goal_service_callback
         )
+        
+        # 네비게이션 취소를 위한 서비스 서버 생성
+        self.cancel_navigation_service = self.create_service(
+            CancelNavigation,
+            'cancel_navigation',
+            self.cancel_navigation_callback
+        )
+
+        # 재계획 플래그 추가
+        self._replanning = False
+        self.current_waypoint_names = []
+        self.blocked_waypoints = {}
 
     # 네비게이션 목표입력 서비스 콜백함수
     def set_goal_service_callback(self, request, response):
@@ -139,6 +148,40 @@ class LiboNavigator(Node):
             response.message = f"오류: {str(e)}"
             return response
 
+    # 네비게이션 취소 서비스 콜백함수
+    def cancel_navigation_callback(self, request, response):
+        """
+        네비게이션 취소 서비스 콜백 함수입니다.
+        현재 진행 중인 네비게이션을 취소합니다.
+        """
+        try:
+            if self.current_state == NavigatorState.NAVIGATING:
+                self.get_logger().info('진행 중인 네비게이션을 취소합니다...')
+                # 현재 Nav2 액션 취소 요청
+                self.nav_action_client.cancel_goal_async()
+                # 웨이포인트 리스트 초기화 (임무 자체 취소)
+                self.waypoint_list = []
+                # 상태를 IDLE로 명확하게 설정
+                self.current_state = NavigatorState.IDLE
+                # 취소 완료 로그
+                self.get_logger().info('네비게이션이 완전히 취소되었습니다.')
+                
+                # 리보서비스에 취소 알림 (선택적)
+                self.notify_navigation_done("CANCELED")
+                
+                response.success = True
+                response.message = "네비게이션이 취소되었습니다."
+            else:
+                response.success = False
+                response.message = "현재 진행 중인 네비게이션이 없습니다."
+                
+            return response
+            
+        except Exception as e:
+            self.get_logger().error(f'서비스 처리 중 오류 발생: {e}')
+            response.success = False
+            response.message = f"오류: {str(e)}"
+            return response
     
     def amcl_pose_callback(self, msg):
         """AMCL로부터 로봇의 현재 위치를 받습니다."""
@@ -189,9 +232,17 @@ class LiboNavigator(Node):
                 break
         
         if is_blocked:
-            self.get_logger().warn('현재 목표 웨이포인트가 장애물로 막혀있습니다. 경로를 재계산합니다.')
-            self.pause_navigation()
-            self.replan_path()
+            # 막힌 웨이포인트를 제외하고 현재 위치에서 완전히 새로운 경로 계산
+            if hasattr(self, 'current_waypoint_names') and self.current_waypoint_names:
+                blocked_waypoint_name = self.current_waypoint_names[0]
+                self.get_logger().warn(f'웨이포인트 {blocked_waypoint_name}가 막혔습니다. 현재 위치에서 새로운 최적 경로를 계산합니다.')
+                self.pause_navigation()
+                self.replan_from_current_position_avoiding_blocked(blocked_waypoint_name)
+            else:
+                # 웨이포인트 정보가 없으면 네비게이션 중지
+                self.get_logger().error('웨이포인트 정보가 없어 재계획할 수 없습니다. 네비게이션을 중지합니다.')
+                self.pause_navigation()
+                self.current_state = NavigatorState.ERROR
     
     def load_waypoints(self):
         """웨이포인트 yaml 파일을 로드합니다."""
@@ -322,7 +373,7 @@ class LiboNavigator(Node):
             self.get_logger().error('웨이포인트 생성에 실패했습니다.')
             self.current_state = NavigatorState.ERROR
             return False
-    
+    #최단 웨이포인트 리스트 생성
     def generate_waypoints(self):
         """목적지까지의 웨이포인트 리스트를 생성합니다."""
         self.get_logger().info('웨이포인트 리스트를 생성합니다...')
@@ -354,14 +405,38 @@ class LiboNavigator(Node):
         
         # 웨이포인트 리스트 생성
         waypoint_poses = []
-        for name in path_wp_names:
+        for i, name in enumerate(path_wp_names):
             pose = PoseStamped()
             pose.header.frame_id = 'map'
             pose.header.stamp = self.get_clock().now().to_msg()
             pose.pose.position.x = self.waypoints[name]['position']['x']
             pose.pose.position.y = self.waypoints[name]['position']['y']
-            pose.pose.orientation.w = 1.0
+            
+            # 다음 웨이포인트가 있으면 그 방향을 향하도록 orientation 설정
+            if i < len(path_wp_names) - 1:
+                next_name = path_wp_names[i+1]
+                next_x = self.waypoints[next_name]['position']['x']
+                next_y = self.waypoints[next_name]['position']['y']
+                
+                # 현재 웨이포인트에서 다음 웨이포인트를 향하는 방향 계산
+                dx = next_x - pose.pose.position.x
+                dy = next_y - pose.pose.position.y
+                yaw = math.atan2(dy, dx)
+                
+                # 쿼터니언으로 변환 (yaw만 사용)
+                q = self.euler_to_quaternion(0, 0, yaw)
+                pose.pose.orientation.x = q[0]
+                pose.pose.orientation.y = q[1]
+                pose.pose.orientation.z = q[2]
+                pose.pose.orientation.w = q[3]
+            else:
+                # 마지막 웨이포인트는 이전 방향을 유지하거나 기본값 사용
+                pose.pose.orientation.w = 1.0
+                
             waypoint_poses.append(pose)
+        
+        # 웨이포인트 이름 목록 저장 (추가)
+        self.current_waypoint_names = path_wp_names.copy()
         
         self.waypoint_list = waypoint_poses
         self.get_logger().info(f'웨이포인트가 생성되었습니다: {len(self.waypoint_list)}개')
@@ -419,61 +494,180 @@ class LiboNavigator(Node):
         """주행 완료 결과를 처리합니다."""
         try:
             result = future.result()
-            self.get_logger().info('주행이 완료되었습니다!')
-            self.current_state = NavigatorState.IDLE
-            
+            if result.status == 4:  # SUCCEEDED
+                self.get_logger().info('주행이 완료되었습니다!')
+                self.current_state = NavigatorState.IDLE
+                # 리보서비스에 완료 알림
+                self.notify_navigation_done("SUCCEEDED")
+            else:
+                self.get_logger().error(f'주행 실패! status: {result.status}')
+                self.current_state = NavigatorState.ERROR
+                self.notify_navigation_done("FAILED")
         except Exception as e:
             self.get_logger().error(f'주행 중 오류가 발생했습니다: {e}')
             self.current_state = NavigatorState.ERROR
+            self.notify_navigation_done("FAILED")
 
-    def replan_path(self):
-        """현재 위치에서 목적지까지 새로운 경로를 계산합니다."""
-        if not self.initial_pose_received or not self.current_goal:
+    def notify_navigation_done(self, result_str):
+        # 리보서비스의 NavigationDone 서비스 클라이언트 생성 및 호출
+        client = self.create_client(NavigationResult, 'navigation_result')
+        req = NavigationResult.Request()
+        req.result = result_str
+        if client.wait_for_service(timeout_sec=2.0):
+            future = client.call_async(req)
+            # 필요하다면 응답 처리
+        else:
+            self.get_logger().warn('navigation_done 서비스가 준비되지 않았습니다.')
+    
+    def replan_from_current_position_avoiding_blocked(self, blocked_waypoint_name):
+        """막힌 웨이포인트를 제외하고 현재 위치에서 목적지까지 완전히 새로운 경로를 계산합니다."""
+        if self._replanning:
+            self.get_logger().warn('이미 경로 재계획이 진행 중입니다.')
             return
         
-        # 현재 위치와 목표 위치에서 가장 가까운 웨이포인트 찾기
-        current_wp = self.get_closest_waypoint(self.robot_current_pose)
-        goal_wp = self.get_closest_waypoint(self.current_goal)
+        self._replanning = True
+        try:
+            if not self.initial_pose_received or not self.current_goal:
+                return
+            
+            # 현재 로봇 위치에서 가장 가까운 웨이포인트 찾기 (시작점)
+            current_wp = self.get_closest_waypoint(self.robot_current_pose)
+            # 최종 목적지 근처의 웨이포인트 찾기 (도착점)
+            goal_wp = self.get_closest_waypoint(self.current_goal)
+            
+            if not current_wp or not goal_wp:
+                self.get_logger().error('현재 위치 또는 목표 위치 근처에서 웨이포인트를 찾을 수 없습니다.')
+                return
+            
+            # 현재 진행 중인 네비게이션 취소
+            if self.current_state == NavigatorState.NAVIGATING:
+                self.nav_action_client.cancel_goal_async()
+            
+            # 막힌 웨이포인트를 임시로 그래프에서 제거
+            self.temporarily_remove_waypoint(blocked_waypoint_name)
+            
+            # 현재 위치에서 목적지까지 완전히 새로운 최적 경로 계산
+            self.get_logger().info(f'새로운 최적 경로 계산: {current_wp} -> {goal_wp} (제외: {blocked_waypoint_name})')
+            self.get_logger().info(f'현재 로봇 위치: ({self.robot_current_pose.position.x:.2f}, {self.robot_current_pose.position.y:.2f})')
+            self.get_logger().info(f'목적지: ({self.current_goal.position.x:.2f}, {self.current_goal.position.y:.2f})')
+            
+            path_wp_names = self.find_path_astar(current_wp, goal_wp)
+            
+            # 임시 제거한 웨이포인트 복구
+            self.restore_waypoint(blocked_waypoint_name)
+            
+            if not path_wp_names:
+                self.get_logger().error('막힌 웨이포인트를 피한 새로운 경로를 찾을 수 없습니다!')
+                self.current_state = NavigatorState.ERROR
+                return
+            
+            # 웨이포인트 이름 목록 저장
+            self.current_waypoint_names = path_wp_names.copy()
+            
+            # 새로운 웨이포인트 리스트 생성 (방향 계산 추가)
+            waypoint_poses = []
+            for i, name in enumerate(path_wp_names):
+                pose = PoseStamped()
+                pose.header.frame_id = 'map'
+                pose.header.stamp = self.get_clock().now().to_msg()
+                pose.pose.position.x = self.waypoints[name]['position']['x']
+                pose.pose.position.y = self.waypoints[name]['position']['y']
+                
+                # 다음 웨이포인트가 있으면 그 방향을 향하도록 orientation 설정
+                if i < len(path_wp_names) - 1:
+                    next_name = path_wp_names[i+1]
+                    next_x = self.waypoints[next_name]['position']['x']
+                    next_y = self.waypoints[next_name]['position']['y']
+                    
+                    # 현재 웨이포인트에서 다음 웨이포인트를 향하는 방향 계산
+                    dx = next_x - pose.pose.position.x
+                    dy = next_y - pose.pose.position.y
+                    yaw = math.atan2(dy, dx)
+                    
+                    # 쿼터니언으로 변환 (yaw만 사용)
+                    q = self.euler_to_quaternion(0, 0, yaw)
+                    pose.pose.orientation.x = q[0]
+                    pose.pose.orientation.y = q[1]
+                    pose.pose.orientation.z = q[2]
+                    pose.pose.orientation.w = q[3]
+                else:
+                    # 마지막 웨이포인트는 기본값 사용
+                    pose.pose.orientation.w = 1.0
+            
+                waypoint_poses.append(pose)
+            
+            self.waypoint_list = waypoint_poses
+            self.get_logger().info(f'새로운 최적 경로가 생성되었습니다: {path_wp_names}')
+            
+            # 새로운 경로로 네비게이션 시작
+            self.start_navigation()
         
-        if not current_wp or not goal_wp:
-            self.get_logger().error('현재 위치 또는 목표 위치 근처에서 웨이포인트를 찾을 수 없습니다.')
-            return
-        
-        # 현재 진행 중인 네비게이션 취소
-        if self.current_state == NavigatorState.NAVIGATING:
-            # Nav2 goal 취소
-            self.nav_action_client.cancel_goal_async()
-        
-        # 새로운 경로 계산
-        self.get_logger().info(f'새로운 경로 계산 시작: {current_wp} -> {goal_wp}')
-        path_wp_names = self.find_path_astar(current_wp, goal_wp)
-        
-        if not path_wp_names:
-            self.get_logger().error('새로운 경로를 찾을 수 없습니다!')
-            return
-        
-        # 새로운 웨이포인트 리스트 생성
-        waypoint_poses = []
-        for name in path_wp_names:
-            pose = PoseStamped()
-            pose.header.frame_id = 'map'
-            pose.header.stamp = self.get_clock().now().to_msg()
-            pose.pose.position.x = self.waypoints[name]['position']['x']
-            pose.pose.position.y = self.waypoints[name]['position']['y']
-            pose.pose.orientation.w = 1.0
-            waypoint_poses.append(pose)
-        
-        self.waypoint_list = waypoint_poses
-        self.get_logger().info(f'새로운 경로가 생성되었습니다: {path_wp_names}')
-        
-        # 새로운 경로로 네비게이션 시작
-        self.start_navigation()
+        finally:
+            self._replanning = False
 
     def pause_navigation(self):
-        """현재 네비게이션을 일시 중지합니다."""
+        """안전하게 네비게이션을 일시정지합니다."""
         if self.current_state == NavigatorState.NAVIGATING:
             self.nav_action_client.cancel_goal_async()
-            self.get_logger().info('네비게이션이 일시 중지되었습니다.')
+            self.current_state = NavigatorState.IDLE
+            self.get_logger().info('네비게이션을 일시정지했습니다.')
+
+    def temporarily_remove_waypoint(self, waypoint_name):
+        """웨이포인트를 임시로 그래프에서 제거합니다."""
+        if not hasattr(self, 'blocked_waypoints'):
+            self.blocked_waypoints = {}
+        
+        if waypoint_name in self.waypoints:
+            # 해당 웨이포인트의 neighbor 관계를 임시 저장하고 제거
+            neighbors = self.waypoints[waypoint_name].get('neighbors', [])
+            self.blocked_waypoints[waypoint_name] = neighbors.copy()
+            
+            # 다른 웨이포인트들의 neighbor 목록에서도 제거
+            for wp_name, wp_data in self.waypoints.items():
+                if 'neighbors' in wp_data and waypoint_name in wp_data['neighbors']:
+                    wp_data['neighbors'].remove(waypoint_name)
+            
+            # 해당 웨이포인트의 neighbors 목록 비우기
+            self.waypoints[waypoint_name]['neighbors'] = []
+            
+            self.get_logger().info(f'웨이포인트 {waypoint_name}을 임시로 그래프에서 제거했습니다.')
+
+    def restore_waypoint(self, waypoint_name):
+        """임시 제거한 웨이포인트를 복구합니다."""
+        if hasattr(self, 'blocked_waypoints') and waypoint_name in self.blocked_waypoints:
+            # 저장된 neighbor 관계 복구
+            neighbors = self.blocked_waypoints[waypoint_name]
+            self.waypoints[waypoint_name]['neighbors'] = neighbors
+            
+            # 다른 웨이포인트들의 neighbor 목록에도 다시 추가
+            for neighbor_name in neighbors:
+                if neighbor_name in self.waypoints:
+                    if 'neighbors' not in self.waypoints[neighbor_name]:
+                        self.waypoints[neighbor_name]['neighbors'] = []
+                    if waypoint_name not in self.waypoints[neighbor_name]['neighbors']:
+                        self.waypoints[neighbor_name]['neighbors'].append(waypoint_name)
+            
+            # 임시 저장 목록에서 제거
+            del self.blocked_waypoints[waypoint_name]
+            
+            self.get_logger().info(f'웨이포인트 {waypoint_name}을 그래프에 복구했습니다.')
+
+    def euler_to_quaternion(self, roll, pitch, yaw):
+        """오일러 각도를 쿼터니언으로 변환합니다."""
+        cy = math.cos(yaw * 0.5)
+        sy = math.sin(yaw * 0.5)
+        cp = math.cos(pitch * 0.5)
+        sp = math.sin(pitch * 0.5)
+        cr = math.cos(roll * 0.5)
+        sr = math.sin(roll * 0.5)
+
+        q = [0] * 4
+        q[0] = sr * cp * cy - cr * sp * sy
+        q[1] = cr * sp * cy + sr * cp * sy
+        q[2] = cr * cp * sy - sr * sp * cy
+        q[3] = cr * cp * cy + sr * sp * sy
+
+        return q
 
 
 def main(args=None):

@@ -1,0 +1,5 @@
+# 요청 (Request) - 비어있어도 됩니다
+---
+# 응답 (Response)
+bool success
+string message
