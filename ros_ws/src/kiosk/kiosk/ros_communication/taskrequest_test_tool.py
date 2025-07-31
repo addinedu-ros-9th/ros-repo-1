@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
-import sys  # 시스템 관련 기능 사용 (프로그램 종료 등)
+import sys  # 시스템 관련 기능
 import rclpy  # ROS2 Python 클라이언트 라이브러리
 from rclpy.node import Node  # ROS2 노드 클래스
 from libo_interfaces.srv import TaskRequest  # 우리가 만든 TaskRequest 서비스
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit  # PyQt5 GUI 위젯들
 from PyQt5.QtCore import QThread, pyqtSignal  # 스레드와 시그널 기능
 import time  # 시간 관련 기능
+import random  # 랜덤 기능
 
 class TaskRequestClient(Node):  # TaskRequest 서비스 클라이언트
     def __init__(self):  # 클라이언트 초기화
@@ -61,7 +62,7 @@ class RequestWorker(QThread):  # 백그라운드 요청 처리 스레드
         self.task_type = task_type  # 작업 타입 저장
         self.call_location = call_location  # 호출지 위치 저장
         self.goal_location = goal_location  # 목적지 위치 저장
-
+    
     def run(self):  # 스레드 실행
         response = self.client.send_request(self.robot_id, self.task_type, self.call_location, self.goal_location)  # 요청 전송
         if response:  # 응답이 있으면
@@ -85,7 +86,7 @@ class TaskRequestTestGUI(QMainWindow):  # 메인 GUI 윈도우
     
     def init_ui(self):  # UI 구성
         self.setWindowTitle('🎯 TaskRequest 테스트 툴')  # 윈도우 제목 설정
-        self.setGeometry(100, 100, 400, 500)  # 윈도우 위치와 크기 설정 (x=100, y=100, width=400, height=500)
+        self.setGeometry(100, 100, 400, 600)  # 윈도우 위치와 크기 설정 (x=100, y=100, width=400, height=600)
         
         # 중앙 위젯 (메인 컨테이너)
         central_widget = QWidget()  # 중앙 위젯 생성
@@ -116,10 +117,20 @@ class TaskRequestTestGUI(QMainWindow):  # 메인 GUI 윈도우
         layout.addWidget(QLabel('목적지 위치:'))  # 라벨 추가
         layout.addWidget(self.goal_location_edit)  # 입력란 추가
         
+        # 버튼 레이아웃 (가로 배치)
+        button_layout = QHBoxLayout()  # 가로 레이아웃 생성
+        
+        # 랜덤 버튼
+        self.random_button = QPushButton('🎲 랜덤 설정')  # 랜덤 버튼 생성
+        self.random_button.clicked.connect(self.set_random_values)  # 버튼 클릭 시 랜덤 설정 함수 호출
+        button_layout.addWidget(self.random_button)  # 랜덤 버튼 추가
+        
         # 전송 버튼
         self.send_button = QPushButton('🚀 요청 전송')  # 전송 버튼 생성
         self.send_button.clicked.connect(self.send_request)  # 버튼 클릭 시 send_request 함수 호출
-        layout.addWidget(self.send_button)  # 버튼 추가
+        button_layout.addWidget(self.send_button)  # 전송 버튼 추가
+        
+        layout.addLayout(button_layout)  # 버튼 레이아웃 추가
         
         # 로그 출력 영역
         layout.addWidget(QLabel('로그:'))  # 로그 라벨 추가
@@ -134,6 +145,28 @@ class TaskRequestTestGUI(QMainWindow):  # 메인 GUI 윈도우
         self.goal_location_edit.setText('D3')  # 기본 목적지 위치 설정
         
         self.log_message('✅ TaskRequest 테스트 툴 시작됨')  # 시작 메시지 출력
+    
+    def set_random_values(self):  # 랜덤 값 설정
+        """입력 필드들을 랜덤한 값으로 설정"""
+        # 랜덤 값들 정의
+        robot_ids = ['libo_a', 'libo_b', 'libo_c']  # 로봇 ID 목록
+        task_types = ['escort', 'assist', 'delivery']  # 작업 타입 목록
+        locations = ['A1', 'A2', 'A3', 'B2', 'B3', 'C1', 'C3', 'D3', 'E3']  # 위치 목록
+        
+        # 랜덤 값 설정
+        self.robot_id_edit.setText(random.choice(robot_ids))  # 랜덤 로봇 ID 설정
+        self.task_type_edit.setText(random.choice(task_types))  # 랜덤 작업 타입 설정
+        
+        # 호출지와 목적지는 서로 다르게 설정
+        call_loc = random.choice(locations)  # 랜덤 호출지 선택
+        goal_loc = random.choice(locations)  # 랜덤 목적지 선택
+        while goal_loc == call_loc:  # 목적지가 호출지와 같으면 다시 선택
+            goal_loc = random.choice(locations)
+        
+        self.call_location_edit.setText(call_loc)  # 랜덤 호출지 위치 설정
+        self.goal_location_edit.setText(goal_loc)  # 랜덤 목적지 위치 설정
+        
+        self.log_message('🎲 랜덤 값으로 설정 완료!')  # 랜덤 설정 완료 메시지
     
     def send_request(self):  # 요청 전송 처리
         if not self.client:  # 클라이언트가 없으면
