@@ -5,6 +5,7 @@ from rclpy.node import Node
 from libo_interfaces.srv import TaskRequest
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
+from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
 import time  # 시간 관련 기능
 import uuid  # 고유 ID 생성
 
@@ -76,15 +77,22 @@ class TaskManager(Node):
         # OverallStatus 퍼블리셔 생성
         self.status_publisher = self.create_publisher(OverallStatus, 'robot_status', 10)  # OverallStatus 토픽 퍼블리셔
         
+        # TaskStatus 퍼블리셔 생성
+        self.task_status_publisher = self.create_publisher(TaskStatus, 'task_status', 10)  # TaskStatus 토픽 퍼블리셔
+        
         # 로봇 상태 체크 타이머 (1초마다 실행)
         self.robot_check_timer = self.create_timer(1.0, self.check_robot_timeouts)  # 1초마다 로봇 타임아웃 체크
         
         # 로봇 상태 발행 타이머 (1초마다 실행)
         self.status_timer = self.create_timer(1.0, self.publish_robot_status)  # 1초마다 로봇 상태 발행
         
+        # TaskStatus 발행 타이머 (1초마다 실행)
+        self.task_status_timer = self.create_timer(1.0, self.publish_task_status)  # 1초마다 더미 작업 상태 발행
+        
         self.get_logger().info('🎯 Task Manager 시작됨 - task_request 서비스 대기 중...')
         self.get_logger().info('💓 Heartbeat 구독 시작됨 - heartbeat 토픽 모니터링 중...')
         self.get_logger().info('📡 OverallStatus 발행 시작됨 - robot_status 토픽으로 1초마다 발행...')
+        self.get_logger().info('📋 TaskStatus 발행 시작됨 - task_status 토픽으로 1초마다 발행...')  # TaskStatus 로그 추가
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -124,6 +132,20 @@ class TaskManager(Node):
             status_msg.position_yaw = 0.0  # 기본값: 방향 알 수 없음
             
             self.status_publisher.publish(status_msg)  # 메시지 발행
+    
+    def publish_task_status(self):  # 더미 작업 상태 발행
+        """1초마다 더미 작업 상태를 발행"""
+        task_status_msg = TaskStatus()  # TaskStatus 메시지 생성
+        task_status_msg.robot_id = "libo_a"  # 더미 로봇 ID
+        task_status_msg.task_type = "delivery"  # 더미 작업 타입
+        task_status_msg.task_stage = 2  # 더미 작업 단계 (2: 진행중)
+        task_status_msg.call_location = "a1"  # 더미 호출 위치
+        task_status_msg.goal_location = "b3"  # 더미 목표 위치
+        task_status_msg.start_time = self.get_clock().now().to_msg()  # 현재 시간을 시작 시간으로
+        task_status_msg.end_time.sec = 0  # 진행중이므로 종료 시간은 0
+        task_status_msg.end_time.nanosec = 0  # 진행중이므로 종료 시간은 0
+        
+        self.task_status_publisher.publish(task_status_msg)  # 메시지 발행
     
     def task_request_callback(self, request, response):  # 키오스크로부터 받은 작업 요청을 처리
         """TaskRequest 서비스 콜백"""

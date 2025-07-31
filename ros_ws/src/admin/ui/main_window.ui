@@ -133,6 +133,71 @@ QLabel#robot_list_label {
        </property>
       </widget>
      </widget>
+     <widget class="QFrame" name="task_status_frame">
+      <property name="geometry">
+       <rect>
+        <x>1050</x>
+        <y>300</y>
+        <width>220</width>
+        <height>200</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string>QFrame {
+    border: 2px solid #e67e22;
+    border-radius: 8px;
+    background-color: #34495e;
+}
+
+QLabel {
+    color: white;
+    font-size: 12px;
+}
+
+QLabel#task_status_title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #e67e22;
+}
+
+QLabel#task_status_label {
+    font-size: 12px;
+    color: white;
+}</string>
+      </property>
+      <widget class="QLabel" name="task_status_title">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>10</y>
+         <width>200</width>
+         <height>25</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>📋 Current Task</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="task_status_label">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>40</y>
+         <width>200</width>
+         <height>150</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>활성 작업 없음</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </widget>
     </widget>
     <widget class="QWidget" name="log_tab">
      <attribute name="title">
