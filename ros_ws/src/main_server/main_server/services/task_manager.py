@@ -5,6 +5,7 @@ from rclpy.node import Node
 from libo_interfaces.srv import TaskRequest
 import time  # 시간 관련 기능
 import uuid  # 고유 ID 생성
+import json  # JSON 파일 저장용
 
 class Task:  # 작업 정보를 담는 클래스
     def __init__(self, robot_id, task_type, call_location, goal_location):  # Task 객체 초기화
@@ -20,6 +21,19 @@ class Task:  # 작업 정보를 담는 클래스
     def get_info(self):  # 작업 정보 반환
         """작업의 현재 정보를 문자열로 반환"""
         return f"Task[{self.task_id}] - {self.robot_id} | {self.task_type} | {self.call_location} -> {self.goal_location} | Status: {self.status}"
+    
+    def to_dict(self):  # Task 객체를 딕셔너리로 변환 (JSON 저장용)
+        """Task 객체를 딕셔너리로 변환"""
+        return {
+            'task_id': self.task_id,
+            'robot_id': self.robot_id,
+            'task_type': self.task_type,
+            'call_location': self.call_location,
+            'goal_location': self.goal_location,
+            'start_time': self.start_time,
+            'end_time': self.end_time,
+            'status': self.status
+        }
 
 class TaskManager(Node):
     def __init__(self):  # TaskManager 노드 초기화 및 서비스 서버 설정
@@ -35,7 +49,19 @@ class TaskManager(Node):
         # 작업 목록을 저장할 리스트
         self.tasks = []  # 생성된 작업들을 저장할 리스트
         
+        # 작업 목록 저장 파일 경로
+        self.tasks_file = "/tmp/current_tasks.json"  # 임시 파일에 저장
+        
         self.get_logger().info('🎯 Task Manager 시작됨 - task_request 서비스 대기 중...')
+    
+    def save_tasks_to_file(self):  # 작업 목록을 파일에 저장
+        """현재 작업 목록을 JSON 파일에 저장"""
+        try:
+            tasks_data = [task.to_dict() for task in self.tasks]  # 모든 Task를 딕셔너리로 변환
+            with open(self.tasks_file, 'w') as f:  # 파일 쓰기 모드로 열기
+                json.dump(tasks_data, f, indent=2)  # JSON 형태로 저장 (들여쓰기 2칸)
+        except Exception as e:
+            self.get_logger().error(f'❌ 작업 목록 저장 실패: {e}')  # 저장 실패 시 에러 로그
     
     def task_request_callback(self, request, response):  # 키오스크로부터 받은 작업 요청을 처리
         """TaskRequest 서비스 콜백"""
@@ -49,9 +75,12 @@ class TaskManager(Node):
         new_task = Task(request.robot_id, request.task_type, request.call_location, request.goal_location)  # Task 객체 생성
         self.tasks.append(new_task)  # 작업 목록에 추가
         
+        # 작업 목록을 파일에 저장
+        self.save_tasks_to_file()  # 파일에 현재 작업 목록 저장
+        
         self.get_logger().info(f'✅ 새로운 작업 생성됨: {new_task.get_info()}')  # 생성된 작업 정보 출력
         
-        # 응답 설정
+        # Callback시 자동 응답 내용
         response.success = True
         response.message = f"Task request 잘 받았음! Task ID: {new_task.task_id}"
         
