@@ -12,7 +12,7 @@ class DatabaseManager:
         self.connection = None
         self._connect()
     
-    def _connect(self):
+    def _connect(self):  # DB 연결하는 내부 함수
         """GCP MySQL 데이터베이스 연결"""
         try:
             self.connection = pymysql.connect(
@@ -29,7 +29,7 @@ class DatabaseManager:
             print(f"❌ 데이터베이스 연결 실패: {e}")
             self.connection = None
     
-    def search_books(self, query: str, search_type: str = 'title') -> List[Dict]:
+    def search_books(self, query: str, search_type: str = 'title') -> List[Dict]:  # 도서 검색하는 함수
         """
         도서 검색
         
@@ -80,7 +80,7 @@ class DatabaseManager:
             print(f"❌ 검색 오류: {e}")
             return []
     
-    def test_connection(self) -> bool:
+    def test_connection(self) -> bool:  # DB 연결이 잘 되는지 테스트하는 함수
         """데이터베이스 연결 테스트"""
         try:
             with self.connection.cursor() as cursor:
@@ -92,7 +92,7 @@ class DatabaseManager:
             print(f"❌ 연결 테스트 실패: {e}")
             return False
     
-    def register_book(self, book_data: Dict) -> bool:
+    def register_book(self, book_data: Dict) -> bool:  # 새 도서 등록하거나 기존 도서 재고 늘리는 함수
         """
         도서 등록 (1단계용) - 중복 시 재고 증가
         
@@ -122,7 +122,7 @@ class DatabaseManager:
                         update_sql = "UPDATE book SET stock_quantity = %s WHERE isbn = %s"
                         cursor.execute(update_sql, (new_stock, isbn))
                         
-                        print(f"�� 기존 도서 재고 증가: {book_data.get('title', 'N/A')}")
+                        print(f"✅ 기존 도서 재고 증가: {book_data.get('title', 'N/A')}")
                         print(f"   기존 재고: {current_stock}권 → 새로운 재고: {new_stock}권")
                         return True
             
@@ -156,7 +156,7 @@ class DatabaseManager:
             print(f"❌ 도서 등록 실패: {e}")
             return False
     
-    def get_book_by_isbn(self, isbn: str) -> Optional[Dict]:
+    def get_book_by_isbn(self, isbn: str) -> Optional[Dict]:  # ISBN 번호로 도서 찾는 함수
         """
         ISBN으로 도서 조회
         
@@ -185,7 +185,7 @@ class DatabaseManager:
             print(f"❌ 도서 조회 실패: {e}")
             return None
     
-    def close(self):
+    def close(self):  # DB 연결 끊는 함수
         """데이터베이스 연결 종료"""
         if self.connection:
             self.connection.close()
