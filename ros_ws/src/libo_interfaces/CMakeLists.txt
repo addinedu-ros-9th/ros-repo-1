@@ -17,6 +17,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/BookInfo.msg"
   "msg/Heartbeat.msg"
+  "msg/OverallStatus.msg"  # OverallStatus 메시지 추가
   "srv/BookSearch.srv"
   "srv/Navigate.srv"
   "srv/EscortRequest.srv"
@@ -24,6 +25,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/GoalPose.msg"  # 이름 충돌을 피하기 위해 GoalPose.msg로 변경
   "msg/Waypoint.msg"  # 새로 만든 웨이포인트 메시지 추가
   "srv/SetGoal.srv"
+  "msg/VoiceCommand.msg"
   DEPENDENCIES builtin_interfaces
 )
 

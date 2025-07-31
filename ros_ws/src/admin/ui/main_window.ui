@@ -24,83 +24,7 @@
     <normaloff>.</normaloff>.</iconset>
   </property>
   <property name="styleSheet">
-   <string>QMainWindow {
-    background-color: #2c3e50;
-}
-
-QTabWidget {
-    background-color: #2c3e50;
-    border: none;
-}
-
-QTabWidget::pane {
-    border: 2px solid #34495e;
-    border-radius: 8px;
-    background-color: #2c3e50;
-    top: -2px;
-}
-
-QTabBar::tab {
-    background-color: #34495e;
-    color: white;
-    padding: 12px 24px;
-    margin-right: 2px;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-    font-size: 14px;
-    font-weight: bold;
-    min-width: 120px;
-}
-
-QTabBar::tab:selected {
-    background-color: #3498db;
-    color: white;
-}
-
-QTabBar::tab:hover {
-    background-color: #2980b9;
-}
-
-QTabBar::tab:!selected {
-    margin-top: 4px;
-}
-
-QStatusBar {
-    background-color: #34495e;
-    color: white;
-    border-top: 1px solid #2c3e50;
-    font-size: 12px;
-}
-
-QMenuBar {
-    background-color: #34495e;
-    color: white;
-    border-bottom: 1px solid #2c3e50;
-}
-
-QMenuBar::item {
-    background-color: transparent;
-    padding: 6px 12px;
-}
-
-QMenuBar::item:selected {
-    background-color: #3498db;
-    border-radius: 4px;
-}
-
-QMenu {
-    background-color: #34495e;
-    color: white;
-    border: 1px solid #2c3e50;
-}
-
-QMenu::item {
-    padding: 6px 20px;
-}
-
-QMenu::item:selected {
-    background-color: #3498db;
-}</string>
+   <string/>
   </property>
   <widget class="QWidget" name="centralwidget">
    <widget class="QTabWidget" name="tabWidget">
@@ -131,226 +55,96 @@ QMenu::item:selected {
      <attribute name="title">
       <string>🤖 Main Control</string>
      </attribute>
+     <widget class="QFrame" name="robot_status_frame">
+      <property name="geometry">
+       <rect>
+        <x>950</x>
+        <y>20</y>
+        <width>320</width>
+        <height>200</height>
+       </rect>
+      </property>
+      <property name="styleSheet">
+       <string>QFrame {
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    background-color: #34495e;
+}
+
+QLabel {
+    color: white;
+    font-size: 12px;
+}
+
+QLabel#robot_status_title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #3498db;
+}</string>
+      </property>
+      <widget class="QLabel" name="robot_status_title">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>10</y>
+         <width>200</width>
+         <height>25</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>🤖 Active Robots</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="robot_count_label">
+       <property name="geometry">
+        <rect>
+         <x>220</x>
+         <y>10</y>
+         <width>80</width>
+         <height>25</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Count: 0</string>
+       </property>
+      </widget>
+      <widget class="QLabel" name="robot_list_label">
+       <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>40</y>
+         <width>300</width>
+         <height>150</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>No robots detected...</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </widget>
     </widget>
     <widget class="QWidget" name="log_tab">
      <attribute name="title">
       <string>📋 System Logs</string>
      </attribute>
-     <widget class="QFrame" name="log_frame">
+     <widget class="QLabel" name="log_placeholder">
       <property name="geometry">
        <rect>
         <x>20</x>
         <y>20</y>
-        <width>1260</width>
-        <height>750</height>
+        <width>300</width>
+        <height>30</height>
        </rect>
       </property>
-      <property name="styleSheet">
-       <string>QFrame {
-    background-color: #34495e;
-    border: 2px solid #2c3e50;
-    border-radius: 8px;
-}</string>
+      <property name="text">
+       <string>System Logs (기능 추후 구현)</string>
       </property>
-      <widget class="QLabel" name="log_title">
-       <property name="geometry">
-        <rect>
-         <x>20</x>
-         <y>20</y>
-         <width>200</width>
-         <height>30</height>
-        </rect>
-       </property>
-       <property name="styleSheet">
-        <string>color: white; font-size: 18px; font-weight: bold;</string>
-       </property>
-       <property name="text">
-        <string>System Logs</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="log_all_btn">
-       <property name="geometry">
-        <rect>
-         <x>20</x>
-         <y>60</y>
-         <width>80</width>
-         <height>30</height>
-        </rect>
-       </property>
-       <property name="styleSheet">
-        <string>QPushButton {
-    background-color: #3498db;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #2980b9;
-}</string>
-       </property>
-       <property name="text">
-        <string>All</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="log_info_btn">
-       <property name="geometry">
-        <rect>
-         <x>110</x>
-         <y>60</y>
-         <width>80</width>
-         <height>30</height>
-        </rect>
-       </property>
-       <property name="styleSheet">
-        <string>QPushButton {
-    background-color: #27ae60;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #219a52;
-}</string>
-       </property>
-       <property name="text">
-        <string>Info</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="log_warning_btn">
-       <property name="geometry">
-        <rect>
-         <x>200</x>
-         <y>60</y>
-         <width>80</width>
-         <height>30</height>
-        </rect>
-       </property>
-       <property name="styleSheet">
-        <string>QPushButton {
-    background-color: #f39c12;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #e67e22;
-}</string>
-       </property>
-       <property name="text">
-        <string>Warning</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="log_error_btn">
-       <property name="geometry">
-        <rect>
-         <x>290</x>
-         <y>60</y>
-         <width>80</width>
-         <height>30</height>
-        </rect>
-       </property>
-       <property name="styleSheet">
-        <string>QPushButton {
-    background-color: #e74c3c;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #c0392b;
-}</string>
-       </property>
-       <property name="text">
-        <string>Error</string>
-       </property>
-      </widget>
-      <widget class="QPushButton" name="log_clear_btn">
-       <property name="geometry">
-        <rect>
-         <x>1150</x>
-         <y>60</y>
-         <width>90</width>
-         <height>30</height>
-        </rect>
-       </property>
-       <property name="styleSheet">
-        <string>QPushButton {
-    background-color: #95a5a6;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    font-weight: bold;
-}
-
-QPushButton:hover {
-    background-color: #7f8c8d;
-}</string>
-       </property>
-       <property name="text">
-        <string>Clear Logs</string>
-       </property>
-      </widget>
-      <widget class="QTextEdit" name="log_display">
-       <property name="geometry">
-        <rect>
-         <x>20</x>
-         <y>100</y>
-         <width>1220</width>
-         <height>630</height>
-        </rect>
-       </property>
-       <property name="styleSheet">
-        <string>QTextEdit {
-    background-color: #1a1a1a;
-    color: #00ff00;
-    border: 1px solid #555555;
-    border-radius: 4px;
-    font-family: 'Courier New', monospace;
-    font-size: 11px;
-    padding: 10px;
-}
-
-QScrollBar:vertical {
-    background-color: #2c3e50;
-    width: 12px;
-    border-radius: 6px;
-}
-
-QScrollBar::handle:vertical {
-    background-color: #3498db;
-    border-radius: 6px;
-    min-height: 20px;
-}
-
-QScrollBar::handle:vertical:hover {
-    background-color: #2980b9;
-}</string>
-       </property>
-       <property name="readOnly">
-        <bool>true</bool>
-       </property>
-       <property name="html">
-        <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
-&lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
-p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Courier New','monospace'; font-size:11px; font-weight:400; font-style:normal;&quot;&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Courier New'; font-size:11px; color:#00ff00;&quot;&gt;[2025-01-01 12:00:00] INFO: LIBO Administrator System Started&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Courier New'; font-size:11px; color:#00ff00;&quot;&gt;[2025-01-01 12:00:01] INFO: Connecting to Libo Service...&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Courier New'; font-size:11px; color:#00ff00;&quot;&gt;[2025-01-01 12:00:02] INFO: ✅ Connected to Libo Service&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Courier New'; font-size:11px; color:#00ff00;&quot;&gt;[2025-01-01 12:00:03] INFO: Searching for available robots...&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Courier New'; font-size:11px; color:#00ff00;&quot;&gt;[2025-01-01 12:00:04] INFO: 🤖 Robot Libo_A detected - Status: Available&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Courier New'; font-size:11px; color:#ffff00;&quot;&gt;[2025-01-01 12:00:05] WARN: Robot battery level: 98% - Consider charging soon&lt;/span&gt;&lt;/p&gt;
-&lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Courier New'; font-size:11px; color:#00ff00;&quot;&gt;[2025-01-01 12:00:06] INFO: System ready for operations&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-       </property>
-      </widget>
      </widget>
     </widget>
    </widget>
@@ -409,11 +203,7 @@ p, li { white-space: pre-wrap; }
   </widget>
   <widget class="QStatusBar" name="statusbar">
    <property name="styleSheet">
-    <string>QStatusBar {
-    background-color: #34495e;
-    color: white;
-    border-top: 1px solid #2c3e50;
-}</string>
+    <string/>
    </property>
   </widget>
   <action name="actionNew_Session">

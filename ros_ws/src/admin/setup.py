@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'debug_tool = admin.debug_tool:main',
             'debug_tool_qt = admin.debug_tool_qt:main',
+            'admin_gui = admin.main_app:main',  # admin_gui 라는 이름으로 실행할 수 있도록 추가
         ],
     },
 )

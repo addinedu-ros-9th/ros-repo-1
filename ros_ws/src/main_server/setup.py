@@ -18,16 +18,19 @@ setup(
     maintainer_email='leesh20806@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'book_search_service = main_server.services.book_search_service:main',
             'robot_commander = main_server.services.robot_commander:main',
             'aladin_book_register = main_server.services.aladin_book_register:main',
             'task_manager = main_server.services.task_manager:main',
+<<<<<<< HEAD
             'weight_subscriber = main_server.ros_communication.weight_subscriber:main',
             'weight_test_publisher = main_server.ros_communication.weight_test_publisher:main',
             'led_status_publisher = main_server.led_status_publisher:main',
+=======
+            'camera_monitoring = main_server.camera_monitoring:main',
+>>>>>>> 20598a34d0b08a982b3600a2a6980feb60193df2
         ],
     },
 )
