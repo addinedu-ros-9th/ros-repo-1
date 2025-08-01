@@ -5,6 +5,8 @@ from rclpy.node import Node
 from libo_interfaces.srv import TaskRequest
 from libo_interfaces.srv import SetGoal  # SetGoal 서비스 추가
 from libo_interfaces.srv import NavigationResult  # NavigationResult 서비스 추가
+from libo_interfaces.srv import ActivateDetector  # ActivateDetector 서비스 추가
+from libo_interfaces.srv import DeactivateDetector  # DeactivateDetector 서비스 추가
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
@@ -17,7 +19,7 @@ import threading  # 스레드 관리
 # 좌표 매핑 딕셔너리 (A1~E9까지 총 45개 좌표)
 LOCATION_COORDINATES = {
     # A열 좌표들
-    'A1': (1.2, 3.4), 'A2': (2.1, 4.5), 'A3': (3.3, 2.8), 'A4': (4.7, 1.9), 'A5': (5.2, 6.1),
+    'A1': (1.2, 3.4), 'A2': (6.0, 0.0), 'A3': (6.0, 3.0), 'A4': (4.7, 1.9), 'A5': (5.2, 6.1),
     'A6': (6.8, 3.7), 'A7': (7.4, 5.2), 'A8': (8.1, 2.3), 'A9': (9.5, 4.8),
     
     # B열 좌표들
@@ -127,6 +129,12 @@ class TaskManager(Node):
             self.navigation_result_callback
         )
         
+        # ActivateDetector 서비스 클라이언트 생성
+        self.activate_detector_client = self.create_client(ActivateDetector, 'activate_detector')
+        
+        # DeactivateDetector 서비스 클라이언트 생성
+        self.deactivate_detector_client = self.create_client(DeactivateDetector, 'deactivate_detector')
+        
         # Heartbeat 토픽 구독자 생성
         self.heartbeat_subscription = self.create_subscription(
             Heartbeat,  # 메시지 타입
@@ -171,6 +179,8 @@ class TaskManager(Node):
         self.get_logger().info('📋 TaskStatus 발행 시작됨 - task_status 토픽으로 1초마다 발행...')  # TaskStatus 로그 추가
         self.get_logger().info('🧭 Navigator 클라이언트 준비됨 - set_navigation_goal 서비스 연결...')  # Navigator 클라이언트 로그 추가
         self.get_logger().info('📍 NavigationResult 서비스 시작됨 - navigation_result 서비스 대기 중...')  # NavigationResult 서버 로그 추가
+        self.get_logger().info('👁️ ActivateDetector 클라이언트 준비됨 - activate_detector 서비스 연결...')
+        self.get_logger().info('👁️ DeactivateDetector 클라이언트 준비됨 - deactivate_detector 서비스 연결...')
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -495,6 +505,14 @@ class TaskManager(Node):
             stage_desc = {1: "시작", 2: "진행중", 3: "완료직전"}.get(current_task.stage, f"Stage {current_task.stage}")
             self.get_logger().info(f'📍 현재 상태: {stage_icons.get(current_task.stage, "⚪")} Stage {current_task.stage} ({stage_desc})')
             
+            # Escort task의 Stage 2 시작 시점에 감지기 활성화
+            if current_task.task_type == 'escort' and current_task.stage == 2:
+                self.get_logger().info(f'🚶 Escort task Stage 2 시작 - 감지기 활성화 요청...')
+                if self.activate_detector(current_task.robot_id):
+                    self.get_logger().info(f'✅ 감지기 활성화 요청 전송 완료')
+                else:
+                    self.get_logger().error(f'❌ 감지기 활성화 요청 전송 실패')
+            
             # 스테이지가 바뀌었으므로 해당하는 좌표를 Navigator에게 전송
             self.get_logger().info(f'🚀 새로운 스테이지에 맞는 좌표 전송 시작...')
             if self.send_coordinate_for_stage(current_task):
@@ -511,6 +529,76 @@ class TaskManager(Node):
         if result:
             self.get_logger().info(f'📤 테스트 요청 전송됨 - 응답은 콜백으로 처리됩니다')
         return result
+
+    def activate_detector(self, robot_id):  # Vision Manager에게 감지기 활성화 요청
+        """Vision Manager에게 ActivateDetector 서비스 요청을 보내는 메서드"""
+        # Vision Manager 서비스가 준비될 때까지 대기
+        if not self.activate_detector_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ Vision Manager 서비스를 찾을 수 없음 (activate_detector)')
+            return False
+        
+        # ActivateDetector 요청 생성
+        request = ActivateDetector.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'👁️ Vision Manager에게 감지기 활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.activate_detector_client.call_async(request)
+            future.add_done_callback(self.activate_detector_response_callback)
+            self.get_logger().info(f'📤 감지기 활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ Vision Manager 통신 중 오류: {e}')
+            return False
+
+    def deactivate_detector(self, robot_id):  # Vision Manager에게 감지기 비활성화 요청
+        """Vision Manager에게 DeactivateDetector 서비스 요청을 보내는 메서드"""
+        # Vision Manager 서비스가 준비될 때까지 대기
+        if not self.deactivate_detector_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ Vision Manager 서비스를 찾을 수 없음 (deactivate_detector)')
+            return False
+        
+        # DeactivateDetector 요청 생성
+        request = DeactivateDetector.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'👁️ Vision Manager에게 감지기 비활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.deactivate_detector_client.call_async(request)
+            future.add_done_callback(self.deactivate_detector_response_callback)
+            self.get_logger().info(f'📤 감지기 비활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ Vision Manager 통신 중 오류: {e}')
+            return False
+
+    def activate_detector_response_callback(self, future):  # ActivateDetector 응답 콜백
+        """ActivateDetector 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ 감지기 활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️  감지기 활성화 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ 감지기 활성화 응답 처리 중 오류: {e}')
+
+    def deactivate_detector_response_callback(self, future):  # DeactivateDetector 응답 콜백
+        """DeactivateDetector 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ 감지기 비활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️  감지기 비활성화 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ 감지기 비활성화 응답 처리 중 오류: {e}')
 
     def manage_robot_states(self):  # 로봇 상태 관리
         """각 로봇의 상태를 관리하는 메서드"""
