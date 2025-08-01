@@ -3,8 +3,11 @@
 import rclpy
 from rclpy.node import Node
 from libo_interfaces.srv import TaskRequest
+from libo_interfaces.srv import SetGoal  # SetGoal 서비스 추가
+from libo_interfaces.srv import NavigationResult  # NavigationResult 서비스 추가
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
+from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
 import time  # 시간 관련 기능
 import uuid  # 고유 ID 생성
 
@@ -12,20 +15,26 @@ class Robot:  # 로봇 정보를 담는 클래스
     def __init__(self, robot_id):  # Robot 객체 초기화
         self.robot_id = robot_id  # 로봇 ID 저장
         self.last_heartbeat_time = time.time()  # 마지막 하트비트 수신 시간
-        self.is_active = True  # 활성 상태 (기본값: 활성)
+        self.is_available = True  # 사용 가능 상태 (기본값: 사용 가능)
     
     def update_heartbeat(self):  # 하트비트 업데이트
         """하트비트를 받았을 때 호출되는 메서드"""
         self.last_heartbeat_time = time.time()  # 마지막 하트비트 시간 업데이트
-        self.is_active = True  # 활성 상태로 설정
 
     def check_timeout(self, timeout_seconds=3):  # 타임아웃 체크
         """지정된 시간(기본 3초) 이내에 하트비트가 수신되었는지 확인하는 메서드"""
         current_time = time.time()  # 현재 시간을 가져옴
         time_since_last_heartbeat = current_time - self.last_heartbeat_time  # 마지막 하트비트를 받은 후 얼마나 시간이 지났는지 계산
-        if time_since_last_heartbeat > timeout_seconds:  # 지정된 시간보다 오래되었다면
-            self.is_active = False  # 로봇을 비활성 상태로 변경
-        return self.is_active  # 현재 로봇의 활성 상태를 반환 (True 또는 False)
+        return time_since_last_heartbeat <= timeout_seconds  # 타임아웃 여부를 직접 반환 (True: 정상, False: 타임아웃)
+    
+    def set_available(self, available):  # 사용 가능 상태 설정
+        """로봇의 사용 가능 상태를 설정하는 메서드"""
+        self.is_available = available  # 사용 가능 상태 업데이트
+    
+    def get_status_info(self):  # 로봇 상태 정보 반환
+        """로봇의 현재 상태 정보를 문자열로 반환"""
+        available_status = "사용가능" if self.is_available else "사용중"
+        return f"Robot[{self.robot_id}] - 활성 | {available_status}"
 
 class Task:  # 작업 정보를 담는 클래스
     def __init__(self, robot_id, task_type, call_location, goal_location):  # Task 객체 초기화
@@ -53,6 +62,16 @@ class TaskManager(Node):
             self.task_request_callback
         )
         
+        # Navigator로 SetGoal 보내는 서비스 클라이언트 생성
+        self.navigator_client = self.create_client(SetGoal, 'set_navigation_goal')
+        
+        # NavigationResult 서비스 서버 생성
+        self.navigation_result_service = self.create_service(
+            NavigationResult,
+            'navigation_result',
+            self.navigation_result_callback
+        )
+        
         # Heartbeat 토픽 구독자 생성
         self.heartbeat_subscription = self.create_subscription(
             Heartbeat,  # 메시지 타입
@@ -76,15 +95,24 @@ class TaskManager(Node):
         # OverallStatus 퍼블리셔 생성
         self.status_publisher = self.create_publisher(OverallStatus, 'robot_status', 10)  # OverallStatus 토픽 퍼블리셔
         
+        # TaskStatus 퍼블리셔 생성
+        self.task_status_publisher = self.create_publisher(TaskStatus, 'task_status', 10)  # TaskStatus 토픽 퍼블리셔
+        
         # 로봇 상태 체크 타이머 (1초마다 실행)
         self.robot_check_timer = self.create_timer(1.0, self.check_robot_timeouts)  # 1초마다 로봇 타임아웃 체크
         
         # 로봇 상태 발행 타이머 (1초마다 실행)
         self.status_timer = self.create_timer(1.0, self.publish_robot_status)  # 1초마다 로봇 상태 발행
         
+        # TaskStatus 발행 타이머 (1초마다 실행)
+        self.task_status_timer = self.create_timer(1.0, self.publish_task_status)  # 1초마다 더미 작업 상태 발행
+        
         self.get_logger().info('🎯 Task Manager 시작됨 - task_request 서비스 대기 중...')
         self.get_logger().info('💓 Heartbeat 구독 시작됨 - heartbeat 토픽 모니터링 중...')
         self.get_logger().info('📡 OverallStatus 발행 시작됨 - robot_status 토픽으로 1초마다 발행...')
+        self.get_logger().info('📋 TaskStatus 발행 시작됨 - task_status 토픽으로 1초마다 발행...')  # TaskStatus 로그 추가
+        self.get_logger().info('🧭 Navigator 클라이언트 준비됨 - set_navigation_goal 서비스 연결...')  # Navigator 클라이언트 로그 추가
+        self.get_logger().info('📍 NavigationResult 서비스 시작됨 - navigation_result 서비스 대기 중...')  # NavigationResult 서버 로그 추가
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -112,11 +140,11 @@ class TaskManager(Node):
     
     def publish_robot_status(self):  # 로봇 상태 발행
         """1초마다 현재 활성 로봇들의 OverallStatus 발행"""
-        for robot_id in self.robots.keys():  # 현재 활성 로봇들에 대해 반복
+        for robot_id, robot in self.robots.items():  # 현재 활성 로봇들에 대해 반복 (robot 객체도 가져옴)
             status_msg = OverallStatus()  # OverallStatus 메시지 생성
             status_msg.timestamp = self.get_clock().now().to_msg()  # 현재 시간 설정
             status_msg.robot_id = robot_id  # 로봇 ID 설정
-            status_msg.is_available = True  # 기본값: 사용 가능
+            status_msg.is_available = robot.is_available  # 실제 로봇의 사용 가능 상태 사용
             status_msg.battery = 255  # 기본값: 알 수 없음 (255로 표시)
             status_msg.book_weight = 0.0  # 기본값: 무게 없음
             status_msg.position_x = 0.0  # 기본값: 위치 알 수 없음
@@ -125,6 +153,29 @@ class TaskManager(Node):
             
             self.status_publisher.publish(status_msg)  # 메시지 발행
     
+    def publish_task_status(self):  # 활성 작업들의 상태 발행
+        """1초마다 현재 활성 Task들의 TaskStatus 발행"""
+        if not self.tasks:  # Task가 없으면 발행하지 않음
+            return
+            
+        for task in self.tasks:  # 현재 활성 Task들에 대해 반복
+            task_status_msg = TaskStatus()  # TaskStatus 메시지 생성
+            task_status_msg.task_id = task.task_id  # 실제 Task ID
+            task_status_msg.robot_id = task.robot_id  # 실제 로봇 ID
+            task_status_msg.task_type = task.task_type  # 실제 작업 타입
+            task_status_msg.task_stage = 2  # 2: 진행중 (활성 상태)
+            task_status_msg.call_location = task.call_location  # 실제 호출 위치
+            task_status_msg.goal_location = task.goal_location  # 실제 목표 위치
+            
+            # Task 생성 시간을 사용 (현재 시간이 아님)
+            task_status_msg.start_time.sec = int(task.start_time)  # Task 시작 시간 (초)
+            task_status_msg.start_time.nanosec = int((task.start_time - int(task.start_time)) * 1000000000)  # 나노초 부분
+            
+            task_status_msg.end_time.sec = 0  # 진행중이므로 종료 시간은 0
+            task_status_msg.end_time.nanosec = 0  # 진행중이므로 종료 시간은 0
+            
+            self.task_status_publisher.publish(task_status_msg)  # 메시지 발행
+
     def task_request_callback(self, request, response):  # 키오스크로부터 받은 작업 요청을 처리
         """TaskRequest 서비스 콜백"""
         self.get_logger().info(f'📥 Task Request 받음!')
@@ -139,6 +190,20 @@ class TaskManager(Node):
         
         self.get_logger().info(f'✅ 새로운 작업 생성됨: {new_task.get_info()}')  # 생성된 작업 정보 출력
         
+        # Task 생성 후 자동으로 로봇을 사용중으로 설정
+        if self.set_robot_unavailable_for_task(request.robot_id):
+            self.get_logger().info(f'🔒 로봇 <{request.robot_id}> 자동으로 사용중 상태로 변경됨')
+        else:
+            self.get_logger().warning(f'⚠️  로봇 <{request.robot_id}> 상태 변경 실패 - 로봇이 존재하지 않음')
+        
+        # Navigator에게 더미 좌표 전송 테스트
+        self.get_logger().info(f'🧭 Navigator 통신 테스트 시작...')
+        navigator_success = self.send_goal_to_navigator(1.5, 2.3)  # 더미 좌표 (1.5, 2.3)
+        if navigator_success:
+            self.get_logger().info(f'📤 Navigator 요청 전송됨 - 응답은 비동기로 처리됩니다')
+        else:
+            self.get_logger().warning(f'⚠️  Navigator 요청 전송 실패')
+        
         # 응답 설정
         response.success = True
         response.message = f"Task request 잘 받았음! Task ID: {new_task.task_id}"
@@ -146,6 +211,106 @@ class TaskManager(Node):
         self.get_logger().info(f'✅ Task Request 처리 완료: {response.message}')
         
         return response
+    
+    def set_robot_available(self, robot_id, available):  # 로봇 사용 가능 상태 설정
+        """특정 로봇의 사용 가능 상태를 설정하는 메서드"""
+        if robot_id in self.robots:  # 로봇이 존재한다면
+            self.robots[robot_id].set_available(available)  # 상태 변경
+            status_text = "사용가능" if available else "사용중"
+            self.get_logger().info(f'🔄 로봇 <{robot_id}> 상태 변경: {status_text}')
+            return True
+        else:
+            self.get_logger().warning(f'❌ 로봇 <{robot_id}> 찾을 수 없음')
+            return False
+    
+    def set_robot_unavailable_for_task(self, robot_id):  # Task 할당 시 로봇을 사용중으로 설정
+        """Task가 할당될 때 로봇을 사용중으로 설정"""
+        return self.set_robot_available(robot_id, False)
+    
+    def set_robot_available_after_task(self, robot_id):  # Task 완료 시 로봇을 사용가능으로 설정
+        """Task가 완료될 때 로봇을 사용가능으로 설정"""
+        return self.set_robot_available(robot_id, True)
+    
+    def get_available_robots(self):  # 사용 가능한 로봇들 목록 반환
+        """현재 사용 가능한 로봇들의 목록을 반환"""
+        available_robots = []
+        for robot_id, robot in self.robots.items():
+            if robot.is_available:  # is_active 체크 제거 (robots에 있다는 것 자체가 활성)
+                available_robots.append(robot_id)
+        return available_robots
+    
+    def send_goal_to_navigator(self, x, y):  # Navigator에게 목표 좌표 전송
+        """Navigator에게 SetGoal 서비스 요청을 보내는 메서드 (비동기)"""
+        # Navigator 서비스가 준비될 때까지 대기
+        if not self.navigator_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ Navigator 서비스를 찾을 수 없음 (set_navigation_goal)')
+            return False
+        
+        # SetGoal 요청 생성
+        request = SetGoal.Request()
+        request.x = x  # 목표 x 좌표
+        request.y = y  # 목표 y 좌표
+        
+        self.get_logger().info(f'🧭 Navigator에게 목표 좌표 전송: ({x}, {y})')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.navigator_client.call_async(request)
+            future.add_done_callback(self.navigator_response_callback)
+            self.get_logger().info(f'📤 Navigator 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ Navigator 통신 중 오류: {e}')
+            return False
+    
+    def navigator_response_callback(self, future):  # Navigator 응답 콜백
+        """Navigator 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ Navigator 응답 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️  Navigator 응답 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ Navigator 응답 처리 중 오류: {e}')
+    
+    def navigation_result_callback(self, request, response):  # NavigationResult 서비스 콜백
+        """NavigationResult 요청을 받아서 처리하는 콜백"""
+        self.get_logger().info(f'📍 NavigationResult 받음: {request.result}')
+        
+        try:
+            # 현재는 단순히 로그만 출력 (나중에 task 상태 업데이트 등 추가 예정)
+            if request.result == "SUCCEEDED":
+                self.get_logger().info(f'✅ 네비게이션 성공!')
+            elif request.result == "FAILED":
+                self.get_logger().warning(f'❌ 네비게이션 실패!')
+            elif request.result == "CANCELED":
+                self.get_logger().info(f'⏹️  네비게이션 취소됨!')
+            else:
+                self.get_logger().warning(f'⚠️  알 수 없는 결과: {request.result}')
+            
+            # 성공 응답
+            response.success = True
+            response.message = f"NavigationResult 처리 완료: {request.result}"
+            
+            return response
+            
+        except Exception as e:
+            self.get_logger().error(f'❌ NavigationResult 처리 중 오류: {e}')
+            response.success = False
+            response.message = f"처리 실패: {str(e)}"
+            return response
+    
+    def test_navigator_communication(self):  # Navigator 통신 테스트
+        """더미 좌표로 Navigator 통신을 테스트하는 메서드"""
+        test_x = 1.0  # 더미 x 좌표
+        test_y = 2.0  # 더미 y 좌표
+        self.get_logger().info(f'🧪 Navigator 통신 테스트 시작: ({test_x}, {test_y})')
+        result = self.send_goal_to_navigator(test_x, test_y)
+        if result:
+            self.get_logger().info(f'📤 테스트 요청 전송됨 - 응답은 콜백으로 처리됩니다')
+        return result
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)

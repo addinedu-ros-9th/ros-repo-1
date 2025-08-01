@@ -24,13 +24,10 @@ setup(
             'robot_commander = main_server.services.robot_commander:main',
             'aladin_book_register = main_server.services.aladin_book_register:main',
             'task_manager = main_server.services.task_manager:main',
-<<<<<<< HEAD
-            'weight_subscriber = main_server.ros_communication.weight_subscriber:main',
-            'weight_test_publisher = main_server.ros_communication.weight_test_publisher:main',
-            'led_status_publisher = main_server.led_status_publisher:main',
-=======
-            'camera_monitoring = main_server.camera_monitoring:main',
->>>>>>> 20598a34d0b08a982b3600a2a6980feb60193df2
+            'weight_subscriber = main_server.ros_communication.weight_subscriber:main',  # 무게 센서 구독자
+            'weight_test_publisher = main_server.ros_communication.weight_test_publisher:main',  # 무게 테스트 퍼블리셔
+            'led_status_publisher = main_server.led_status_publisher:main',  # LED 상태 퍼블리셔
+            'camera_monitoring = main_server.camera_monitoring:main',  # 카메라 모니터링
         ],
     },
 )
