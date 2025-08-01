@@ -714,18 +714,55 @@ class TaskManager(Node):
                 counter_value = int(msg.command)
                 self.get_logger().info(f'📊 [DetectionTimer] 카운터: {counter_value}초 (robot: {msg.robot_id})')
                 
-                # 조건부 CancelNavigation 로직
-                if counter_value == 5:
-                    # 5초일 때 경고 로그
-                    self.get_logger().warn(f'⚠️ [DetectionTimer] 5초 경과! 주의가 필요합니다. (robot: {msg.robot_id})')
-                
-                elif counter_value == 10:
-                    # 10초일 때 자동 CancelNavigation 발행
-                    self.get_logger().warn(f'🚨 [DetectionTimer] 10초 경과! 자동으로 네비게이션 취소를 요청합니다. (robot: {msg.robot_id})')
-                    if self.cancel_navigation():
-                        self.get_logger().info(f'✅ [DetectionTimer] 네비게이션 취소 요청 전송 완료')
+                # 10초 초과 시 특별 처리
+                if counter_value >= 10:
+                    self.get_logger().warn(f'🚨 [DetectionTimer] 10초 초과! 특별 처리 시작 (robot: {msg.robot_id})')
+                    
+                    # 현재 활성 task 확인
+                    if self.tasks and len(self.tasks) > 0:
+                        current_task = self.tasks[0]  # 첫 번째 활성 task
+                        
+                        # Escort task이고 Stage 2인 경우에만 특별 처리
+                        if current_task.task_type == 'escort' and current_task.stage == 2:
+                            self.get_logger().warn(f'🚨 [DetectionTimer] Escort Stage 2에서 10초 초과! 자동 처리 시작')
+                            
+                            # 1. CancelNavigation 발행
+                            self.get_logger().info(f'⏹️ [DetectionTimer] CancelNavigation 요청 전송...')
+                            if self.cancel_navigation():
+                                self.get_logger().info(f'✅ [DetectionTimer] CancelNavigation 요청 전송 완료')
+                            else:
+                                self.get_logger().error(f'❌ [DetectionTimer] CancelNavigation 요청 전송 실패')
+                            
+                            # 2. DeactivateDetector 발행
+                            self.get_logger().info(f'👁️ [DetectionTimer] DeactivateDetector 요청 전송...')
+                            if self.deactivate_detector(current_task.robot_id):
+                                self.get_logger().info(f'✅ [DetectionTimer] DeactivateDetector 요청 전송 완료')
+                            else:
+                                self.get_logger().error(f'❌ [DetectionTimer] DeactivateDetector 요청 전송 실패')
+                            
+                            # 3. Stage 3으로 강제 이동
+                            self.get_logger().warn(f'🔄 [DetectionTimer] Stage 3으로 강제 이동...')
+                            current_task.stage = 3
+                            self.get_logger().info(f'✅ [DetectionTimer] Stage 3으로 이동 완료')
+                            
+                            # 4. Stage 3 좌표 전송
+                            if self.send_coordinate_for_stage(current_task):
+                                self.get_logger().info(f'✅ [DetectionTimer] Stage 3 좌표 전송 완료')
+                            else:
+                                self.get_logger().error(f'❌ [DetectionTimer] Stage 3 좌표 전송 실패')
+                            
+                        else:
+                            # Escort가 아니거나 Stage 2가 아닌 경우 일반 경고만
+                            task_info = f"{current_task.task_type} (Stage {current_task.stage})" if self.tasks else "No active task"
+                            self.get_logger().warn(f'⚠️ [DetectionTimer] 10초 초과했지만 Escort Stage 2가 아님: {task_info}')
+                    
                     else:
-                        self.get_logger().error(f'❌ [DetectionTimer] 네비게이션 취소 요청 전송 실패')
+                        # 활성 task가 없는 경우
+                        self.get_logger().warn(f'⚠️ [DetectionTimer] 10초 초과했지만 활성 task가 없음')
+                
+                # 5초일 때는 일반 경고만 (기존 로직 유지)
+                elif counter_value == 5:
+                    self.get_logger().warn(f'⚠️ [DetectionTimer] 5초 경과! 주의가 필요합니다. (robot: {msg.robot_id})')
                 
             except ValueError:
                 # 숫자가 아닌 다른 명령인 경우
