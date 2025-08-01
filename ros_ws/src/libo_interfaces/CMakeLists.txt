@@ -31,7 +31,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/TaskStatus.msg"
   "srv/ActivateDetector.srv"
   "srv/DeactivateDetector.srv"
-  "srv/QRScanVerification.srv"
+  "srv/RobotQRCheck.srv"
   "srv/ActivateTracker.srv"
   "srv/EndTask.srv"
   "srv/DeactivateTalker.srv"
