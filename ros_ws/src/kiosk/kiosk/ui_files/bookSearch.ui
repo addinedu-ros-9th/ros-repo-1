@@ -248,7 +248,7 @@ QScrollBar::handle:vertical:hover {
       <widget class="QPushButton" name="orderButton">
        <property name="font">
         <font>
-         <pointsize>14</pointsize>
+         <pointsize>16</pointsize>
          <weight>75</weight>
          <bold>true</bold>
         </font>
@@ -258,8 +258,8 @@ QScrollBar::handle:vertical:hover {
        </property>
        <property name="minimumSize">
         <size>
-         <width>120</width>
-         <height>50</height>
+         <width>180</width>
+         <height>60</height>
         </size>
        </property>
        <property name="styleSheet">
@@ -267,8 +267,9 @@ QScrollBar::handle:vertical:hover {
     background-color: #e74c3c;
     color: white;
     border: none;
-    border-radius: 10px;
+    border-radius: 15px;
     font-weight: bold;
+    font-size: 16px;
 }
 QPushButton:hover {
     background-color: #c0392b;
@@ -280,56 +281,34 @@ QPushButton:pressed {
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="robotCallButton">
-       <property name="font">
-        <font>
-         <pointsize>14</pointsize>
-         <weight>75</weight>
-         <bold>true</bold>
-        </font>
+      <spacer name="horizontalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
        </property>
-       <property name="text">
-        <string>리보 호출</string>
-       </property>
-       <property name="minimumSize">
+       <property name="sizeHint" stdset="0">
         <size>
-         <width>120</width>
-         <height>50</height>
+         <width>40</width>
+         <height>20</height>
         </size>
        </property>
-       <property name="styleSheet">
-        <string notr="true">QPushButton {
-    background-color: #f39c12;
-    color: white;
-    border: none;
-    border-radius: 10px;
-    font-weight: bold;
-}
-QPushButton:hover {
-    background-color: #e67e22;
-}
-QPushButton:pressed {
-    background-color: #d35400;
-}</string>
-       </property>
-      </widget>
+      </spacer>
      </item>
      <item>
       <widget class="QPushButton" name="homeButton">
        <property name="font">
         <font>
-         <pointsize>14</pointsize>
+         <pointsize>16</pointsize>
          <weight>75</weight>
          <bold>true</bold>
         </font>
        </property>
        <property name="text">
-        <string>홈으로</string>
+        <string>홈으로 돌아가기</string>
        </property>
        <property name="minimumSize">
         <size>
-         <width>120</width>
-         <height>50</height>
+         <width>180</width>
+         <height>60</height>
         </size>
        </property>
        <property name="styleSheet">
@@ -337,8 +316,9 @@ QPushButton:pressed {
     background-color: #27ae60;
     color: white;
     border: none;
-    border-radius: 10px;
+    border-radius: 15px;
     font-weight: bold;
+    font-size: 16px;
 }
 QPushButton:hover {
     background-color: #229954;

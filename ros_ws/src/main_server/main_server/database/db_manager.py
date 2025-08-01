@@ -2,6 +2,7 @@
 # 도서 등록 메서드 추가 (register_book)
 # ISBN 중복 검사
 # ISBN으로 도서 조회 기능
+# ✅ DB 테이블 스키마와 완벽 일치하도록 수정
 
 import pymysql
 from typing import List, Dict, Optional
@@ -57,10 +58,10 @@ class DatabaseManager:
             else:
                 where_clause = "title LIKE %s"
             
-            
+            # ✅ 수정: location → location_id (DB 스키마 일치)
             query_sql = f"""
             SELECT 
-                id, title, author, publisher, category_name, location,
+                id, title, author, publisher, category_name, location_id,
                 price, stock_quantity, isbn, cover_image_url
             FROM book
             WHERE {where_clause}
@@ -72,6 +73,11 @@ class DatabaseManager:
             with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 cursor.execute(query_sql, (search_param,))
                 results = cursor.fetchall()
+                
+                # ✅ 호환성 유지: location_id를 location으로도 제공
+                for result in results:
+                    if 'location_id' in result:
+                        result['location'] = result['location_id']
                 
             print(f"🔍 검색 결과: {len(results)}권 발견")
             return results
@@ -126,10 +132,10 @@ class DatabaseManager:
                         print(f"   기존 재고: {current_stock}권 → 새로운 재고: {new_stock}권")
                         return True
             
-            # 새로운 도서 등록
+            # ✅ 수정: location → location_id (DB 스키마 일치)
             insert_sql = """
             INSERT INTO book (
-                title, author, publisher, category_name, location,
+                title, author, publisher, category_name, location_id,
                 price, stock_quantity, isbn, cover_image_url
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """
@@ -139,7 +145,7 @@ class DatabaseManager:
                 book_data.get('author', ''),
                 book_data.get('publisher', ''),
                 book_data.get('category_name', ''),
-                book_data.get('location', ''),
+                book_data.get('location', ''),  # 입력 데이터에서는 'location' 키 사용
                 book_data.get('price', 0),
                 book_data.get('stock_quantity', 1),
                 book_data.get('isbn', ''),
@@ -172,12 +178,17 @@ class DatabaseManager:
         
         try:
             with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                # ✅ 수정: location → location_id (DB 스키마 일치)
                 cursor.execute("""
-                    SELECT id, title, author, publisher, category_name, location,
+                    SELECT id, title, author, publisher, category_name, location_id,
                            price, stock_quantity, isbn, cover_image_url
                     FROM book WHERE isbn = %s
                 """, (isbn,))
                 result = cursor.fetchone()
+                
+                # ✅ 호환성 유지: location_id를 location으로도 제공
+                if result and 'location_id' in result:
+                    result['location'] = result['location_id']
                 
             return result
             

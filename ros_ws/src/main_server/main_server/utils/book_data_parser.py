@@ -4,6 +4,8 @@
 # 알라딘 API 응답을 DB 스키마에 맞게 변환
 # 저자명 정리, 가격 추출, 카테고리 결정
 # 데이터 유효성 검증
+# ✅ DB 테이블 스키마와 완벽 일치하도록 수정
+
 from typing import Dict, Optional, List
 import re
 
@@ -26,11 +28,11 @@ class BookDataParser:
             '시/에세이': '소설'
         }
         
-        # 위치 매핑 (카테고리별 기본 위치)
+        # ✅ 위치 매핑 (카테고리별 기본 위치) - DB location 테이블과 일치
         self.location_mapping = {
-            '컴퓨터': 'D5',
-            '언어': 'D7',
-            '소설': 'C8'
+            '컴퓨터': 'D5',  # computer 구역
+            '언어': 'D7',    # language 구역
+            '소설': 'C8'     # novel 구역
         }
     
     def parse_aladin_response(self, book_info: Dict) -> Optional[Dict]:
@@ -71,13 +73,13 @@ class BookDataParser:
             # 재고 수량 (기본값: 1)
             stock_quantity = 1
             
-            # 파싱된 데이터 구성
+            # ✅ 파싱된 데이터 구성 - DB 스키마와 일치
             parsed_book = {
                 'title': title,
                 'author': author,
                 'publisher': publisher,
                 'category_name': category,
-                'location': location,
+                'location': location,  # db_manager에서 location_id로 처리됨
                 'price': price,
                 'stock_quantity': stock_quantity,
                 'isbn': isbn,
@@ -197,15 +199,15 @@ class BookDataParser:
     
     def _determine_location(self, category: str) -> str:
         """
-        카테고리별 위치 결정
+        카테고리별 위치 결정 - DB location 테이블과 일치
         
         Args:
             category (str): 도서 카테고리
             
         Returns:
-            str: 위치 코드
+            str: 위치 코드 (DB location.id와 일치)
         """
-        return self.location_mapping.get(category, 'D3')
+        return self.location_mapping.get(category, 'C8')  # 기본값을 C8(소설)로 변경
     
     def validate_parsed_data(self, parsed_book: Dict) -> bool:
         """
@@ -235,6 +237,13 @@ class BookDataParser:
         if price <= 0:
             print(f"❌ 잘못된 가격: {price}")
             return False
+        
+        # ✅ 위치 검증 - DB location 테이블의 유효한 ID인지 확인
+        location = parsed_book.get('location', '')
+        valid_locations = ['D5', 'D7', 'C8', 'E3', 'E9', 'C3']  # DB location 테이블의 실제 ID들
+        if location not in valid_locations:
+            print(f"⚠️ 유효하지 않은 위치 코드: {location}, 기본값 C8로 설정")
+            parsed_book['location'] = 'C8'  # 기본값으로 변경
         
         print("✅ 파싱된 데이터 유효성 검증 통과")
         return True
@@ -271,4 +280,4 @@ def main():
                 print("❌ 파싱된 데이터가 유효하지 않습니다.")
 
 if __name__ == "__main__":
-    main() 
+    main()
