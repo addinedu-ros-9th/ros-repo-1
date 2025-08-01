@@ -339,6 +339,70 @@ QProgressBar::chunk {
      <string>98%</string>
     </property>
    </widget>
+   <widget class="QLabel" name="robot_count_label">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>170</y>
+      <width>191</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #3498db; font-weight: bold; font-size: 11px;</string>
+    </property>
+    <property name="text">
+     <string>Count: 0</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QFrame" name="task_status_frame">
+   <property name="geometry">
+    <rect>
+     <x>250</x>
+     <y>600</y>
+     <width>361</width>
+     <height>120</height>
+    </rect>
+   </property>
+   <widget class="QLabel" name="task_status_title">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>10</y>
+      <width>200</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>font-size: 14px; font-weight: bold;</string>
+    </property>
+    <property name="text">
+     <string>Current Task Status:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="task_status_label">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>40</y>
+      <width>341</width>
+      <height>70</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #ecf0f1; font-size: 11px; background-color: #34495e; padding: 5px; border-radius: 3px;</string>
+    </property>
+    <property name="text">
+     <string>활성 작업 없음</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignTop</set>
+    </property>
+    <property name="wordWrap">
+     <bool>true</bool>
+    </property>
+   </widget>
   </widget>
   <widget class="QLabel" name="map_display">
    <property name="geometry">
@@ -457,6 +521,25 @@ Feed</string>
      <set>Qt::AlignCenter</set>
     </property>
    </widget>
+   <widget class="QLabel" name="robot_list_label">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>210</y>
+      <width>331</width>
+      <height>15</height>
+     </rect>
+    </property>
+    <property name="styleSheet">
+     <string>color: #bdc3c7; font-size: 10px;</string>
+    </property>
+    <property name="text">
+     <string>활성 로봇 없음</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignTop</set>
+    </property>
+   </widget>
   </widget>
   <widget class="QPushButton" name="emergency_btn">
    <property name="geometry">
@@ -476,7 +559,7 @@ Feed</string>
     <rect>
      <x>20</x>
      <y>600</y>
-     <width>591</width>
+     <width>221</width>
      <height>120</height>
     </rect>
    </property>
@@ -499,40 +582,40 @@ Feed</string>
    <widget class="QPushButton" name="waypoint_a_btn">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>10</x>
       <y>45</y>
-      <width>120</width>
-      <height>40</height>
+      <width>60</width>
+      <height>30</height>
      </rect>
     </property>
     <property name="text">
-     <string>Waypoint A</string>
+     <string>A</string>
     </property>
    </widget>
    <widget class="QPushButton" name="waypoint_b_btn">
     <property name="geometry">
      <rect>
-      <x>220</x>
+      <x>80</x>
       <y>45</y>
-      <width>120</width>
-      <height>40</height>
+      <width>60</width>
+      <height>30</height>
      </rect>
     </property>
     <property name="text">
-     <string>Waypoint B</string>
+     <string>B</string>
     </property>
    </widget>
    <widget class="QPushButton" name="waypoint_c_btn">
     <property name="geometry">
      <rect>
-      <x>390</x>
+      <x>150</x>
       <y>45</y>
-      <width>120</width>
-      <height>40</height>
+      <width>60</width>
+      <height>30</height>
      </rect>
     </property>
     <property name="text">
-     <string>Waypoint C</string>
+     <string>C</string>
     </property>
    </widget>
   </widget>
