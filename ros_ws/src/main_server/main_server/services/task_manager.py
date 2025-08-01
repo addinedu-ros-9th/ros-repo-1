@@ -189,10 +189,11 @@ class TaskManager(Node):
         
         # Navigator에게 더미 좌표 전송 테스트
         self.get_logger().info(f'🧭 Navigator 통신 테스트 시작...')
-        if self.send_goal_to_navigator(1.5, 2.3):  # 더미 좌표 (1.5, 2.3)
-            self.get_logger().info(f'✅ Navigator 통신 성공!')
+        navigator_success = self.send_goal_to_navigator(1.5, 2.3)  # 더미 좌표 (1.5, 2.3)
+        if navigator_success:
+            self.get_logger().info(f'📤 Navigator 요청 전송됨 - 응답은 비동기로 처리됩니다')
         else:
-            self.get_logger().warning(f'⚠️  Navigator 통신 실패')
+            self.get_logger().warning(f'⚠️  Navigator 요청 전송 실패')
         
         # 응답 설정
         response.success = True
@@ -230,7 +231,7 @@ class TaskManager(Node):
         return available_robots
     
     def send_goal_to_navigator(self, x, y):  # Navigator에게 목표 좌표 전송
-        """Navigator에게 SetGoal 서비스 요청을 보내는 메서드"""
+        """Navigator에게 SetGoal 서비스 요청을 보내는 메서드 (비동기)"""
         # Navigator 서비스가 준비될 때까지 대기
         if not self.navigator_client.wait_for_service(timeout_sec=3.0):
             self.get_logger().error('❌ Navigator 서비스를 찾을 수 없음 (set_navigation_goal)')
@@ -244,33 +245,36 @@ class TaskManager(Node):
         self.get_logger().info(f'🧭 Navigator에게 목표 좌표 전송: ({x}, {y})')
         
         try:
-            # 비동기 서비스 호출
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
             future = self.navigator_client.call_async(request)
-            # 간단한 동기 방식으로 응답 대기 (미니멀 시스템)
-            rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
-            
-            if future.done():
-                response = future.result()
-                if response.success:
-                    self.get_logger().info(f'✅ Navigator 응답 성공: {response.message}')
-                    return True
-                else:
-                    self.get_logger().warning(f'⚠️  Navigator 응답 실패: {response.message}')
-                    return False
-            else:
-                self.get_logger().error('❌ Navigator 응답 타임아웃')
-                return False
+            future.add_done_callback(self.navigator_response_callback)
+            self.get_logger().info(f'📤 Navigator 요청 전송 완료 - 응답 대기 중...')
+            return True
                 
         except Exception as e:
             self.get_logger().error(f'❌ Navigator 통신 중 오류: {e}')
             return False
+    
+    def navigator_response_callback(self, future):  # Navigator 응답 콜백
+        """Navigator 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ Navigator 응답 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️  Navigator 응답 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ Navigator 응답 처리 중 오류: {e}')
     
     def test_navigator_communication(self):  # Navigator 통신 테스트
         """더미 좌표로 Navigator 통신을 테스트하는 메서드"""
         test_x = 1.0  # 더미 x 좌표
         test_y = 2.0  # 더미 y 좌표
         self.get_logger().info(f'🧪 Navigator 통신 테스트 시작: ({test_x}, {test_y})')
-        return self.send_goal_to_navigator(test_x, test_y)
+        result = self.send_goal_to_navigator(test_x, test_y)
+        if result:
+            self.get_logger().info(f'📤 테스트 요청 전송됨 - 응답은 콜백으로 처리됩니다')
+        return result
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)

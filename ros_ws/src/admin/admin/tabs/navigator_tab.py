@@ -28,22 +28,45 @@ class NavigatorServerNode(Node):  # SetGoal 서비스 서버 노드
         """SetGoal 요청을 받아서 처리하는 콜백"""
         current_time = time.strftime('%H:%M:%S', time.localtime())
         
-        # 수신 정보 저장
-        message_info = {
-            'time': current_time,
-            'x': request.x,
-            'y': request.y
-        }
-        self.received_messages.append(message_info)
-        
-        # 로그 출력
-        self.get_logger().info(f'🎯 SetGoal 수신: ({request.x}, {request.y}) at {current_time}')
-        
-        # 성공 응답 생성
-        response.success = True
-        response.message = f"디버그 서버에서 수신 완료: ({request.x}, {request.y})"
-        
-        return response
+        try:
+            # 수신 정보 저장
+            message_info = {
+                'time': current_time,
+                'x': request.x,
+                'y': request.y,
+                'status': 'received'  # 수신 상태 추가
+            }
+            self.received_messages.append(message_info)
+            
+            # 로그 출력
+            self.get_logger().info(f'🎯 SetGoal 수신: ({request.x}, {request.y}) at {current_time}')
+            
+            # 성공 응답 생성
+            response.success = True
+            response.message = f"디버그 서버에서 수신 완료: ({request.x}, {request.y}) at {current_time}"
+            
+            # 응답 상태 업데이트
+            message_info['status'] = 'responded'
+            message_info['response'] = 'SUCCESS'
+            
+            self.get_logger().info(f'✅ SetGoal 응답 전송: SUCCESS - {response.message}')
+            
+            return response
+            
+        except Exception as e:
+            # 에러 처리
+            self.get_logger().error(f'❌ SetGoal 처리 중 오류: {e}')
+            
+            # 실패 응답 생성
+            response.success = False
+            response.message = f"디버그 서버 오류: {str(e)}"
+            
+            # 에러 상태 저장
+            if 'message_info' in locals():
+                message_info['status'] = 'error'
+                message_info['response'] = f'ERROR: {str(e)}'
+            
+            return response
     
     def get_latest_messages(self, count=10):  # 최근 메시지 가져오기
         """최근 수신된 메시지들을 반환"""
@@ -133,13 +156,25 @@ class NavigatorTab(QWidget):  # Navigator 디버깅 탭
         if latest_messages:
             display_text = "🎯 SetGoal 메시지 수신 기록:\n\n"
             for msg in latest_messages:
-                display_text += f"[{msg['time']}] 좌표: ({msg['x']}, {msg['y']})\n"
+                status_icon = "✅" if msg.get('status') == 'responded' else "❌" if msg.get('status') == 'error' else "⏳"
+                display_text += f"{status_icon} [{msg['time']}] 좌표: ({msg['x']}, {msg['y']})\n"
+                if 'response' in msg:
+                    display_text += f"   📤 응답: {msg['response']}\n"
+                display_text += "\n"
             
-            # 메시지 개수 표시
-            display_text += f"\n📊 총 수신 메시지: {len(self.server_node.received_messages)}개"
+            # 통계 정보 추가
+            total_count = len(self.server_node.received_messages)
+            success_count = len([m for m in self.server_node.received_messages if m.get('status') == 'responded'])
+            error_count = len([m for m in self.server_node.received_messages if m.get('status') == 'error'])
+            
+            display_text += f"📊 통계:\n"
+            display_text += f"   총 수신: {total_count}개\n"
+            display_text += f"   성공 응답: {success_count}개\n"
+            display_text += f"   오류: {error_count}개\n"
             
         else:
-            display_text = "SetGoal 메시지 대기 중...\n"
+            display_text = "SetGoal 메시지 대기 중...\n\n"
+            display_text += "💡 TaskManager에서 Task Request를 보내면 여기에 SetGoal 메시지가 표시됩니다.\n"
         
         self.messages_text.setPlainText(display_text)
         
