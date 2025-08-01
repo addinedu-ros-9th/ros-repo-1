@@ -133,20 +133,29 @@ class TaskManager(Node):
             
             self.status_publisher.publish(status_msg)  # 메시지 발행
     
-    def publish_task_status(self):  # 더미 작업 상태 발행
-        """1초마다 더미 작업 상태를 발행"""
-        task_status_msg = TaskStatus()  # TaskStatus 메시지 생성
-        task_status_msg.robot_id = "libo_a"  # 더미 로봇 ID
-        task_status_msg.task_type = "delivery"  # 더미 작업 타입
-        task_status_msg.task_stage = 2  # 더미 작업 단계 (2: 진행중)
-        task_status_msg.call_location = "a1"  # 더미 호출 위치
-        task_status_msg.goal_location = "b3"  # 더미 목표 위치
-        task_status_msg.start_time = self.get_clock().now().to_msg()  # 현재 시간을 시작 시간으로
-        task_status_msg.end_time.sec = 0  # 진행중이므로 종료 시간은 0
-        task_status_msg.end_time.nanosec = 0  # 진행중이므로 종료 시간은 0
-        
-        self.task_status_publisher.publish(task_status_msg)  # 메시지 발행
-    
+    def publish_task_status(self):  # 활성 작업들의 상태 발행
+        """1초마다 현재 활성 Task들의 TaskStatus 발행"""
+        if not self.tasks:  # Task가 없으면 발행하지 않음
+            return
+            
+        for task in self.tasks:  # 현재 활성 Task들에 대해 반복
+            task_status_msg = TaskStatus()  # TaskStatus 메시지 생성
+            task_status_msg.task_id = task.task_id  # 실제 Task ID
+            task_status_msg.robot_id = task.robot_id  # 실제 로봇 ID
+            task_status_msg.task_type = task.task_type  # 실제 작업 타입
+            task_status_msg.task_stage = 2  # 2: 진행중 (활성 상태)
+            task_status_msg.call_location = task.call_location  # 실제 호출 위치
+            task_status_msg.goal_location = task.goal_location  # 실제 목표 위치
+            
+            # Task 생성 시간을 사용 (현재 시간이 아님)
+            task_status_msg.start_time.sec = int(task.start_time)  # Task 시작 시간 (초)
+            task_status_msg.start_time.nanosec = int((task.start_time - int(task.start_time)) * 1000000000)  # 나노초 부분
+            
+            task_status_msg.end_time.sec = 0  # 진행중이므로 종료 시간은 0
+            task_status_msg.end_time.nanosec = 0  # 진행중이므로 종료 시간은 0
+            
+            self.task_status_publisher.publish(task_status_msg)  # 메시지 발행
+
     def task_request_callback(self, request, response):  # 키오스크로부터 받은 작업 요청을 처리
         """TaskRequest 서비스 콜백"""
         self.get_logger().info(f'📥 Task Request 받음!')

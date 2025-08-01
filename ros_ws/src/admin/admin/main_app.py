@@ -81,6 +81,7 @@ class AdminWindow(QMainWindow):
         try:
             # 작업 상태 정보 저장
             self.task_status_data = {
+                'task_id': msg.task_id,  # Task ID 추가
                 'robot_id': msg.robot_id,  # 로봇 ID
                 'task_type': msg.task_type,  # 작업 타입
                 'task_stage': msg.task_stage,  # 작업 단계
@@ -89,10 +90,10 @@ class AdminWindow(QMainWindow):
                 'last_updated': time.time()  # 마지막 업데이트 시간
             }
             self.update_task_status_display()  # GUI 업데이트
-            print(f"📋 작업 상태 수신: {msg.robot_id} - {msg.task_type}")  # 디버그 출력
+            print(f"✅ TaskStatus 수신: Task[{msg.task_id}] - {msg.robot_id}")  # 디버그 출력 추가
             
         except Exception as e:
-            print(f"작업 상태 처리 중 오류: {e}")
+            print(f"❌ 작업 상태 처리 중 오류: {e}")  # 에러 메시지 개선
 
     def update_robot_status_display(self):  # 로봇 상태 표시 업데이트
         """활성 로봇들의 상태를 위젯에 표시"""
@@ -125,8 +126,9 @@ class AdminWindow(QMainWindow):
                 # 작업 단계 텍스트 변환
                 stage_text = {1: "시작", 2: "진행중", 3: "완료"}.get(self.task_status_data['task_stage'], "알 수 없음")
                 
-                # 작업 정보 텍스트 생성
-                status_text = (f"🤖 로봇: {self.task_status_data['robot_id']}\n"
+                # 작업 정보 텍스트 생성 (task_id 추가)
+                status_text = (f"🆔 Task ID: {self.task_status_data['task_id']}\n"
+                              f"🤖 로봇: {self.task_status_data['robot_id']}\n"
                               f"📋 작업: {self.task_status_data['task_type']}\n" 
                               f"⚡ 단계: {stage_text}\n"
                               f"📍 {self.task_status_data['call_location']} → {self.task_status_data['goal_location']}")
@@ -136,7 +138,7 @@ class AdminWindow(QMainWindow):
                 self.task_status_label.setText(status_text)  # 텍스트 업데이트
                 
         except Exception as e:
-            print(f"작업 상태 표시 중 오류: {e}")
+            print(f"❌ 작업 상태 표시 중 오류: {e}")  # 에러 메시지 개선
 
     def init_timer(self):
         self.ros_timer = QTimer(self) # QTimer 객체 생성
