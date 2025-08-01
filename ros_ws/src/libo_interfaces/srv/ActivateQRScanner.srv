@@ -1,0 +1,8 @@
+# Request
+string robot_id 
+
+---
+
+# Response
+bool success 
+string message 
