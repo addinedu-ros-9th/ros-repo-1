@@ -272,20 +272,30 @@ class TaskManager(Node):
         else:
             self.get_logger().warning(f'⚠️  로봇 <{request.robot_id}> 상태 변경 실패 - 로봇이 존재하지 않음')
         
+        # 로봇의 state를 task type과 동일하게 변경
+        if request.robot_id in self.robots:
+            # task type을 RobotState enum으로 변환
+            task_type_to_state = {
+                'escort': RobotState.ESCORT,
+                'delivery': RobotState.DELIVERY,
+                'assist': RobotState.ASSIST
+            }
+            
+            if request.task_type in task_type_to_state:
+                new_state = task_type_to_state[request.task_type]
+                old_state, _ = self.robots[request.robot_id].change_state(new_state)
+                self.get_logger().info(f'🔄 로봇 <{request.robot_id}> 상태 변경: {old_state.value} → {new_state.value} (Task Type: {request.task_type})')
+            else:
+                self.get_logger().warning(f'⚠️  알 수 없는 Task Type: {request.task_type}')
+        else:
+            self.get_logger().warning(f'⚠️  로봇 <{request.robot_id}> 찾을 수 없음 - state 변경 불가')
+        
         # 새로운 Task의 첫 번째 스테이지 좌표 전송
         self.get_logger().info(f'🚀 새로운 Task의 Stage 1 좌표 전송 시작...')
         if self.send_coordinate_for_stage(new_task):
             self.get_logger().info(f'✅ Stage 1 좌표 전송 완료')
         else:
             self.get_logger().error(f'❌ Stage 1 좌표 전송 실패')
-        
-        # Navigator에게 더미 좌표 전송 테스트 (기존 코드 제거)
-        # self.get_logger().info(f'🧭 Navigator 통신 테스트 시작...')
-        # navigator_success = self.send_goal_to_navigator(1.5, 2.3)  # 더미 좌표 (1.5, 2.3)
-        # if navigator_success:
-        #     self.get_logger().info(f'📤 Navigator 요청 전송됨 - 응답은 비동기로 처리됩니다')
-        # else:
-        #     self.get_logger().warning(f'⚠️  Navigator 요청 전송 실패')
         
         # 응답 설정
         response.success = True
@@ -447,6 +457,13 @@ class TaskManager(Node):
             # 로봇을 사용가능 상태로 변경
             if self.set_robot_available_after_task(current_task.robot_id):
                 self.get_logger().info(f'🔓 로봇 <{current_task.robot_id}> 사용가능 상태로 변경됨')
+            
+            # 로봇의 state를 CHARGING으로 변경 (Task 완료 후 충전 상태로)
+            if current_task.robot_id in self.robots:
+                old_state, _ = self.robots[current_task.robot_id].change_state(RobotState.CHARGING)
+                self.get_logger().info(f'🔋 로봇 <{current_task.robot_id}> Task 완료 후 충전 상태로 변경: {old_state.value} → CHARGING')
+            else:
+                self.get_logger().warning(f'⚠️  로봇 <{current_task.robot_id}> 찾을 수 없음 - state 변경 불가')
             
             # task 목록에서 제거
             self.tasks.remove(current_task)
