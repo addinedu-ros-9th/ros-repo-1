@@ -4,6 +4,7 @@ import rclpy
 from rclpy.node import Node
 from libo_interfaces.srv import TaskRequest
 from libo_interfaces.srv import SetGoal  # SetGoal 서비스 추가
+from libo_interfaces.srv import NavigationResult  # NavigationResult 서비스 추가
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
@@ -64,6 +65,13 @@ class TaskManager(Node):
         # Navigator로 SetGoal 보내는 서비스 클라이언트 생성
         self.navigator_client = self.create_client(SetGoal, 'set_navigation_goal')
         
+        # NavigationResult 서비스 서버 생성
+        self.navigation_result_service = self.create_service(
+            NavigationResult,
+            'navigation_result',
+            self.navigation_result_callback
+        )
+        
         # Heartbeat 토픽 구독자 생성
         self.heartbeat_subscription = self.create_subscription(
             Heartbeat,  # 메시지 타입
@@ -104,6 +112,7 @@ class TaskManager(Node):
         self.get_logger().info('📡 OverallStatus 발행 시작됨 - robot_status 토픽으로 1초마다 발행...')
         self.get_logger().info('📋 TaskStatus 발행 시작됨 - task_status 토픽으로 1초마다 발행...')  # TaskStatus 로그 추가
         self.get_logger().info('🧭 Navigator 클라이언트 준비됨 - set_navigation_goal 서비스 연결...')  # Navigator 클라이언트 로그 추가
+        self.get_logger().info('📍 NavigationResult 서비스 시작됨 - navigation_result 서비스 대기 중...')  # NavigationResult 서버 로그 추가
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -265,6 +274,33 @@ class TaskManager(Node):
                 self.get_logger().warning(f'⚠️  Navigator 응답 실패: {response.message}')
         except Exception as e:
             self.get_logger().error(f'❌ Navigator 응답 처리 중 오류: {e}')
+    
+    def navigation_result_callback(self, request, response):  # NavigationResult 서비스 콜백
+        """NavigationResult 요청을 받아서 처리하는 콜백"""
+        self.get_logger().info(f'📍 NavigationResult 받음: {request.result}')
+        
+        try:
+            # 현재는 단순히 로그만 출력 (나중에 task 상태 업데이트 등 추가 예정)
+            if request.result == "SUCCEEDED":
+                self.get_logger().info(f'✅ 네비게이션 성공!')
+            elif request.result == "FAILED":
+                self.get_logger().warning(f'❌ 네비게이션 실패!')
+            elif request.result == "CANCELED":
+                self.get_logger().info(f'⏹️  네비게이션 취소됨!')
+            else:
+                self.get_logger().warning(f'⚠️  알 수 없는 결과: {request.result}')
+            
+            # 성공 응답
+            response.success = True
+            response.message = f"NavigationResult 처리 완료: {request.result}"
+            
+            return response
+            
+        except Exception as e:
+            self.get_logger().error(f'❌ NavigationResult 처리 중 오류: {e}')
+            response.success = False
+            response.message = f"처리 실패: {str(e)}"
+            return response
     
     def test_navigator_communication(self):  # Navigator 통신 테스트
         """더미 좌표로 Navigator 통신을 테스트하는 메서드"""

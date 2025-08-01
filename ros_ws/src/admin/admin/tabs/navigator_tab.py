@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextEdit
 from PyQt5.QtCore import pyqtSignal, QTimer
 import time
 from libo_interfaces.srv import SetGoal
+from libo_interfaces.srv import NavigationResult  # NavigationResult 서비스 추가
 
 class NavigatorServerNode(Node):  # SetGoal 서비스 서버 노드
     def __init__(self):
@@ -105,6 +106,13 @@ class NavigatorTab(QWidget):  # Navigator 디버깅 탭
         super().__init__(parent)
         self.ros_node = ros_node  # 메인 앱의 ROS 노드
         self.server_node = NavigatorServerNode()  # 디버그 서버 노드 생성
+        
+        # NavigationResult 서비스 클라이언트 생성
+        self.navigation_result_client = self.ros_node.create_client(NavigationResult, 'navigation_result')
+        
+        # NavigationResult 로그를 저장할 리스트
+        self.navigation_result_logs = []
+        
         self.init_ui()  # UI 초기화
         self.init_timer()  # 업데이트 타이머 초기화
     
@@ -177,7 +185,7 @@ class NavigatorTab(QWidget):  # Navigator 디버깅 탭
             }
         """)
         self.messages_text.setReadOnly(True)
-        self.messages_text.setMaximumHeight(300)  # 높이 제한
+        self.messages_text.setMaximumHeight(200)  # 높이를 300에서 200으로 줄임
         self.messages_text.setPlainText("서비스가 비활성화되었습니다.\n'서비스 활성화' 버튼을 눌러 디버깅을 시작하세요.\n")
         layout.addWidget(self.messages_text)
         
@@ -201,6 +209,100 @@ class NavigatorTab(QWidget):  # Navigator 디버깅 탭
         button_layout.addWidget(self.clear_button)
         button_layout.addStretch()
         layout.addLayout(button_layout)
+        
+        # NavigationResult 테스트 영역 추가
+        nav_result_label = QLabel("📍 NavigationResult 테스트:")
+        nav_result_label.setStyleSheet("font-size: 14px; font-weight: bold; margin-top: 20px;")
+        layout.addWidget(nav_result_label)
+        
+        nav_result_desc = QLabel("TaskManager에게 가짜 네비게이션 결과를 보냅니다:")
+        nav_result_desc.setStyleSheet("font-size: 12px; color: #7f8c8d; margin: 5px;")
+        layout.addWidget(nav_result_desc)
+        
+        # NavigationResult 버튼들
+        nav_result_layout = QHBoxLayout()
+        
+        # 성공 버튼
+        self.success_button = QPushButton("✅ SUCCEEDED")
+        self.success_button.clicked.connect(lambda: self.send_navigation_result("SUCCEEDED"))
+        self.success_button.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 5px;
+                font-weight: bold;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #229954;
+            }
+        """)
+        nav_result_layout.addWidget(self.success_button)
+        
+        # 실패 버튼
+        self.failed_button = QPushButton("❌ FAILED")
+        self.failed_button.clicked.connect(lambda: self.send_navigation_result("FAILED"))
+        self.failed_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 5px;
+                font-weight: bold;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        nav_result_layout.addWidget(self.failed_button)
+        
+        # 취소 버튼 (텍스트 단축 및 크기 통일)
+        self.canceled_button = QPushButton("⏹️ CANCEL")
+        self.canceled_button.clicked.connect(lambda: self.send_navigation_result("CANCELED"))
+        self.canceled_button.setStyleSheet("""
+            QPushButton {
+                background-color: #f39c12;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 5px;
+                font-weight: bold;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #e67e22;
+            }
+        """)
+        nav_result_layout.addWidget(self.canceled_button)
+        
+        nav_result_layout.addStretch()
+        layout.addLayout(nav_result_layout)
+        
+        # NavigationResult 로그 영역
+        nav_result_log_label = QLabel("NavigationResult 로그:")
+        nav_result_log_label.setStyleSheet("font-size: 12px; font-weight: bold; margin-top: 10px;")
+        layout.addWidget(nav_result_log_label)
+        
+        # NavigationResult 로그 텍스트 영역
+        self.nav_result_text = QTextEdit()
+        self.nav_result_text.setStyleSheet("""
+            QTextEdit {
+                background-color: #f8f9fa;
+                border: 2px solid #dee2e6;
+                border-radius: 5px;
+                font-family: 'Courier New', monospace;
+                font-size: 11px;
+                padding: 8px;
+            }
+        """)
+        self.nav_result_text.setReadOnly(True)
+        self.nav_result_text.setMaximumHeight(120)  # NavigationResult 로그 높이
+        self.nav_result_text.setPlainText("NavigationResult 버튼을 클릭해서 테스트해보세요.\n")
+        layout.addWidget(self.nav_result_text)
         
         # 컨텐츠 위젯에 레이아웃 설정
         content_widget.setLayout(layout)
@@ -307,6 +409,83 @@ class NavigatorTab(QWidget):  # Navigator 디버깅 탭
                     }
                 """)
                 self.messages_text.setPlainText("SetGoal 메시지 대기 중...\n💡 TaskManager에서 Task Request를 보내면 여기에 SetGoal 메시지가 표시됩니다.\n")
+    
+    def send_navigation_result(self, result_type):  # NavigationResult 서비스 호출
+        """TaskManager에게 NavigationResult를 보내는 메서드"""
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        # 클릭 로그 추가
+        click_log = f"[{current_time}] 🖱️  {result_type} 버튼 클릭됨"
+        self.navigation_result_logs.append(click_log)
+        self.update_navigation_result_display()
+        
+        try:
+            # 서비스가 준비될 때까지 대기
+            if not self.navigation_result_client.wait_for_service(timeout_sec=2.0):
+                error_log = f"[{current_time}] ❌ NavigationResult 서비스를 찾을 수 없음"
+                self.navigation_result_logs.append(error_log)
+                self.update_navigation_result_display()
+                self.ros_node.get_logger().error('❌ NavigationResult 서비스를 찾을 수 없음')
+                return False
+            
+            # NavigationResult 요청 생성
+            request = NavigationResult.Request()
+            request.result = result_type  # "SUCCEEDED", "FAILED", "CANCELED"
+            
+            send_log = f"[{current_time}] 📤 NavigationResult 전송: {result_type}"
+            self.navigation_result_logs.append(send_log)
+            self.update_navigation_result_display()
+            
+            self.ros_node.get_logger().info(f'📍 NavigationResult 전송: {result_type}')
+            
+            # 비동기 서비스 호출
+            future = self.navigation_result_client.call_async(request)
+            future.add_done_callback(lambda f: self.navigation_result_response_callback(f, result_type))
+            
+            return True
+            
+        except Exception as e:
+            error_log = f"[{current_time}] ❌ 전송 오류: {str(e)}"
+            self.navigation_result_logs.append(error_log)
+            self.update_navigation_result_display()
+            self.ros_node.get_logger().error(f'❌ NavigationResult 전송 중 오류: {e}')
+            return False
+    
+    def navigation_result_response_callback(self, future, result_type):  # NavigationResult 응답 콜백
+        """NavigationResult 서비스 응답을 처리하는 콜백"""
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        try:
+            response = future.result()
+            if response.success:
+                success_log = f"[{current_time}] ✅ {result_type} 응답 성공: {response.message}"
+                self.navigation_result_logs.append(success_log)
+                self.ros_node.get_logger().info(f'✅ NavigationResult ({result_type}) 전송 성공: {response.message}')
+            else:
+                fail_log = f"[{current_time}] ⚠️  {result_type} 응답 실패: {response.message}"
+                self.navigation_result_logs.append(fail_log)
+                self.ros_node.get_logger().warning(f'⚠️  NavigationResult ({result_type}) 전송 실패: {response.message}')
+        except Exception as e:
+            error_log = f"[{current_time}] ❌ {result_type} 응답 처리 오류: {str(e)}"
+            self.navigation_result_logs.append(error_log)
+            self.ros_node.get_logger().error(f'❌ NavigationResult 응답 처리 중 오류: {e}')
+        
+        self.update_navigation_result_display()
+    
+    def update_navigation_result_display(self):  # NavigationResult 로그 표시 업데이트
+        """NavigationResult 로그를 UI에 표시"""
+        if self.navigation_result_logs:
+            # 최근 10개 로그만 표시
+            recent_logs = self.navigation_result_logs[-10:]
+            display_text = "\n".join(recent_logs) + "\n"
+        else:
+            display_text = "NavigationResult 버튼을 클릭해서 테스트해보세요.\n"
+        
+        self.nav_result_text.setPlainText(display_text)
+        
+        # 스크롤을 맨 아래로
+        scrollbar = self.nav_result_text.verticalScrollBar()
+        scrollbar.setValue(scrollbar.maximum())
     
     def shutdown(self):  # 탭 종료 시 정리
         """탭이 종료될 때 서버 노드 정리"""
