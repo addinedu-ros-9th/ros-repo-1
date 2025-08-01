@@ -1,4 +1,6 @@
-string robot_id
+# 요청 (Request)
+string robot_id     # 로봇 id (libo_a)
 ---
-bool success
-string message
+# 응답 (Response)
+bool success        # True, False
+string message      # 오류 메시지 (실패 시)

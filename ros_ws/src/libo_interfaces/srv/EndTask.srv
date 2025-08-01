@@ -1,5 +1,6 @@
 # 요청 (Request)
 string robot_id     # 로봇 id (libo_a)
+string task_type    # task type (assist, delivery, ..)
 ---
 # 응답 (Response)
 bool success        # True, False

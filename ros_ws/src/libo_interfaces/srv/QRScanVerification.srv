@@ -1,0 +1,7 @@
+# 요청 (Request)
+string robot_id     # 로봇 id (libo_a) 
+string admin_name   # 관리자 이름 (김민수, 박태환, ..)
+---
+# 응답 (Response)
+bool success        # True
+string message      # 오류 메시지 (실패 시)
