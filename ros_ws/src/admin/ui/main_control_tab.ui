@@ -1,0 +1,501 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainControlTab</class>
+ <widget class="QWidget" name="MainControlTab">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1300</width>
+    <height>820</height>
+   </rect>
+  </property>
+  <layout class="QHBoxLayout" name="horizontalLayout">
+   <item>
+    <widget class="QWidget" name="left_container" native="true">
+     <property name="minimumSize">
+      <size>
+       <width>400</width>
+       <height>0</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>450</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <layout class="QVBoxLayout" name="left_layout">
+      <item>
+       <widget class="QFrame" name="task_request_frame">
+        <property name="styleSheet">
+         <string>QFrame {
+    border: 2px solid #e74c3c;
+    border-radius: 8px;
+    background-color: #ffffff;
+    margin: 5px;
+    padding: 8px;
+}
+QLabel {
+    color: #2c3e50;
+    font-size: 11px;
+}
+QLineEdit {
+    background-color: #f8f9fa;
+    color: #2c3e50;
+    border: 1px solid #95a5a6;
+    border-radius: 3px;
+    padding: 3px;
+}
+QPushButton {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
+    font-weight: bold;
+    font-size: 10px;
+}
+QPushButton:hover {
+    background-color: #2980b9;
+}</string>
+        </property>
+        <layout class="QVBoxLayout" name="task_layout">
+         <item>
+          <widget class="QLabel" name="task_title_label">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>50</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>50</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string>font-size: 12px; font-weight: bold; color: #e74c3c; margin: 1px;</string>
+           </property>
+           <property name="text">
+            <string>🚀 Task Request</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="input_grid_layout">
+           <item>
+            <layout class="QVBoxLayout" name="left_column">
+             <item>
+              <widget class="QLabel" name="robot_id_label">
+               <property name="text">
+                <string>로봇 ID:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="robot_id_edit">
+               <property name="maximumSize">
+                <size>
+                 <width>16777215</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>libo_a</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="task_type_label">
+               <property name="text">
+                <string>작업 타입:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="task_type_edit">
+               <property name="maximumSize">
+                <size>
+                 <width>16777215</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>escort</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <layout class="QVBoxLayout" name="right_column">
+             <item>
+              <widget class="QLabel" name="call_location_label">
+               <property name="text">
+                <string>호출지:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="call_location_edit">
+               <property name="maximumSize">
+                <size>
+                 <width>16777215</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>A2</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="goal_location_label">
+               <property name="text">
+                <string>목적지:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLineEdit" name="goal_location_edit">
+               <property name="maximumSize">
+                <size>
+                 <width>16777215</width>
+                 <height>20</height>
+                </size>
+               </property>
+               <property name="text">
+                <string>B3</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <widget class="QPushButton" name="send_task_button">
+           <property name="text">
+            <string>📤 Send Task Request</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QTextEdit" name="task_log_text">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>80</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>80</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string>background-color: #f8f9fa; color: #2c3e50; font-size: 9px;</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QFrame" name="heartbeat_frame">
+        <layout class="QVBoxLayout" name="heartbeat_layout">
+         <item>
+          <widget class="QLabel" name="heartbeat_title_label">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>50</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>50</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string>font-size: 12px; font-weight: bold; color: #27ae60; margin: 1px; background-color: white; border: 2px solid #27ae60; border-radius: 8px; padding: 8px;</string>
+           </property>
+           <property name="text">
+            <string>💓 Heartbeat Monitor</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QWidget" name="heartbeat_log_text" native="true"/>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="center_container" native="true">
+     <property name="minimumSize">
+      <size>
+       <width>400</width>
+       <height>0</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>450</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <layout class="QVBoxLayout" name="center_layout">
+      <item>
+       <widget class="QFrame" name="navigator_frame">
+        <property name="styleSheet">
+         <string>QFrame {
+    border: 2px solid #f39c12;
+    border-radius: 8px;
+    background-color: #ffffff;
+    margin: 5px;
+    padding: 8px;
+}
+QLabel {
+    color: #2c3e50;
+    font-size: 11px;
+}
+QLineEdit {
+    background-color: #f8f9fa;
+    color: #2c3e50;
+    border: 1px solid #95a5a6;
+    border-radius: 3px;
+    padding: 3px;
+}
+QPushButton {
+    background-color: #f39c12;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
+    font-weight: bold;
+    font-size: 10px;
+}
+QPushButton:hover {
+    background-color: #e67e22;
+}
+QTextEdit {
+    background-color: #f8f9fa;
+    color: #2c3e50;
+    border: 1px solid #95a5a6;
+    border-radius: 3px;
+    font-size: 9px;
+}</string>
+        </property>
+        <layout class="QVBoxLayout" name="navigator_layout">
+         <item>
+          <widget class="QLabel" name="navigator_title_label">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>50</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>50</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string>font-size: 12px; font-weight: bold; color: #f39c12; margin: 1px;</string>
+           </property>
+           <property name="text">
+            <string>🧭 Navigator Control</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="toggle_navigator_button">
+           <property name="text">
+            <string>🟢 Start Navigator Service</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="navigation_result_layout">
+           <item>
+            <widget class="QPushButton" name="send_success_button">
+             <property name="text">
+              <string>✅ SUCCESS</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="send_failed_button">
+             <property name="text">
+              <string>❌ FAILED</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="send_canceled_button">
+             <property name="text">
+              <string>⏹️ CANCELED</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <widget class="QTextEdit" name="navigator_log_text">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>100</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string>background-color: #f8f9fa; color: #2c3e50; font-size: 9px;</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QTextEdit" name="navigator_messages_text">
+           <property name="styleSheet">
+            <string>background-color: #f8f9fa; color: #2c3e50; font-size: 9px;</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QWidget" name="right_container" native="true">
+     <property name="minimumSize">
+      <size>
+       <width>400</width>
+       <height>0</height>
+      </size>
+     </property>
+     <property name="maximumSize">
+      <size>
+       <width>450</width>
+       <height>16777215</height>
+      </size>
+     </property>
+     <layout class="QVBoxLayout" name="right_layout">
+      <item>
+       <widget class="QFrame" name="robot_status_frame">
+        <property name="styleSheet">
+         <string>QFrame {
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    background-color: #ffffff;
+    margin: 5px;
+    padding: 8px;
+}
+QLabel {
+    color: #2c3e50;
+    font-size: 12px;
+}
+QLabel#robot_status_title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #3498db;
+}
+QLabel#robot_list_label {
+    font-size: 13px;
+    color: #2c3e50;
+}</string>
+        </property>
+        <layout class="QVBoxLayout" name="robot_status_layout">
+         <item>
+          <widget class="QLabel" name="robot_status_title">
+           <property name="text">
+            <string>🤖 Active Robots</string>
+           </property>
+           <property name="styleSheet">
+            <string>font-size: 14px; font-weight: bold; color: #3498db;</string>
+           </property>
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>30</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QTextEdit" name="robot_list_text">
+           <property name="styleSheet">
+            <string>background-color: #f8f9fa; color: #2c3e50; font-size: 11px; border: 1px solid #95a5a6; border-radius: 3px;</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QFrame" name="current_task_frame">
+        <property name="styleSheet">
+         <string>QFrame {
+    border: 2px solid #9b59b6;
+    border-radius: 8px;
+    background-color: #ffffff;
+    margin: 5px;
+    padding: 8px;
+}
+QLabel {
+    color: #2c3e50;
+    font-size: 12px;
+}
+QLabel#current_task_title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #9b59b6;
+}</string>
+        </property>
+        <layout class="QVBoxLayout" name="current_task_layout">
+         <item>
+          <widget class="QLabel" name="current_task_title">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string>font-size: 14px; font-weight: bold; color: #9b59b6;</string>
+           </property>
+           <property name="text">
+            <string>📋 Current Task</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QTextEdit" name="current_task_text">
+           <property name="styleSheet">
+            <string>background-color: #f8f9fa; color: #2c3e50; font-size: 11px; border: none;</string>
+           </property>
+           <property name="text" stdset="0">
+            <string>활성 작업 없음</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

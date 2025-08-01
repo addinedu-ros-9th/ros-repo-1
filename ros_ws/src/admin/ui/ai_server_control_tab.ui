@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>AiServerControlTab</class>
+ <widget class="QWidget" name="AiServerControlTab">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1300</width>
+    <height>820</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QFrame" name="detector_control_frame">
+     <property name="styleSheet">
+      <string>QFrame {
+    border: 2px solid #e67e22;
+    border-radius: 8px;
+    background-color: #ffffff;
+    margin: 10px;
+    padding: 15px;
+}
+QLabel {
+    color: #2c3e50;
+    font-size: 12px;
+    font-weight: bold;
+}
+QLineEdit {
+    background-color: #f8f9fa;
+    color: #2c3e50;
+    border: 1px solid #95a5a6;
+    border-radius: 5px;
+    padding: 8px;
+    font-size: 11px;
+}
+QPushButton {
+    background-color: #e67e22;
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 5px;
+    font-weight: bold;
+    font-size: 12px;
+    min-height: 30px;
+}
+QPushButton:hover {
+    background-color: #d35400;
+}
+QPushButton:disabled {
+    background-color: #bdc3c7;
+    color: #7f8c8d;
+}
+QTextEdit {
+    background-color: #f8f9fa;
+    color: #2c3e50;
+    border: 1px solid #95a5a6;
+    border-radius: 5px;
+    font-size: 10px;
+    padding: 5px;
+}</string>
+     </property>
+     <layout class="QVBoxLayout" name="detector_layout">
+      <item>
+       <widget class="QLabel" name="detector_title_label">
+        <property name="text">
+         <string>👁️ AI Server Detector Control</string>
+        </property>
+        <property name="styleSheet">
+         <string>font-size: 16px; font-weight: bold; color: #e67e22; margin: 5px;</string>
+        </property>
+        <property name="minimumSize">
+         <size>
+          <width>0</width>
+          <height>40</height>
+         </size>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="robot_selection_layout">
+        <item>
+         <widget class="QLabel" name="robot_id_label">
+          <property name="text">
+           <string>로봇 ID:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="detector_robot_id_edit">
+          <property name="text">
+           <string>libo_a</string>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>150</width>
+            <height>0</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="control_buttons_layout">
+        <item>
+         <widget class="QPushButton" name="activate_detector_button">
+          <property name="text">
+           <string>🟢 Activate Detector</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="deactivate_detector_button">
+          <property name="text">
+           <string>🔴 Deactivate Detector</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="clear_log_button">
+          <property name="text">
+           <string>🧹 Clear Log</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer_2">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="log_title_label">
+        <property name="text">
+         <string>📋 Detector Control Log:</string>
+        </property>
+        <property name="styleSheet">
+         <string>font-size: 14px; font-weight: bold; color: #2c3e50; margin: 5px;</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QTextEdit" name="detector_log_text">
+        <property name="styleSheet">
+         <string>background-color: #f8f9fa; color: #2c3e50; font-size: 10px; border: 1px solid #95a5a6; border-radius: 5px;</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+</ui> 

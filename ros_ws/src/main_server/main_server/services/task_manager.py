@@ -622,6 +622,12 @@ class TaskManager(Node):
                 old_state, new_state = robot.change_state(RobotState.STANDBY)
                 self.get_logger().info(f'⚡ 로봇 <{robot.robot_id}> 상태 변경: {old_state.value} → {new_state.value} (10초 경과)')
         
+        # ESCORT, DELIVERY, ASSIST 상태는 Task 완료 시까지 자동 변경하지 않음
+        # 이 상태들은 advance_task_stage에서만 변경됨
+        elif robot.current_state in [RobotState.ESCORT, RobotState.DELIVERY, RobotState.ASSIST]:
+            # Task 관련 상태는 자동 변경하지 않음 - Task 완료 시까지 유지
+            pass
+        
         # 다른 상태들은 나중에 추가 예정
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
