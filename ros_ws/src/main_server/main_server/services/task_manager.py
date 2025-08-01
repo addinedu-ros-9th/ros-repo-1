@@ -13,20 +13,26 @@ class Robot:  # 로봇 정보를 담는 클래스
     def __init__(self, robot_id):  # Robot 객체 초기화
         self.robot_id = robot_id  # 로봇 ID 저장
         self.last_heartbeat_time = time.time()  # 마지막 하트비트 수신 시간
-        self.is_active = True  # 활성 상태 (기본값: 활성)
+        self.is_available = True  # 사용 가능 상태 (기본값: 사용 가능)
     
     def update_heartbeat(self):  # 하트비트 업데이트
         """하트비트를 받았을 때 호출되는 메서드"""
         self.last_heartbeat_time = time.time()  # 마지막 하트비트 시간 업데이트
-        self.is_active = True  # 활성 상태로 설정
 
     def check_timeout(self, timeout_seconds=3):  # 타임아웃 체크
         """지정된 시간(기본 3초) 이내에 하트비트가 수신되었는지 확인하는 메서드"""
         current_time = time.time()  # 현재 시간을 가져옴
         time_since_last_heartbeat = current_time - self.last_heartbeat_time  # 마지막 하트비트를 받은 후 얼마나 시간이 지났는지 계산
-        if time_since_last_heartbeat > timeout_seconds:  # 지정된 시간보다 오래되었다면
-            self.is_active = False  # 로봇을 비활성 상태로 변경
-        return self.is_active  # 현재 로봇의 활성 상태를 반환 (True 또는 False)
+        return time_since_last_heartbeat <= timeout_seconds  # 타임아웃 여부를 직접 반환 (True: 정상, False: 타임아웃)
+    
+    def set_available(self, available):  # 사용 가능 상태 설정
+        """로봇의 사용 가능 상태를 설정하는 메서드"""
+        self.is_available = available  # 사용 가능 상태 업데이트
+    
+    def get_status_info(self):  # 로봇 상태 정보 반환
+        """로봇의 현재 상태 정보를 문자열로 반환"""
+        available_status = "사용가능" if self.is_available else "사용중"
+        return f"Robot[{self.robot_id}] - 활성 | {available_status}"
 
 class Task:  # 작업 정보를 담는 클래스
     def __init__(self, robot_id, task_type, call_location, goal_location):  # Task 객체 초기화
@@ -120,11 +126,11 @@ class TaskManager(Node):
     
     def publish_robot_status(self):  # 로봇 상태 발행
         """1초마다 현재 활성 로봇들의 OverallStatus 발행"""
-        for robot_id in self.robots.keys():  # 현재 활성 로봇들에 대해 반복
+        for robot_id, robot in self.robots.items():  # 현재 활성 로봇들에 대해 반복 (robot 객체도 가져옴)
             status_msg = OverallStatus()  # OverallStatus 메시지 생성
             status_msg.timestamp = self.get_clock().now().to_msg()  # 현재 시간 설정
             status_msg.robot_id = robot_id  # 로봇 ID 설정
-            status_msg.is_available = True  # 기본값: 사용 가능
+            status_msg.is_available = robot.is_available  # 실제 로봇의 사용 가능 상태 사용
             status_msg.battery = 255  # 기본값: 알 수 없음 (255로 표시)
             status_msg.book_weight = 0.0  # 기본값: 무게 없음
             status_msg.position_x = 0.0  # 기본값: 위치 알 수 없음
@@ -170,6 +176,12 @@ class TaskManager(Node):
         
         self.get_logger().info(f'✅ 새로운 작업 생성됨: {new_task.get_info()}')  # 생성된 작업 정보 출력
         
+        # Task 생성 후 자동으로 로봇을 사용중으로 설정
+        if self.set_robot_unavailable_for_task(request.robot_id):
+            self.get_logger().info(f'🔒 로봇 <{request.robot_id}> 자동으로 사용중 상태로 변경됨')
+        else:
+            self.get_logger().warning(f'⚠️  로봇 <{request.robot_id}> 상태 변경 실패 - 로봇이 존재하지 않음')
+        
         # 응답 설정
         response.success = True
         response.message = f"Task request 잘 받았음! Task ID: {new_task.task_id}"
@@ -177,6 +189,33 @@ class TaskManager(Node):
         self.get_logger().info(f'✅ Task Request 처리 완료: {response.message}')
         
         return response
+    
+    def set_robot_available(self, robot_id, available):  # 로봇 사용 가능 상태 설정
+        """특정 로봇의 사용 가능 상태를 설정하는 메서드"""
+        if robot_id in self.robots:  # 로봇이 존재한다면
+            self.robots[robot_id].set_available(available)  # 상태 변경
+            status_text = "사용가능" if available else "사용중"
+            self.get_logger().info(f'🔄 로봇 <{robot_id}> 상태 변경: {status_text}')
+            return True
+        else:
+            self.get_logger().warning(f'❌ 로봇 <{robot_id}> 찾을 수 없음')
+            return False
+    
+    def set_robot_unavailable_for_task(self, robot_id):  # Task 할당 시 로봇을 사용중으로 설정
+        """Task가 할당될 때 로봇을 사용중으로 설정"""
+        return self.set_robot_available(robot_id, False)
+    
+    def set_robot_available_after_task(self, robot_id):  # Task 완료 시 로봇을 사용가능으로 설정
+        """Task가 완료될 때 로봇을 사용가능으로 설정"""
+        return self.set_robot_available(robot_id, True)
+    
+    def get_available_robots(self):  # 사용 가능한 로봇들 목록 반환
+        """현재 사용 가능한 로봇들의 목록을 반환"""
+        available_robots = []
+        for robot_id, robot in self.robots.items():
+            if robot.is_available:  # is_active 체크 제거 (robots에 있다는 것 자체가 활성)
+                available_robots.append(robot_id)
+        return available_robots
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)
