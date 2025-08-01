@@ -46,10 +46,11 @@ class Task:  # 작업 정보를 담는 클래스
         self.start_time = time.time()  # 시작 시간 기록
         self.end_time = None  # 종료 시간 (아직 없음)
         self.status = "created"  # 작업 상태 (created, running, completed, failed)
+        self.stage = 1  # 작업 단계 (1: 시작, 2: 진행중, 3: 완료 직전)
     
     def get_info(self):  # 작업 정보 반환
         """작업의 현재 정보를 문자열로 반환"""
-        return f"Task[{self.task_id}] - {self.robot_id} | {self.task_type} | {self.call_location} -> {self.goal_location} | Status: {self.status}"
+        return f"Task[{self.task_id}] - {self.robot_id} | {self.task_type} | {self.call_location} -> {self.goal_location} | Status: {self.status} | Stage: {self.stage}"
 
 class TaskManager(Node):
     def __init__(self):  # TaskManager 노드 초기화 및 서비스 서버 설정
@@ -163,7 +164,7 @@ class TaskManager(Node):
             task_status_msg.task_id = task.task_id  # 실제 Task ID
             task_status_msg.robot_id = task.robot_id  # 실제 로봇 ID
             task_status_msg.task_type = task.task_type  # 실제 작업 타입
-            task_status_msg.task_stage = 2  # 2: 진행중 (활성 상태)
+            task_status_msg.task_stage = task.stage  # 실제 Task stage 사용
             task_status_msg.call_location = task.call_location  # 실제 호출 위치
             task_status_msg.goal_location = task.goal_location  # 실제 목표 위치
             
@@ -283,6 +284,8 @@ class TaskManager(Node):
             # 현재는 단순히 로그만 출력 (나중에 task 상태 업데이트 등 추가 예정)
             if request.result == "SUCCEEDED":
                 self.get_logger().info(f'✅ 네비게이션 성공!')
+                # SUCCEEDED를 받으면 현재 활성 task의 stage 증가
+                self.advance_task_stage()
             elif request.result == "FAILED":
                 self.get_logger().warning(f'❌ 네비게이션 실패!')
             elif request.result == "CANCELED":
@@ -302,6 +305,42 @@ class TaskManager(Node):
             response.message = f"처리 실패: {str(e)}"
             return response
     
+    def advance_task_stage(self):  # 활성 task의 stage 증가
+        """현재 활성화된 task의 stage를 1단계씩 증가시키는 메서드"""
+        if not self.tasks:  # 활성 task가 없으면 리턴
+            self.get_logger().warning(f'⚠️  SUCCEEDED를 받았지만 활성 task가 없음')
+            return
+        
+        # 첫 번째 활성 task를 대상으로 함 (미니멀 구현)
+        current_task = self.tasks[0]
+        old_stage = current_task.stage
+        
+        current_task.stage += 1  # stage 1단계 증가
+        
+        # Stage별 아이콘
+        stage_icons = {1: "🟡", 2: "🔵", 3: "🟢"}
+        
+        self.get_logger().info(f'🎯 Task[{current_task.task_id}] Stage 변화: {stage_icons.get(old_stage, "⚪")} {old_stage} → {stage_icons.get(current_task.stage, "⚪")} {current_task.stage}')
+        
+        # stage 3을 넘어가면 task 완료 및 제거
+        if current_task.stage > 3:
+            current_task.end_time = time.time()  # 종료 시간 기록
+            current_task.status = "completed"  # 상태를 완료로 변경
+            
+            # 로봇을 사용가능 상태로 변경
+            if self.set_robot_available_after_task(current_task.robot_id):
+                self.get_logger().info(f'🔓 로봇 <{current_task.robot_id}> 사용가능 상태로 변경됨')
+            
+            # task 목록에서 제거
+            self.tasks.remove(current_task)
+            
+            self.get_logger().info(f'🏁 Task[{current_task.task_id}] 완료 및 제거됨!')
+            self.get_logger().info(f'📊 현재 활성 task 수: {len(self.tasks)}개')
+        else:
+            # Stage 3 이하일 때 현재 상태 로그
+            stage_desc = {1: "시작", 2: "진행중", 3: "완료직전"}.get(current_task.stage, f"Stage {current_task.stage}")
+            self.get_logger().info(f'📍 현재 상태: {stage_icons.get(current_task.stage, "⚪")} Stage {current_task.stage} ({stage_desc})')
+
     def test_navigator_communication(self):  # Navigator 통신 테스트
         """더미 좌표로 Navigator 통신을 테스트하는 메서드"""
         test_x = 1.0  # 더미 x 좌표

@@ -116,6 +116,9 @@ class LiboNavigator(Node):
         self.current_waypoint_names = []
         self.blocked_waypoints = {}
 
+        # Costmap 저장용 변수 추가
+        self.current_costmap = None
+
     # 네비게이션 목표입력 서비스 콜백함수
     def set_goal_service_callback(self, request, response):
         """
@@ -196,58 +199,56 @@ class LiboNavigator(Node):
             self.initial_pose_received = True
     
     def costmap_callback(self, msg):
-        """Costmap 정보를 받아 장애물을 감지합니다."""
-        # Costmap 데이터 처리
+        """Costmap 정보를 저장하고 장애물을 감지합니다."""
+        # 🔥 핵심: costmap 데이터를 클래스 변수에 저장
+        self.current_costmap = msg
+
+        # 기본 조건 체크
+        if not self.waypoint_list or self.current_state != NavigatorState.NAVIGATING:
+            return
+
+        # 🔥 수정: 디버깅 로그 레벨 조정 (너무 자주 출력되지 않도록)
+        self.get_logger().debug('costmap_callback 호출됨')  # info -> debug
+
+        # 현재 목표 웨이포인트의 위치
+        current_target = self.waypoint_list[0]
+
+        # 장애물 감지 로직 (기존과 동일)
         width = msg.metadata.size_x
         height = msg.metadata.size_y
         resolution = msg.metadata.resolution
         origin_x = msg.metadata.origin.position.x
         origin_y = msg.metadata.origin.position.y
-        
-        # 현재 목표 웨이포인트가 있는지 확인
-        if not self.waypoint_list or self.current_state != NavigatorState.NAVIGATING:
-            return
-            
-        # 현재 목표 웨이포인트의 위치
-        current_target = self.waypoint_list[0]  # 현재 향하고 있는 웨이포인트
-        
-        # 웨이포인트의 맵 좌표계 상의 위치를 Costmap 인덱스로 변환
+
         wx = int((current_target.pose.position.x - origin_x) / resolution)
         wy = int((current_target.pose.position.y - origin_y) / resolution)
-        
-        # 해당 위치 주변의 비용 확인 (장애물 여부 판단)
-        check_radius = 5  # 웨이포인트 주변 5셀 반경 확인
-        is_blocked = False
-        
+
+        check_radius = 3
+        blocked_cells = 0
+        total_cells = 0
+
         for dx in range(-check_radius, check_radius + 1):
             for dy in range(-check_radius, check_radius + 1):
                 x = wx + dx
                 y = wy + dy
                 if 0 <= x < width and 0 <= y < height:
                     index = y * width + x
-                    if msg.data[index] >= 99:  # 장애물로 판단되는 임계값
-                        is_blocked = True
-                        break
-            if is_blocked:
-                break
-        
+                    total_cells += 1
+                    if msg.data[index] >= 80:
+                        blocked_cells += 1
+
+        blocked_ratio = blocked_cells / total_cells if total_cells > 0 else 0
+        is_blocked = blocked_ratio > 0.3
+
         if is_blocked:
-            # 막힌 웨이포인트를 제외하고 현재 위치에서 완전히 새로운 경로 계산
-            if hasattr(self, 'current_waypoint_names') and self.current_waypoint_names:
-                blocked_waypoint_name = self.current_waypoint_names[0]
-                self.get_logger().warn(f'웨이포인트 {blocked_waypoint_name}가 막혔습니다. 현재 위치에서 새로운 최적 경로를 계산합니다.')
-                self.pause_navigation()
-                self.replan_from_current_position_avoiding_blocked(blocked_waypoint_name)
-            else:
-                # 웨이포인트 정보가 없으면 네비게이션 중지
-                self.get_logger().error('웨이포인트 정보가 없어 재계획할 수 없습니다. 네비게이션을 중지합니다.')
-                self.pause_navigation()
-                self.current_state = NavigatorState.ERROR
+            self.get_logger().warn('장애물 감지! Costmap 기반 재계획을 시작합니다!')
+            self.smart_replan_with_costmap()
     
     def load_waypoints(self):
         """웨이포인트 yaml 파일을 로드합니다."""
         try:
-            share_dir = get_package_share_directory('libo_waypoint_runner')
+            # 🔥 수정: libo_navigator 패키지에서 파일 로드
+            share_dir = get_package_share_directory('libo_navigator')
             waypoint_file_path = f'{share_dir}/config/waypoints.yaml'
             self.get_logger().info(f"웨이포인트 파일 로딩: {waypoint_file_path}")
             
@@ -278,16 +279,17 @@ class LiboNavigator(Node):
         return closest_wp_name
     
     def find_path_astar(self, start_wp_name, goal_wp_name):
-        """A* 알고리즘으로 최적 경로를 찾습니다."""
+        """Costmap을 반영한 A* 알고리즘으로 최적 경로를 찾습니다."""
         open_set = []
         heapq.heappush(open_set, (0, start_wp_name))
         came_from = {}
         g_score = {name: float('inf') for name in self.waypoints}
         g_score[start_wp_name] = 0
         f_score = {name: float('inf') for name in self.waypoints}
+        
         goal_pos = self.waypoints[goal_wp_name]['position']
         start_pos = self.waypoints[start_wp_name]['position']
-        f_score[start_wp_name] = math.sqrt((goal_pos['x'] - start_pos['x'])**2 + (goal_pos['y'] - start_pos['y'])**2)
+        f_score[start_wp_name] = self.calculate_heuristic(start_pos, goal_pos)
         
         while open_set:
             _, current_name = heapq.heappop(open_set)
@@ -302,11 +304,15 @@ class LiboNavigator(Node):
             current_pos = self.waypoints[current_name]['position']
             for neighbor_name in self.waypoints[current_name].get('neighbors', []):
                 neighbor_pos = self.waypoints[neighbor_name]['position']
-                tentative_g_score = g_score[current_name] + math.sqrt((neighbor_pos['x'] - current_pos['x'])**2 + (neighbor_pos['y'] - current_pos['y'])**2)
+                
+                # 🔥 핵심: Costmap 위험도를 반영한 비용 계산
+                edge_cost = self.calculate_edge_cost_with_costmap(current_pos, neighbor_pos)
+                tentative_g_score = g_score[current_name] + edge_cost
+                
                 if tentative_g_score < g_score[neighbor_name]:
                     came_from[neighbor_name] = current_name
                     g_score[neighbor_name] = tentative_g_score
-                    h_score = math.sqrt((goal_pos['x'] - neighbor_pos['x'])**2 + (goal_pos['y'] - neighbor_pos['y'])**2)
+                    h_score = self.calculate_heuristic(neighbor_pos, goal_pos)
                     f_score[neighbor_name] = tentative_g_score + h_score
                     if neighbor_name not in [i[1] for i in open_set]:
                         heapq.heappush(open_set, (f_score[neighbor_name], neighbor_name))
@@ -519,174 +525,161 @@ class LiboNavigator(Node):
         else:
             self.get_logger().warn('navigation_done 서비스가 준비되지 않았습니다.')
     
-    def replan_from_current_position_avoiding_blocked(self, blocked_waypoint_name):
-        """막힌 웨이포인트를 제외하고 현재 위치에서 목적지까지 완전히 새로운 경로를 계산합니다."""
+    def smart_replan_with_costmap(self):
+        """Costmap을 반영한 스마트 재계획"""
         if self._replanning:
-            self.get_logger().warn('이미 경로 재계획이 진행 중입니다.')
             return
         
         self._replanning = True
         try:
-            if not self.initial_pose_received or not self.current_goal:
-                return
+            # 현재 Nav2 액션 취소
+            self.nav_action_client.cancel_goal_async()
             
-            # 현재 로봇 위치에서 가장 가까운 웨이포인트 찾기 (시작점)
+            # Costmap 기반 새 경로 계산
             current_wp = self.get_closest_waypoint(self.robot_current_pose)
-            # 최종 목적지 근처의 웨이포인트 찾기 (도착점)
             goal_wp = self.get_closest_waypoint(self.current_goal)
             
-            if not current_wp or not goal_wp:
-                self.get_logger().error('현재 위치 또는 목표 위치 근처에서 웨이포인트를 찾을 수 없습니다.')
-                return
+            self.get_logger().info(f'Costmap 기반 경로 재계산: {current_wp} -> {goal_wp}')
             
-            # 현재 진행 중인 네비게이션 취소
-            if self.current_state == NavigatorState.NAVIGATING:
-                self.nav_action_client.cancel_goal_async()
-            
-            # 막힌 웨이포인트를 임시로 그래프에서 제거
-            self.temporarily_remove_waypoint(blocked_waypoint_name)
-            
-            # 현재 위치에서 목적지까지 완전히 새로운 최적 경로 계산
-            self.get_logger().info(f'새로운 최적 경로 계산: {current_wp} -> {goal_wp} (제외: {blocked_waypoint_name})')
-            self.get_logger().info(f'현재 로봇 위치: ({self.robot_current_pose.position.x:.2f}, {self.robot_current_pose.position.y:.2f})')
-            self.get_logger().info(f'목적지: ({self.current_goal.position.x:.2f}, {self.current_goal.position.y:.2f})')
-            
+            # 🔥 수정: 통합된 find_path_astar 함수 사용
             path_wp_names = self.find_path_astar(current_wp, goal_wp)
             
-            # 임시 제거한 웨이포인트 복구
-            self.restore_waypoint(blocked_waypoint_name)
-            
-            if not path_wp_names:
-                self.get_logger().error('막힌 웨이포인트를 피한 새로운 경로를 찾을 수 없습니다!')
-                self.current_state = NavigatorState.ERROR
-                return
-            
-            # 웨이포인트 이름 목록 저장
-            self.current_waypoint_names = path_wp_names.copy()
-            
-            # 새로운 웨이포인트 리스트 생성 (방향 계산 추가)
-            waypoint_poses = []
-            for i, name in enumerate(path_wp_names):
-                pose = PoseStamped()
-                pose.header.frame_id = 'map'
-                pose.header.stamp = self.get_clock().now().to_msg()
-                pose.pose.position.x = self.waypoints[name]['position']['x']
-                pose.pose.position.y = self.waypoints[name]['position']['y']
+            if path_wp_names:
+                self.current_waypoint_names = path_wp_names.copy()
                 
-                # 다음 웨이포인트가 있으면 그 방향을 향하도록 orientation 설정
-                if i < len(path_wp_names) - 1:
-                    next_name = path_wp_names[i+1]
-                    next_x = self.waypoints[next_name]['position']['x']
-                    next_y = self.waypoints[next_name]['position']['y']
+                # 새로운 웨이포인트 리스트 생성
+                waypoint_poses = []
+                for i, name in enumerate(path_wp_names):
+                    pose = PoseStamped()
+                    pose.header.frame_id = 'map'
+                    pose.header.stamp = self.get_clock().now().to_msg()
+                    pose.pose.position.x = self.waypoints[name]['position']['x']
+                    pose.pose.position.y = self.waypoints[name]['position']['y']
                     
-                    # 현재 웨이포인트에서 다음 웨이포인트를 향하는 방향 계산
-                    dx = next_x - pose.pose.position.x
-                    dy = next_y - pose.pose.position.y
-                    yaw = math.atan2(dy, dx)
+                    # 방향 계산
+                    if i < len(path_wp_names) - 1:
+                        next_name = path_wp_names[i+1]
+                        next_x = self.waypoints[next_name]['position']['x']
+                        next_y = self.waypoints[next_name]['position']['y']
+                        
+                        dx = next_x - pose.pose.position.x
+                        dy = next_y - pose.pose.position.y
+                        yaw = math.atan2(dy, dx)
+                        
+                        q = self.euler_to_quaternion(0, 0, yaw)
+                        pose.pose.orientation.x = q[0]
+                        pose.pose.orientation.y = q[1]
+                        pose.pose.orientation.z = q[2]
+                        pose.pose.orientation.w = q[3]
+                    else:
+                        pose.pose.orientation.w = 1.0
                     
-                    # 쿼터니언으로 변환 (yaw만 사용)
-                    q = self.euler_to_quaternion(0, 0, yaw)
-                    pose.pose.orientation.x = q[0]
-                    pose.pose.orientation.y = q[1]
-                    pose.pose.orientation.z = q[2]
-                    pose.pose.orientation.w = q[3]
-                else:
-                    # 마지막 웨이포인트는 기본값 사용
-                    pose.pose.orientation.w = 1.0
-            
-                waypoint_poses.append(pose)
-            
-            self.waypoint_list = waypoint_poses
-            self.get_logger().info(f'새로운 최적 경로가 생성되었습니다: {path_wp_names}')
-            
-            # 새로운 경로로 네비게이션 시작
-            self.start_navigation()
-        
+                    waypoint_poses.append(pose)
+                
+                self.waypoint_list = waypoint_poses
+                self.start_navigation()
+                self.get_logger().info(f'Costmap 기반 새 경로: {path_wp_names}')
+            else:
+                self.get_logger().error('Costmap 기반 경로를 찾을 수 없습니다!')
+                self.current_state = NavigatorState.ERROR
+                
         finally:
             self._replanning = False
 
-    def pause_navigation(self):
-        """안전하게 네비게이션을 일시정지합니다."""
-        if self.current_state == NavigatorState.NAVIGATING:
-            self.nav_action_client.cancel_goal_async()
-            self.current_state = NavigatorState.IDLE
-            self.get_logger().info('네비게이션을 일시정지했습니다.')
+   
 
-    def temporarily_remove_waypoint(self, waypoint_name):
-        """웨이포인트를 임시로 그래프에서 제거합니다."""
-        if not hasattr(self, 'blocked_waypoints'):
-            self.blocked_waypoints = {}
+    def calculate_edge_cost_with_costmap(self, pos1, pos2):
+        """두 웨이포인트 사이의 costmap 기반 비용을 계산합니다."""
+        # 기본 유클리드 거리
+        base_distance = math.sqrt((pos2['x'] - pos1['x'])**2 + (pos2['y'] - pos1['y'])**2)
         
-        if waypoint_name in self.waypoints:
-            # 해당 웨이포인트의 neighbor 관계를 임시 저장하고 제거
-            neighbors = self.waypoints[waypoint_name].get('neighbors', [])
-            self.blocked_waypoints[waypoint_name] = neighbors.copy()
-            
-            # 다른 웨이포인트들의 neighbor 목록에서도 제거
-            for wp_name, wp_data in self.waypoints.items():
-                if 'neighbors' in wp_data and waypoint_name in wp_data['neighbors']:
-                    wp_data['neighbors'].remove(waypoint_name)
-            
-            # 해당 웨이포인트의 neighbors 목록 비우기
-            self.waypoints[waypoint_name]['neighbors'] = []
-            
-            self.get_logger().info(f'웨이포인트 {waypoint_name}을 임시로 그래프에서 제거했습니다.')
+        # costmap 데이터가 없으면 기본 거리만 반환
+        if self.current_costmap is None:
+            return base_distance
+        
+        # 두 점 사이의 직선 경로에서 costmap 위험도 샘플링
+        danger_penalty = self.sample_costmap_danger(pos1, pos2)
+        
+        # 최종 비용 = 기본 거리 + 위험도 패널티
+        return base_distance + danger_penalty
 
-    def restore_waypoint(self, waypoint_name):
-        """임시 제거한 웨이포인트를 복구합니다."""
-        if hasattr(self, 'blocked_waypoints') and waypoint_name in self.blocked_waypoints:
-            # 저장된 neighbor 관계 복구
-            neighbors = self.blocked_waypoints[waypoint_name]
-            self.waypoints[waypoint_name]['neighbors'] = neighbors
+    def sample_costmap_danger(self, pos1, pos2):
+        """두 점 사이 직선 경로의 costmap 위험도를 샘플링합니다."""
+        try:
+            costmap = self.current_costmap
+            width = costmap.metadata.size_x
+            height = costmap.metadata.size_y
+            resolution = costmap.metadata.resolution
+            origin_x = costmap.metadata.origin.position.x
+            origin_y = costmap.metadata.origin.position.y
             
-            # 다른 웨이포인트들의 neighbor 목록에도 다시 추가
-            for neighbor_name in neighbors:
-                if neighbor_name in self.waypoints:
-                    if 'neighbors' not in self.waypoints[neighbor_name]:
-                        self.waypoints[neighbor_name]['neighbors'] = []
-                    if waypoint_name not in self.waypoints[neighbor_name]['neighbors']:
-                        self.waypoints[neighbor_name]['neighbors'].append(waypoint_name)
+            # 직선 경로를 여러 점으로 샘플링
+            num_samples = 20
+            total_danger = 0
+            valid_samples = 0  # 🔥 추가: 유효한 샘플 수 카운트
             
-            # 임시 저장 목록에서 제거
-            del self.blocked_waypoints[waypoint_name]
+            for i in range(num_samples + 1):
+                ratio = i / num_samples
+                sample_x = pos1['x'] + ratio * (pos2['x'] - pos1['x'])
+                sample_y = pos1['y'] + ratio * (pos2['y'] - pos1['y'])
+                
+                # 맵 좌표를 costmap 인덱스로 변환
+                grid_x = int((sample_x - origin_x) / resolution)
+                grid_y = int((sample_y - origin_y) / resolution)
+                
+                # 🔥 개선: 범위 체크 강화
+                if 0 <= grid_x < width and 0 <= grid_y < height:
+                    index = grid_y * width + grid_x
+                    if 0 <= index < len(costmap.data):  # 추가 안전성 체크
+                        cost_value = costmap.data[index]
+                        valid_samples += 1
+                        
+                        # 위험도에 따른 패널티 계산
+                        if cost_value >= 99:      # 장애물
+                            total_danger += 1000  # 매우 높은 패널티
+                        elif cost_value >= 80:    # 위험 지역
+                            total_danger += 100   # 높은 패널티
+                        elif cost_value >= 50:    # 약간 위험
+                            total_danger += 10    # 낮은 패널티
+        
+            # 🔥 개선: 유효한 샘플이 있을 때만 평균 계산
+            return total_danger / valid_samples if valid_samples > 0 else 0
             
-            self.get_logger().info(f'웨이포인트 {waypoint_name}을 그래프에 복구했습니다.')
+        except Exception as e:
+            self.get_logger().warn(f'Costmap 샘플링 중 오류: {e}')
+            return 0
+
+    def calculate_heuristic(self, pos1, pos2):
+        """목적지까지의 휴리스틱 (유클리드 거리)"""
+        return math.sqrt((pos2['x'] - pos1['x'])**2 + (pos2['y'] - pos1['y'])**2)
 
     def euler_to_quaternion(self, roll, pitch, yaw):
-        """오일러 각도를 쿼터니언으로 변환합니다."""
-        cy = math.cos(yaw * 0.5)
-        sy = math.sin(yaw * 0.5)
-        cp = math.cos(pitch * 0.5)
-        sp = math.sin(pitch * 0.5)
-        cr = math.cos(roll * 0.5)
-        sr = math.sin(roll * 0.5)
-
-        q = [0] * 4
-        q[0] = sr * cp * cy - cr * sp * sy
-        q[1] = cr * sp * cy + sr * cp * sy
-        q[2] = cr * cp * sy - sr * sp * cy
-        q[3] = cr * cp * cy + sr * sp * sy
-
-        return q
+        """오일러 각을 쿼터니언으로 변환합니다."""
+        import math
+        
+        qx = math.sin(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) - math.cos(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
+        qy = math.cos(roll/2) * math.sin(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.cos(pitch/2) * math.sin(yaw/2)
+        qz = math.cos(roll/2) * math.cos(pitch/2) * math.sin(yaw/2) - math.sin(roll/2) * math.sin(pitch/2) * math.cos(yaw/2)
+        qw = math.cos(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
+        
+        return [qx, qy, qz, qw]
 
 
 def main(args=None):
-    """메인 함수"""
+    """메인 함수 - 노드를 초기화하고 실행합니다."""
     rclpy.init(args=args)
-    
-    # 네비게이터 노드 생성
     navigator = LiboNavigator()
     
     try:
-        # 노드 실행
         rclpy.spin(navigator)
     except KeyboardInterrupt:
-        pass
+        navigator.get_logger().info('키보드 인터럽트로 종료합니다...')
+    except Exception as e:
+        navigator.get_logger().error(f'예상치 못한 오류로 종료합니다: {e}')
     finally:
-        # 노드 종료
         navigator.destroy_node()
         rclpy.shutdown()
-
+        print("Libo Navigator가 완전히 종료되었습니다.")
 
 if __name__ == '__main__':
     main()
