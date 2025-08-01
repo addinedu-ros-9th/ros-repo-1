@@ -14,32 +14,43 @@ from rclpy.node import Node
 from PyQt5.QtGui import QColor
 
 from libo_interfaces.msg import OverallStatus, TaskStatus, Heartbeat
-from libo_interfaces.srv import TaskRequest, SetGoal, NavigationResult
+from libo_interfaces.srv import TaskRequest, SetGoal, NavigationResult, CancelNavigation
 
 class NavigatorServerNode(Node):  # SetGoal 서비스 서버 노드
     def __init__(self):
         super().__init__('navigator_debug_server', automatically_declare_parameters_from_overrides=True)
         
-        # 서비스 서버는 처음에 None (비활성 상태)
-        self.service = None
+        # 서비스 서버들은 처음에 None (비활성 상태)
+        self.set_goal_service = None
+        self.cancel_navigation_service = None
         self.is_active = False  # 서버 활성화 상태
         
         # 수신된 메시지를 저장할 리스트
         self.received_messages = []
+        self.cancel_messages = []  # CancelNavigation 메시지 저장
         
         self.get_logger().info('🧭 Navigator 디버그 서버 생성됨 (비활성 상태)')
     
     def start_service(self):  # 서비스 서버 시작
-        """SetGoal 서비스 서버를 시작"""
-        if self.service is None:
+        """SetGoal과 CancelNavigation 서비스 서버를 시작"""
+        if self.set_goal_service is None:
             try:
-                self.service = self.create_service(
+                # SetGoal 서비스 서버 생성
+                self.set_goal_service = self.create_service(
                     SetGoal,
                     'set_navigation_goal',
                     self.set_goal_callback
                 )
+                
+                # CancelNavigation 서비스 서버 생성
+                self.cancel_navigation_service = self.create_service(
+                    CancelNavigation,
+                    'cancel_navigation',
+                    self.cancel_navigation_callback
+                )
+                
                 self.is_active = True
-                self.get_logger().info('✅ Navigator 디버그 서버 활성화됨 - set_navigation_goal 서비스 대기 중...')
+                self.get_logger().info('✅ Navigator 디버그 서버 활성화됨 - set_navigation_goal, cancel_navigation 서비스 대기 중...')
                 return True
             except Exception as e:
                 self.get_logger().error(f'❌ 서비스 시작 실패: {e}')
@@ -47,11 +58,16 @@ class NavigatorServerNode(Node):  # SetGoal 서비스 서버 노드
         return True
     
     def stop_service(self):  # 서비스 서버 중지
-        """SetGoal 서비스 서버를 중지"""
-        if self.service is not None:
+        """SetGoal과 CancelNavigation 서비스 서버를 중지"""
+        if self.set_goal_service is not None:
             try:
-                self.destroy_service(self.service)
-                self.service = None
+                self.destroy_service(self.set_goal_service)
+                self.set_goal_service = None
+                
+                if self.cancel_navigation_service is not None:
+                    self.destroy_service(self.cancel_navigation_service)
+                    self.cancel_navigation_service = None
+                
                 self.is_active = False
                 self.get_logger().info('🔴 Navigator 디버그 서버 비활성화됨')
                 return True
@@ -104,9 +120,55 @@ class NavigatorServerNode(Node):  # SetGoal 서비스 서버 노드
             
             return response
     
+    def cancel_navigation_callback(self, request, response):  # CancelNavigation 서비스 콜백
+        """CancelNavigation 요청을 받아서 처리하는 콜백"""
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        try:
+            # 수신 정보 저장
+            message_info = {
+                'time': current_time,
+                'status': 'received'  # 수신 상태 추가
+            }
+            self.cancel_messages.append(message_info)
+            
+            # 로그 출력
+            self.get_logger().info(f'⏹️ CancelNavigation 수신 at {current_time}')
+            
+            # 성공 응답 생성
+            response.success = True
+            response.message = f"네비게이션 취소 요청 처리 완료 at {current_time}"
+            
+            # 응답 상태 업데이트
+            message_info['status'] = 'responded'
+            message_info['response'] = 'SUCCESS'
+            
+            self.get_logger().info(f'✅ CancelNavigation 응답 전송: SUCCESS - {response.message}')
+            
+            return response
+            
+        except Exception as e:
+            # 에러 처리
+            self.get_logger().error(f'❌ CancelNavigation 처리 중 오류: {e}')
+            
+            # 실패 응답 생성
+            response.success = False
+            response.message = f"디버그 서버 오류: {str(e)}"
+            
+            # 에러 상태 저장
+            if 'message_info' in locals():
+                message_info['status'] = 'error'
+                message_info['response'] = f'ERROR: {str(e)}'
+            
+            return response
+    
     def get_latest_messages(self, count=10):  # 최근 메시지 가져오기
         """최근 수신된 메시지들을 반환"""
         return self.received_messages[-count:] if self.received_messages else []
+    
+    def get_latest_cancel_messages(self, count=10):  # 최근 취소 메시지 가져오기
+        """최근 수신된 취소 메시지들을 반환"""
+        return self.cancel_messages[-count:] if self.cancel_messages else []
 
 class MainControlTab(QWidget):
     def __init__(self, ros_node, parent=None):
@@ -151,6 +213,11 @@ class MainControlTab(QWidget):
         self.send_success_button.clicked.connect(lambda: self.send_navigation_result("SUCCEEDED"))
         self.send_failed_button.clicked.connect(lambda: self.send_navigation_result("FAILED"))
         self.send_canceled_button.clicked.connect(lambda: self.send_navigation_result("CANCELED"))
+        
+        # CancelNavigation 로그 업데이트 타이머
+        self.cancel_log_timer = QTimer()
+        self.cancel_log_timer.timeout.connect(self.update_cancel_navigation_log)
+        self.cancel_log_timer.start(1000)  # 1초마다 업데이트
     
     def init_ros_connections(self):
         """ROS 연결 초기화"""
@@ -278,7 +345,7 @@ class MainControlTab(QWidget):
             if self.navigator_server.start_service():
                 self.toggle_navigator_button.setText("🔴 Stop Navigator Service")
                 self.toggle_navigator_button.setStyleSheet("background-color: #e74c3c;")
-                self.log_navigator_message("🟢 Navigator 서비스 시작됨 - set_navigation_goal 서비스 대기 중...")
+                self.log_navigator_message("🟢 Navigator 서비스 시작됨 - set_navigation_goal, cancel_navigation 서비스 대기 중...")
             else:
                 self.log_navigator_message("❌ Navigator 서비스 시작 실패")
         else:
@@ -403,6 +470,22 @@ class MainControlTab(QWidget):
             self.current_task_text.setPlainText("".join(active_tasks))
         else:
             self.current_task_text.setPlainText("활성 작업 없음")
+    
+    def update_cancel_navigation_log(self):
+        """CancelNavigation 로그 업데이트"""
+        if hasattr(self, 'cancel_navigation_log_text'):
+            latest_messages = self.navigator_server.get_latest_cancel_messages(5)  # 최근 5개 메시지
+            
+            if latest_messages:
+                log_text = ""
+                for msg in latest_messages:
+                    status_icon = "✅" if msg.get('status') == 'responded' else "📥"
+                    response_text = msg.get('response', '대기중')
+                    log_text += f"[{msg['time']}] {status_icon} {response_text}\n"
+                
+                self.cancel_navigation_log_text.setPlainText(log_text)
+            else:
+                self.cancel_navigation_log_text.setPlainText("취소 요청 없음")
     
     def cleanup(self):
         """탭 종료 시 정리"""

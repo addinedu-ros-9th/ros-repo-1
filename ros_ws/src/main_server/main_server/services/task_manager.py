@@ -7,9 +7,11 @@ from libo_interfaces.srv import SetGoal  # SetGoal 서비스 추가
 from libo_interfaces.srv import NavigationResult  # NavigationResult 서비스 추가
 from libo_interfaces.srv import ActivateDetector  # ActivateDetector 서비스 추가
 from libo_interfaces.srv import DeactivateDetector  # DeactivateDetector 서비스 추가
+from libo_interfaces.srv import CancelNavigation  # CancelNavigation 서비스 추가
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
+from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
 import time  # 시간 관련 기능
 import uuid  # 고유 ID 생성
 import random  # 랜덤 좌표 생성용
@@ -135,6 +137,9 @@ class TaskManager(Node):
         # DeactivateDetector 서비스 클라이언트 생성
         self.deactivate_detector_client = self.create_client(DeactivateDetector, 'deactivate_detector')
         
+        # CancelNavigation 서비스 클라이언트 생성
+        self.cancel_navigation_client = self.create_client(CancelNavigation, 'cancel_navigation')
+        
         # Heartbeat 토픽 구독자 생성
         self.heartbeat_subscription = self.create_subscription(
             Heartbeat,  # 메시지 타입
@@ -147,6 +152,14 @@ class TaskManager(Node):
                 history=rclpy.qos.HistoryPolicy.KEEP_LAST,  # 마지막 N개 메시지만 유지
                 depth=10  # 큐 깊이
             )
+        )
+        
+        # DetectionTimer 토픽 구독자 생성
+        self.detection_timer_subscription = self.create_subscription(
+            DetectionTimer,  # 메시지 타입
+            'detection_timer',  # 토픽 이름
+            self.detection_timer_callback,  # 콜백 함수
+            10  # QoS depth
         )
         
         # 작업 목록을 저장할 리스트
@@ -181,6 +194,8 @@ class TaskManager(Node):
         self.get_logger().info('📍 NavigationResult 서비스 시작됨 - navigation_result 서비스 대기 중...')  # NavigationResult 서버 로그 추가
         self.get_logger().info('👁️ ActivateDetector 클라이언트 준비됨 - activate_detector 서비스 연결...')
         self.get_logger().info('👁️ DeactivateDetector 클라이언트 준비됨 - deactivate_detector 서비스 연결...')
+        self.get_logger().info('⏹️ CancelNavigation 클라이언트 준비됨 - cancel_navigation 서비스 연결...')
+        self.get_logger().info('⏰ DetectionTimer 구독 시작됨 - detection_timer 토픽 모니터링 중...')
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -653,6 +668,71 @@ class TaskManager(Node):
                 self.get_logger().warning(f'⚠️  감지기 비활성화 실패: {response.message}')
         except Exception as e:
             self.get_logger().error(f'❌ 감지기 비활성화 응답 처리 중 오류: {e}')
+
+    def cancel_navigation(self):  # 네비게이션 취소 요청
+        """네비게이션을 취소하는 메서드"""
+        # CancelNavigation 서비스가 준비될 때까지 대기
+        if not self.cancel_navigation_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ CancelNavigation 서비스를 찾을 수 없음')
+            return False
+        
+        # CancelNavigation 요청 생성 (요청은 비어있음)
+        request = CancelNavigation.Request()
+        
+        self.get_logger().info(f'⏹️ 네비게이션 취소 요청 전송...')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.cancel_navigation_client.call_async(request)
+            future.add_done_callback(self.cancel_navigation_response_callback)
+            self.get_logger().info(f'📤 네비게이션 취소 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ CancelNavigation 통신 중 오류: {e}')
+            return False
+
+    def cancel_navigation_response_callback(self, future):  # CancelNavigation 응답 콜백
+        """CancelNavigation 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ 네비게이션 취소 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️ 네비게이션 취소 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ 네비게이션 취소 응답 처리 중 오류: {e}')
+
+    def detection_timer_callback(self, msg):  # DetectionTimer 메시지 수신 콜백
+        """DetectionTimer 메시지를 받았을 때 호출되는 콜백 함수"""
+        try:
+            # 단순히 DetectionTimer 메시지 수신만 로그로 표시
+            self.get_logger().info(f'⏰ [DetectionTimer] 수신됨! robot_id={msg.robot_id}, command={msg.command}')
+            
+            # 일반적인 카운터 명령인 경우
+            try:
+                counter_value = int(msg.command)
+                self.get_logger().info(f'📊 [DetectionTimer] 카운터: {counter_value}초 (robot: {msg.robot_id})')
+                
+                # 조건부 CancelNavigation 로직
+                if counter_value == 5:
+                    # 5초일 때 경고 로그
+                    self.get_logger().warn(f'⚠️ [DetectionTimer] 5초 경과! 주의가 필요합니다. (robot: {msg.robot_id})')
+                
+                elif counter_value == 10:
+                    # 10초일 때 자동 CancelNavigation 발행
+                    self.get_logger().warn(f'🚨 [DetectionTimer] 10초 경과! 자동으로 네비게이션 취소를 요청합니다. (robot: {msg.robot_id})')
+                    if self.cancel_navigation():
+                        self.get_logger().info(f'✅ [DetectionTimer] 네비게이션 취소 요청 전송 완료')
+                    else:
+                        self.get_logger().error(f'❌ [DetectionTimer] 네비게이션 취소 요청 전송 실패')
+                
+            except ValueError:
+                # 숫자가 아닌 다른 명령인 경우
+                self.get_logger().info(f'📝 [DetectionTimer] 명령: {msg.command} (robot: {msg.robot_id})')
+            
+        except Exception as e:  # 예외 발생 시 처리
+            self.get_logger().error(f'❌ [DetectionTimer] 처리 중 오류: {e}')  # 에러 로그
 
     def manage_robot_states(self):  # 로봇 상태 관리
         """각 로봇의 상태를 관리하는 메서드"""

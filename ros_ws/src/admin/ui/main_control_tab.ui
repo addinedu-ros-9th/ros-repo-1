@@ -369,6 +369,50 @@ QTextEdit {
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="QLabel" name="cancel_navigation_label">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>20</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>20</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string>font-size: 10px; font-weight: bold; color: #e74c3c; margin: 1px;</string>
+           </property>
+           <property name="text">
+            <string>⏹️ Cancel Navigation Log</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QTextEdit" name="cancel_navigation_log_text">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>16777215</width>
+             <height>60</height>
+            </size>
+           </property>
+           <property name="styleSheet">
+            <string>background-color: #f8f9fa; color: #2c3e50; font-size: 9px; border: 1px solid #e74c3c; border-radius: 3px;</string>
+           </property>
+           <property name="text" stdset="0">
+            <string>취소 요청 없음</string>
+           </property>
+          </widget>
+         </item>
         </layout>
        </widget>
       </item>

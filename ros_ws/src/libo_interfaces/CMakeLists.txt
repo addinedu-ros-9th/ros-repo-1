@@ -35,6 +35,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ActivateTracker.srv"
   "srv/EndTask.srv"
   "srv/DeactivateTalker.srv"
+  "msg/DetectionTimer.msg"  # DetectionTimer 메시지 추가
   DEPENDENCIES builtin_interfaces
 )
 
