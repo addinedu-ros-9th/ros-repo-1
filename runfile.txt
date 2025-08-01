@@ -12,3 +12,24 @@ ros2 run stock stock_gui
 5. libo_gui 실행
 ros2 run libo_gui robot_face_gui 
 
+
+6. Libo navigator 실행
+빅핑키 가제보  브링업   런치
+ ros2 launch vicpinky_bringup gazebo_bringup.launch.xml 
+
+빅핑키 네비게이션 브링업 (심타임 조심) 런치
+ros2 launch vicpinky_navigation bringup_launch.xml use_sim_time:=true
+
+빅핑키 네비게이션 시각화 riviz(심타임조심 런치
+ros2 launch vicpinky_navigation nav2_view.launch.xml use_sim_time:=true
+리보 네비게이터 노드 런
+ ros2 run  libo_navigator navigator_node 
+
+
+
+
+
+
+
+
+
