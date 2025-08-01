@@ -17,5 +17,8 @@
 
   <export>
     <build_type>ament_python</build_type>
+    <colcon-ros>
+      <install_marker>ament_python</install_marker>
+    </colcon-ros>
   </export>
 </package>

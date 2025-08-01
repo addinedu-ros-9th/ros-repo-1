@@ -11,6 +11,8 @@ from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
 import time  # 시간 관련 기능
 import uuid  # 고유 ID 생성
 import random  # 랜덤 좌표 생성용
+from enum import Enum  # 상태 열거형
+import threading  # 스레드 관리
 
 # 좌표 매핑 딕셔너리 (A1~E9까지 총 45개 좌표)
 LOCATION_COORDINATES = {
@@ -38,11 +40,22 @@ LOCATION_COORDINATES = {
     'Base': (3.9, 8.1)  # E3 좌표와 동일
 }
 
+# 로봇 상태 정의 (시스템 상태 제거)
+class RobotState(Enum):  # 개별 로봇 상태
+    INIT = "INIT"  # 초기화
+    CHARGING = "CHARGING"  # 충전
+    STANDBY = "STANDBY"  # 대기
+    ESCORT = "ESCORT"  # 에스코트 작업
+    DELIVERY = "DELIVERY"  # 딜리버리 작업
+    ASSIST = "ASSIST"  # 어시스트 작업
+
 class Robot:  # 로봇 정보를 담는 클래스
     def __init__(self, robot_id):  # Robot 객체 초기화
         self.robot_id = robot_id  # 로봇 ID 저장
         self.last_heartbeat_time = time.time()  # 마지막 하트비트 수신 시간
-        self.is_available = True  # 사용 가능 상태 (기본값: 사용 가능)
+        self.current_state = RobotState.INIT  # 현재 로봇 상태 (기본값: 초기화)
+        self.is_available = False  # 초기화 상태는 사용 불가 (INIT 상태에 맞게)
+        self.state_start_time = time.time()  # 현재 상태 시작 시간 추가
     
     def update_heartbeat(self):  # 하트비트 업데이트
         """하트비트를 받았을 때 호출되는 메서드"""
@@ -58,10 +71,24 @@ class Robot:  # 로봇 정보를 담는 클래스
         """로봇의 사용 가능 상태를 설정하는 메서드"""
         self.is_available = available  # 사용 가능 상태 업데이트
     
+    def change_state(self, new_state):  # 로봇 상태 변경
+        """로봇의 상태를 변경하고 해당 상태에 맞는 availability 설정"""
+        old_state = self.current_state
+        self.current_state = new_state
+        self.state_start_time = time.time()  # 상태 변경 시간 기록
+        
+        # 상태에 따른 availability 자동 설정
+        if new_state == RobotState.STANDBY:
+            self.is_available = True  # 대기 상태일 때만 사용 가능
+        else:
+            self.is_available = False  # 나머지 상태는 모두 사용 불가
+        
+        return old_state, new_state
+    
     def get_status_info(self):  # 로봇 상태 정보 반환
         """로봇의 현재 상태 정보를 문자열로 반환"""
         available_status = "사용가능" if self.is_available else "사용중"
-        return f"Robot[{self.robot_id}] - 활성 | {available_status}"
+        return f"Robot[{self.robot_id}] - {self.current_state.value} | {available_status}"
 
 class Task:  # 작업 정보를 담는 클래스
     def __init__(self, robot_id, task_type, call_location, goal_location):  # Task 객체 초기화
@@ -135,6 +162,9 @@ class TaskManager(Node):
         # TaskStatus 발행 타이머 (1초마다 실행)
         self.task_status_timer = self.create_timer(1.0, self.publish_task_status)  # 1초마다 더미 작업 상태 발행
         
+        # 로봇 상태 관리 타이머 (1초마다 실행)
+        self.robot_state_timer = self.create_timer(1.0, self.manage_robot_states)  # 1초마다 로봇 상태 관리
+        
         self.get_logger().info('🎯 Task Manager 시작됨 - task_request 서비스 대기 중...')
         self.get_logger().info('💓 Heartbeat 구독 시작됨 - heartbeat 토픽 모니터링 중...')
         self.get_logger().info('📡 OverallStatus 발행 시작됨 - robot_status 토픽으로 1초마다 발행...')
@@ -176,15 +206,28 @@ class TaskManager(Node):
             status_msg = OverallStatus()  # OverallStatus 메시지 생성
             status_msg.timestamp = self.get_clock().now().to_msg()  # 현재 시간 설정
             status_msg.robot_id = robot_id  # 로봇 ID 설정
+            status_msg.robot_state = robot.current_state.value  # 로봇 상태 추가 (INIT, CHARGING, STANDBY 등)
             status_msg.is_available = robot.is_available  # 실제 로봇의 사용 가능 상태 사용
-            status_msg.battery = 255  # 기본값: 알 수 없음 (255로 표시)
+            
+            # 배터리 시뮬레이션 (시간에 따라 감소, CHARGING 상태일 때는 증가)
+            current_time = time.time()
+            if robot.current_state == RobotState.CHARGING:
+                # 충전 중일 때는 배터리가 점진적으로 증가 (최대 100%)
+                battery_increase = int((current_time - robot.state_start_time) * 2)  # 2% per second
+                status_msg.battery = min(100, 20 + battery_increase)  # 최소 20%에서 시작해서 최대 100%
+            else:
+                # 다른 상태일 때는 배터리가 점진적으로 감소 (최소 10%)
+                battery_decrease = int((current_time - robot.state_start_time) * 0.5)  # 0.5% per second
+                status_msg.battery = max(10, 100 - battery_decrease)  # 최대 100%에서 시작해서 최소 10%
+            
+            # 기본값들 (시뮬레이션 없음)
             status_msg.book_weight = 0.0  # 기본값: 무게 없음
             status_msg.position_x = 0.0  # 기본값: 위치 알 수 없음
             status_msg.position_y = 0.0  # 기본값: 위치 알 수 없음
             status_msg.position_yaw = 0.0  # 기본값: 방향 알 수 없음
             
             self.status_publisher.publish(status_msg)  # 메시지 발행
-            self.get_logger().debug(f'📡 로봇 상태 발행: {robot_id} → {"사용가능" if robot.is_available else "사용중"}')
+            self.get_logger().debug(f'📡 로봇 상태 발행: {robot_id} → {robot.current_state.value} | {"사용가능" if robot.is_available else "사용중"} | 배터리: {status_msg.battery}%')
     
     def publish_task_status(self):  # 활성 작업들의 상태 발행
         """1초마다 현재 활성 Task들의 TaskStatus 발행"""
@@ -431,6 +474,30 @@ class TaskManager(Node):
         if result:
             self.get_logger().info(f'📤 테스트 요청 전송됨 - 응답은 콜백으로 처리됩니다')
         return result
+
+    def manage_robot_states(self):  # 로봇 상태 관리
+        """각 로봇의 상태를 관리하는 메서드"""
+        for robot_id, robot in self.robots.items():
+            self.process_robot_state(robot)
+    
+    def process_robot_state(self, robot):  # 개별 로봇 상태 처리
+        """개별 로봇의 상태에 따른 처리 로직"""
+        current_time = time.time()
+        state_duration = current_time - robot.state_start_time  # 현재 상태 지속 시간
+        
+        if robot.current_state == RobotState.INIT:
+            # INIT 상태에서 5초 후 CHARGING으로 변경
+            if state_duration >= 5.0:
+                old_state, new_state = robot.change_state(RobotState.CHARGING)
+                self.get_logger().info(f'🔋 로봇 <{robot.robot_id}> 상태 변경: {old_state.value} → {new_state.value} (5초 경과)')
+        
+        elif robot.current_state == RobotState.CHARGING:
+            # CHARGING 상태에서 10초 후 STANDBY로 변경 (임시)
+            if state_duration >= 10.0:
+                old_state, new_state = robot.change_state(RobotState.STANDBY)
+                self.get_logger().info(f'⚡ 로봇 <{robot.robot_id}> 상태 변경: {old_state.value} → {new_state.value} (10초 경과)')
+        
+        # 다른 상태들은 나중에 추가 예정
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)

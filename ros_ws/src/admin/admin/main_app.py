@@ -6,11 +6,12 @@ import os
 import rclpy
 import time  # 시간 추적용 추가
 import random  # 랜덤 값 생성용 추가
-from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, QTableWidget, QTableWidgetItem, QFrame  # 통합 위젯들 추가
-from PyQt5.QtCore import QTimer, QThread, pyqtSignal, QObject  # 스레드 관련 추가
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, QTableWidget, QTableWidgetItem, QFrame, QScrollArea # 통합 위젯들 추가
+from PyQt5.QtCore import QTimer, QThread, pyqtSignal, QObject, Qt # 스레드 관련 추가
 from PyQt5 import uic
 from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node # ROS2 노드 클래스 임포트
+from PyQt5.QtGui import QColor # QColor 임포트
 
 from admin.tabs.task_request_tab import TaskRequestTab # 우리가 만든 TaskRequestTab을 임포트
 from admin.tabs.heartbeat_monitor_tab import HeartbeatMonitorTab # 새로 만든 HeartbeatMonitorTab을 임포트
@@ -516,11 +517,26 @@ class AdminWindow(QMainWindow):
         robot_title_layout.addWidget(self.robot_count_label)
         robot_layout.addLayout(robot_title_layout, 0)  # stretch factor 0으로 고정 크기
         
-        # 로봇 목록 (남은 공간 사용하되 적절한 크기)
-        self.robot_list_label = QLabel("활성 로봇 없음")
-        self.robot_list_label.setStyleSheet("color: #2c3e50; font-size: 12px; background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 10px;")
-        self.robot_list_label.setWordWrap(True)
-        robot_layout.addWidget(self.robot_list_label, 1)  # 남은 공간 사용
+        # 로봇 카드들을 담을 스크롤 영역
+        self.robot_scroll_area = QScrollArea()
+        self.robot_scroll_area.setWidgetResizable(True)
+        self.robot_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.robot_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.robot_scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+        """)
+        
+        # 스크롤 영역 안에 들어갈 컨테이너 위젯
+        self.robot_container = QWidget()
+        self.robot_container_layout = QVBoxLayout(self.robot_container)
+        self.robot_container_layout.setAlignment(Qt.AlignTop)
+        self.robot_container_layout.setSpacing(10)
+        
+        self.robot_scroll_area.setWidget(self.robot_container)
+        robot_layout.addWidget(self.robot_scroll_area, 1)  # 남은 공간 사용
         
         # Current Task 프레임
         task_frame = QFrame()
@@ -798,18 +814,179 @@ class AdminWindow(QMainWindow):
     def robot_status_callback(self, msg):  # OverallStatus 메시지 수신 콜백
         """OverallStatus 메시지를 받았을 때 GUI 업데이트"""
         try:
-            # 로봇별로 상태 정보 저장 (마지막 수신 시간도 포함)
+            # 로봇별로 상태 정보 저장 (모든 정보 포함)
             self.robot_status_dict[msg.robot_id] = {
                 'id': msg.robot_id,  # 로봇 ID
+                'state': msg.robot_state,  # 로봇 상태 (INIT, CHARGING, STANDBY 등)
                 'available': msg.is_available,  # 사용 가능 여부
                 'battery': msg.battery,  # 배터리 잔량
-                'position': f"({msg.position_x:.1f}, {msg.position_y:.1f})",  # 위치 정보
+                'book_weight': msg.book_weight,  # 책 무게
+                'position_x': msg.position_x,  # X 좌표
+                'position_y': msg.position_y,  # Y 좌표
+                'position_yaw': msg.position_yaw,  # Yaw 각도
                 'last_seen': time.time()  # 마지막 수신 시간 추가
             }
             self.update_robot_status_display()  # GUI 업데이트
             
         except Exception as e:
             print(f"로봇 상태 처리 중 오류: {e}")
+
+    def update_robot_status_display(self):  # 로봇 상태 표시 업데이트
+        """활성 로봇들의 상태를 개별 카드로 표시"""
+        try:
+            # 로봇 개수 업데이트
+            robot_count = len(self.robot_status_dict)  # 활성 로봇 개수
+            self.robot_count_label.setText(f"Count: {robot_count}")  # 카운트 라벨 업데이트
+            
+            # 기존 로봇 카드들 제거
+            for i in reversed(range(self.robot_container_layout.count())):
+                child = self.robot_container_layout.itemAt(i).widget()
+                if child:
+                    child.deleteLater()
+            
+            if robot_count == 0:  # 로봇이 없다면
+                # 빈 상태 메시지 표시
+                empty_label = QLabel("활성 로봇 없음")
+                empty_label.setStyleSheet("""
+                    color: #95a5a6; 
+                    font-size: 14px; 
+                    font-style: italic; 
+                    padding: 20px;
+                    text-align: center;
+                """)
+                empty_label.setAlignment(Qt.AlignCenter)
+                self.robot_container_layout.addWidget(empty_label)
+            else:
+                # 각 로봇 정보를 개별 카드로 추가
+                for robot_id, status in self.robot_status_dict.items():
+                    robot_card = self.create_robot_card(robot_id, status)
+                    self.robot_container_layout.addWidget(robot_card)
+                
+        except Exception as e:
+            print(f"로봇 상태 표시 중 오류: {e}")
+
+    def create_robot_card(self, robot_id, status):  # 개별 로봇 카드 생성
+        """개별 로봇의 정보를 담은 카드 위젯 생성"""
+        # 로봇 카드 프레임
+        card_frame = QFrame()
+        
+        # 상태에 따른 카드 색상 설정
+        state_colors = {
+            'STANDBY': '#d4edda',  # 연한 초록색
+            'CHARGING': '#fff3cd',  # 연한 노란색
+            'INIT': '#f8d7da',      # 연한 분홍색
+            'ESCORT': '#cce5ff',    # 연한 파란색
+            'DELIVERY': '#e2e3e5',  # 연한 회색
+            'ASSIST': '#d1ecf1'     # 연한 청록색
+        }
+        
+        card_color = state_colors.get(status['state'], '#f8f9fa')  # 기본값은 연한 회색
+        
+        card_frame.setStyleSheet(f"""
+            QFrame {{
+                border: 2px solid #3498db;
+                border-radius: 8px;
+                background-color: {card_color};
+                margin: 3px;
+                padding: 8px;
+                max-width: 300px;
+            }}
+            QLabel {{
+                color: #2c3e50;
+                font-size: 10px;
+            }}
+        """)
+        
+        card_layout = QVBoxLayout(card_frame)
+        card_layout.setSpacing(3)  # 간격 줄이기
+        card_layout.setContentsMargins(5, 5, 5, 5)  # 여백 줄이기
+        
+        # 로봇 제목 (ID + State) - 세로 배치로 변경
+        title_layout = QVBoxLayout()
+        
+        # 첫 번째 줄: 로봇 ID
+        robot_id_label = QLabel(f"🤖 {robot_id}")
+        robot_id_label.setStyleSheet("font-size: 12px; font-weight: bold; color: #2c3e50;")
+        title_layout.addWidget(robot_id_label)
+        
+        # 두 번째 줄: State와 Available 상태
+        status_layout = QHBoxLayout()
+        
+        # State 표시 (고정 너비로 설정)
+        state_label = QLabel(f"📊 {status['state']}")
+        state_label.setStyleSheet("font-size: 10px; font-weight: bold; color: #7f8c8d;")
+        state_label.setFixedWidth(80)  # State 고정 너비
+        status_layout.addWidget(state_label)
+        
+        # Available 상태 표시
+        available_text = "✅ 사용가능" if status['available'] else "❌ 사용 불가"
+        available_label = QLabel(available_text)
+        available_label.setStyleSheet("font-size: 10px; font-weight: bold; color: #27ae60;" if status['available'] else "font-size: 10px; font-weight: bold; color: #e74c3c;")
+        status_layout.addWidget(available_label)
+        
+        status_layout.addStretch()  # 오른쪽 정렬을 위한 공간
+        title_layout.addLayout(status_layout)
+        card_layout.addLayout(title_layout)
+        
+        # 구분선 추가
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setStyleSheet("background-color: #bdc3c7; margin: 3px 0px;")
+        card_layout.addWidget(separator)
+        
+        # 상세 정보 (2열로 배치)
+        info_layout = QHBoxLayout()
+        info_layout.setSpacing(10)  # 열 간격 줄이기
+        
+        # 왼쪽 열
+        left_column = QVBoxLayout()
+        left_column.setSpacing(2)  # 간격 줄이기
+        
+        # 배터리 정보
+        if status['battery'] == 255:
+            battery_text = "🔋 N/A"
+            battery_color = "#95a5a6"
+        else:
+            battery_text = f"🔋 {status['battery']}%"
+            if status['battery'] > 50:
+                battery_color = "#27ae60"  # 초록색
+            elif status['battery'] > 20:
+                battery_color = "#f39c12"  # 주황색
+            else:
+                battery_color = "#e74c3c"  # 빨간색
+        
+        battery_label = QLabel(battery_text)
+        battery_label.setStyleSheet(f"color: {battery_color}; font-size: 10px;")
+        left_column.addWidget(battery_label)
+        
+        # 책 무게 정보
+        weight_text = f"📚 {status['book_weight']:.1f}kg" if status['book_weight'] > 0 else "📚 0.0kg"
+        weight_label = QLabel(weight_text)
+        weight_label.setStyleSheet("color: #2c3e50; font-size: 10px;")
+        left_column.addWidget(weight_label)
+        
+        info_layout.addLayout(left_column)
+        
+        # 오른쪽 열
+        right_column = QVBoxLayout()
+        right_column.setSpacing(2)  # 간격 줄이기
+        
+        # 위치 정보 (간단하게)
+        pos_text = f"📍 ({status['position_x']:.1f}, {status['position_y']:.1f})"
+        pos_label = QLabel(pos_text)
+        pos_label.setStyleSheet("color: #2c3e50; font-size: 10px;")
+        right_column.addWidget(pos_label)
+        
+        # 방향 정보 (간단하게)
+        yaw_text = f"🧭 {status['position_yaw']:.0f}°"
+        yaw_label = QLabel(yaw_text)
+        yaw_label.setStyleSheet("color: #2c3e50; font-size: 10px;")
+        right_column.addWidget(yaw_label)
+        
+        info_layout.addLayout(right_column)
+        card_layout.addLayout(info_layout)
+        
+        return card_frame
 
     def task_status_callback(self, msg):  # TaskStatus 메시지 수신 콜백
         """TaskStatus 메시지를 받았을 때 GUI 업데이트"""
@@ -840,28 +1017,6 @@ class AdminWindow(QMainWindow):
             
         except Exception as e:
             print(f"❌ 작업 상태 처리 중 오류: {e}")  # 에러 메시지 개선
-
-    def update_robot_status_display(self):  # 로봇 상태 표시 업데이트
-        """활성 로봇들의 상태를 위젯에 표시"""
-        try:
-            # 로봇 개수 업데이트
-            robot_count = len(self.robot_status_dict)  # 활성 로봇 개수
-            self.robot_count_label.setText(f"Count: {robot_count}")  # 카운트 라벨 업데이트
-            
-            # 로봇 목록 텍스트 생성
-            if robot_count == 0:  # 로봇이 없다면
-                status_text = "활성 로봇 없음"
-            else:
-                status_lines = []  # 로봇 정보 저장할 리스트
-                for robot_id, status in self.robot_status_dict.items():  # 각 로봇에 대해
-                    availability = "사용가능" if status['available'] else "사용중"  # 가용성 표시
-                    status_lines.append(f"🤖 {robot_id}: {availability}")  # 로봇 정보 추가
-                status_text = "\n".join(status_lines)  # 줄바꿈으로 연결
-                
-            self.robot_list_label.setText(status_text)  # 목록 라벨 업데이트
-                
-        except Exception as e:
-            print(f"로봇 상태 표시 중 오류: {e}")
 
     def update_task_status_display(self):  # 작업 상태 표시 업데이트
         """현재 작업 상태를 위젯에 표시"""
