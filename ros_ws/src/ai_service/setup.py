@@ -23,7 +23,8 @@ setup(
         'console_scripts': [
             'vision_manager = ai_service.nodes.vision_manager:main',
             'velocity_manager = ai_service.nodes.velocity_manager:main',
-            'talker_manager = ai_service.nodes.talker_manager:main'            
+            'talker_manager = ai_service.nodes.talker_manager:main',
+            'test_voice_command_maker = ai_service.nodes.test_voice_command_maker:main'            
         ],
     },
 )

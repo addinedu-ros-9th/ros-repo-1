@@ -1,20 +1,25 @@
 import os
-from dotenv import load_dotenv
+import sys
+import io
+import time
 import socket
 import threading
 import queue
 import struct
-import numpy as np
-import pvporcupine
-import resampy
+import wave
+import pytz
 import openai
-import time
+import numpy as np
+import resampy
+import pvporcupine
+import rclpy
 import speech_recognition as sr
 from datetime import datetime
-import pytz
+from dotenv import load_dotenv
+from pydub import AudioSegment
 from google.cloud import texttospeech
-import wave
-import sys
+from rclpy.node import Node
+from libo_interfaces.msg import VoiceCommand
 
 # ================== 프로젝트 루트 경로 세팅 ==================
 # 현재 실행 경로에서 ros-repo-1 위치 찾기
@@ -28,10 +33,22 @@ if ros_ws_index != -1:
 else:
     # 백업 방법: 현재 위치에서 상위로 올라가며 찾기
     PROJECT_ROOT = os.path.abspath(os.path.join(current_path, '../../../../../../'))
+    
+# MP3 효과음 디렉토리 설정
+MP3_EFFECTS_DIR = os.path.join(PROJECT_ROOT, "data", "mp3_effect_files")
+
+# MP3 효과음 디렉토리가 없으면 생성
+if not os.path.exists(MP3_EFFECTS_DIR):
+    try:
+        os.makedirs(MP3_EFFECTS_DIR)
+        print(f"MP3 효과음 디렉토리 생성됨: {MP3_EFFECTS_DIR}")
+    except Exception as e:
+        print(f"MP3 효과음 디렉토리 생성 오류: {str(e)}")
 
 print(f"프로젝트 루트 경로: {PROJECT_ROOT}")
 env_path = os.path.join(PROJECT_ROOT, '.env')
 print(f".env 파일 경로: {env_path}")
+print(f"MP3 효과음 디렉토리 경로: {MP3_EFFECTS_DIR}")
 
 # 파일 존재 확인
 if not os.path.exists(env_path):
@@ -65,6 +82,59 @@ for path in [PORCUPINE_MODEL_PATH, PORCUPINE_KEYWORD_PATH]:
 
 # ================== 네트워크/오디오 기본 설정 ==================
 HAEDWARE_HANDLER_IP = "127.0.0.1"       # Hardware Handler IP
+
+# ================== 음성 명령 응답 매핑 ==================
+# 음성 명령 응답 매핑 - 카테고리별로 구성
+VOICE_COMMANDS = {
+    # 공통 음성 명령
+    "common": {
+        "power_on": {"type": "mp3", "value": "power_on.mp3"},  # (전원 켜지는 소리 - 삐빅)
+        "initialized": {"type": "mp3", "value": "robot_initialized.mp3"},  # (초기화 완료 소리 - 따리리리링)
+        "charging": {"type": "tts", "value": "충전을 시작하겠습니다."},
+        "battery_sufficient": {"type": "tts", "value": "배터리가 충분합니다. 대기모드로 전환합니다."},
+        "depart_base": {"type": "tts", "value": "출발합니다~ (종잔기를 뽑고)"},
+        "obstacle_detected": {"type": "mp3", "value": "honk.mp3"},  # (장애물이 감지됐습니다. 잠시합니다. / 빵!!!!!!!!!!)
+        "reroute": {"type": "tts", "value": "새로운 경로로 안내합니다."},
+        "return": {"type": "mp3", "value": "complete.mp3"},  # (복귀하겠습니다. / (북귀음 소리 - 빠빕))
+        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
+    },
+    
+    # 안내 관련 음성 명령
+    "escort": {
+        "depart_base": {"type": "tts", "value": "출발합니다~"},
+        "arrived_kiosk": {"type": "tts", "value": "잭 위치까지 에스코팅을 시작하겠습니다. 뒤로 따라와주시길 바랍니다."},
+        "lost_user": {"type": "tts", "value": "손님이 보이지 않습니다. 20초 후에 자동종료 됩니다."},
+        "user_reconnected": {"type": "mp3", "value": "reconnected.mp3"},  # (다시 연결된 소리, 뿌루루? 빠빅?)
+        "arrived_destination": {"type": "tts", "value": "도착했습니다. 더 필요한 것이 있으면 키오스크에서 불러주세요."},
+        "return": {"type": "mp3", "value": "complete.mp3"},  # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
+        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
+    },
+    
+    # 배송 관련 음성 명령
+    "delivery": {
+        "depart_base": {"type": "tts", "value": "출발합니다~"},
+        "arrived_admin_desk": {"type": "tts", "value": "딜리버리 준비가 완료되었습니다. 다음 목적지를 선택해주세요."},
+        "receive_next_goal": {"type": "tts", "value": "목적지를 수신하였습니다. 출발하겠습니다."},
+        "arrived_destination": {"type": "tts", "value": "도착했습니다. 작업이 완료되면 말해주세요."},
+        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},  # 네? / (삐빅)
+        "return": {"type": "mp3", "value": "complete.mp3"},  # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
+        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
+    },
+    
+    # 도움 관련 음성 명령
+    "assist": {
+        "depart_base": {"type": "tts", "value": "출발합니다~"},
+        "arrived_kiosk": {"type": "tts", "value": "어시스트를 시작하시면 QR 코드를 카메라 앞에 대주세요"},
+        "qr_authenticated": {"type": "tts", "value": "QR 인증 완료! 어시스트를 시작하면 카메라 앞에서 대기 해주시길 바랍니다."},
+        "no_person_5s": {"type": "tts", "value": "감지 실패!"},
+        "person_detected": {"type": "tts", "value": "감지 성공!"},
+        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},  # 네? / (삐빅)
+        "pause": {"type": "tts", "value": "일시정지합니다."},
+        "resume": {"type": "tts", "value": "어시스트를 재개합니다."},
+        "return": {"type": "mp3", "value": "complete.mp3"},  # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
+        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
+    }
+}
 AI_SERVICE_IP = "127.0.0.1"            # AI Service IP
 MIC_STREAM_PORT = 7000                 # 마이크 스트림 포트 (UDP)
 SPEAKER_PORT = 7002                    # 스피커 출력 포트 (TCP)
@@ -197,6 +267,129 @@ class CommunicationManager:
             self.tcp_ready.clear()
             return False
 
+    def play_mp3_file(self, file_name):
+        """MP3 파일을 재생하여 TCP로 전송"""
+        try:
+            file_path = os.path.join(MP3_EFFECTS_DIR, file_name)
+            if not os.path.exists(file_path):
+                print(f"[{get_kr_time()}][ERROR] MP3 파일을 찾을 수 없습니다: {file_path}")
+                return False
+                
+            print(f"[{get_kr_time()}][MP3] 파일 로드 중: {file_name}")
+            
+            try:
+                # MP3 파일을 pydub로 직접 로드
+                sound = AudioSegment.from_mp3(file_path)
+                
+                # 모노 변환 (필요시)
+                if sound.channels > 1:
+                    sound = sound.set_channels(1)
+                
+                # 샘플링 레이트 변환 (필요시)
+                if sound.frame_rate != TTS_RATE:
+                    sound = sound.set_frame_rate(TTS_RATE)
+                
+                # 16비트로 설정 (필요시)
+                sound = sound.set_sample_width(2)
+                
+                # 오디오 데이터를 numpy 배열로 변환
+                samples = np.array(sound.get_array_of_samples())
+                audio_float32 = samples.astype(np.float32) / 32768.0  # int16 범위에서 float32로 변환
+                
+                # float32 형식으로 오디오 데이터 전송
+                print(f"[{get_kr_time()}][AUDIO] MP3 오디오 데이터 전송 중...")
+                success = self.send_audio_data(audio_float32)
+                
+                if success:
+                    print(f"[{get_kr_time()}][AUDIO] MP3 전송 완료: {file_name}")
+                else:
+                    print(f"[{get_kr_time()}][AUDIO] ❌ MP3 전송 실패: {file_name}")
+                
+                return success
+            
+            except Exception as inner_e:
+                # MP3 파일 로드 실패 시 TTS로 대체
+                print(f"[{get_kr_time()}][WARNING] MP3 파일 로드 실패, TTS로 대체: {str(inner_e)}")
+                return self.play_tts_response(f"효과음 {file_name}을 재생하려 했으나 실패했습니다.")
+            
+        except Exception as e:
+            print(f"[{get_kr_time()}][ERROR] MP3 재생 오류: {str(e)}")
+            return False
+    
+    def play_tts_response(self, text):
+        """텍스트를 TTS로 변환하여 TCP로 전송"""
+        try:
+            print(f"[{get_kr_time()}][TTS] 음성 응답 생성 중: {text}")
+            synthesis_input = texttospeech.SynthesisInput(text=text)
+            
+            voice = texttospeech.VoiceSelectionParams(
+                language_code="ko-KR",
+                name="ko-KR-Standard-A",
+                ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
+            )
+            
+            audio_config = texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.LINEAR16,
+                sample_rate_hertz=TTS_RATE,
+            )
+            
+            tts_response = tts_client.synthesize_speech(
+                input=synthesis_input,
+                voice=voice,
+                audio_config=audio_config
+            )
+            
+            # 오디오 데이터를 float32로 변환
+            audio_data = np.frombuffer(tts_response.audio_content, dtype=np.int16)
+            audio_float32 = audio_data.astype(np.float32) / 32768.0
+            
+            # TCP를 통해 스피커 노드로 전송
+            print(f"[{get_kr_time()}][AUDIO] TTS 오디오 데이터 전송 중...")
+            success = self.send_audio_data(audio_float32)
+            
+            if success:
+                print(f"[{get_kr_time()}][AUDIO] TTS 전송 완료")
+            else:
+                print(f"[{get_kr_time()}][AUDIO] ❌ TTS 전송 실패")
+            
+            return success
+        except Exception as e:
+            print(f"[{get_kr_time()}][ERROR] TTS 생성/전송 오류: {str(e)}")
+            return False
+            
+    def play_voice_command(self, category, action):
+        """카테고리와 액션에 따라 음성 명령을 재생
+        
+        Args:
+            category (str): 명령 카테고리 ('common', 'escort', 'delivery', 'assist')
+            action (str): 카테고리 내 액션 이름
+            
+        Returns:
+            bool: 성공 여부
+        """
+        try:
+            if category not in VOICE_COMMANDS:
+                print(f"[{get_kr_time()}][ERROR] 유효하지 않은 카테고리: {category}")
+                return False
+                
+            if action not in VOICE_COMMANDS[category]:
+                print(f"[{get_kr_time()}][ERROR] '{category}' 카테고리에 '{action}' 액션이 없습니다")
+                return False
+                
+            command = VOICE_COMMANDS[category][action]
+            print(f"[{get_kr_time()}][VOICE] 명령 실행: {category}.{action} ({command['type']})")
+            
+            if command['type'] == 'mp3':
+                return self.play_mp3_file(command['value'])
+            elif command['type'] == 'tts':
+                return self.play_tts_response(command['value'])
+            else:
+                print(f"[{get_kr_time()}][ERROR] 알 수 없는 명령 타입: {command['type']}")
+                return False
+        except Exception as e:
+            print(f"[{get_kr_time()}][ERROR] 음성 명령 실행 오류: {str(e)}")
+            return False
+
     def cleanup(self):
         """모든 리소스 정리"""
         self.stop_event.set()
@@ -206,6 +399,54 @@ class CommunicationManager:
             self.tcp_server.close()
         if self.udp_sock:
             self.udp_sock.close()
+
+class TalkerNode(Node):
+    """
+    ROS2 노드 클래스 - 음성 명령 토픽 구독자
+    """
+    def __init__(self, comm_manager):
+        super().__init__('talker_node')
+        
+        # 통신 관리자 참조 저장
+        self.comm_manager = comm_manager
+        
+        # 로깅
+        self.get_logger().info('TalkerNode 초기화 중...')
+        
+        # VoiceCommand 토픽 구독
+        self.voice_cmd_sub = self.create_subscription(
+            VoiceCommand,
+            '/voice_command',
+            self.voice_command_callback,
+            10
+        )
+        
+        self.get_logger().info('VoiceCommand 구독 설정 완료!')
+    
+    def voice_command_callback(self, msg):
+        """
+        VoiceCommand 메시지 처리 콜백
+        
+        Args:
+            msg.robot_id: 로봇 ID (예: "libo_a", "libo_b")
+            msg.category: 명령 카테고리 (예: "escort", "delivery")
+            msg.action: 명령 액션 (예: "arrived", "return")
+        """
+        robot_id = msg.robot_id
+        category = msg.category
+        action = msg.action
+        
+        print(f"{'=' * 30} VoiceCommand 수신 {'=' * 30}")
+        self.get_logger().info(f'VoiceCommand 수신: 로봇={robot_id}, 카테고리={category}, 액션={action}')
+        
+        # 카테고리와 액션으로 음성 명령 재생
+        success = self.comm_manager.play_voice_command(category, action)
+        
+        if success:
+            self.get_logger().info(f"음성 명령 '{category}.{action}' 성공적으로 실행됨")
+        else:
+            self.get_logger().warning(f"음성 명령 '{category}.{action}' 실행 실패")
+
 
 def init_tcp_server():
     """TCP 서버 초기화 및 클라이언트 대기"""
@@ -221,7 +462,10 @@ def init_tcp_server():
     tcp_client, addr = tcp_server.accept()
     print(f"[{get_kr_time()}][TCP] 스피커 노드 연결됨: {addr}")
 
-def main():
+def main(args=None):
+    # ROS2 초기화
+    rclpy.init(args=args)
+    
     # ========== 1. 통신 관리자 초기화 ==========
     print(f"[{get_kr_time()}][INIT] 통신 관리자 초기화 중...")
     comm_manager = CommunicationManager()
@@ -230,7 +474,27 @@ def main():
     udp_thread = comm_manager.start_udp_receiver()
     tcp_thread = comm_manager.start_tcp_server()
 
-    # ========== 2. Porcupine 웨이크워드 엔진 ==========
+    # ========== 2. ROS2 노드 생성 (VoiceCommand 메시지 구독용) ==========
+    print(f"[{get_kr_time()}][INIT] ROS2 노드 생성 중...")
+    talker_node = TalkerNode(comm_manager)
+    
+    # ROS2 노드와 웨이크워드 감지를 병렬로 실행하기 위한 스레드 생성
+    def ros_spin_thread():
+        try:
+            print(f"[{get_kr_time()}][ROS] ROS2 스핀 루프 시작")
+            rclpy.spin(talker_node)
+        except Exception as e:
+            print(f"[{get_kr_time()}][ERROR] ROS2 스핀 루프 오류: {str(e)}")
+        finally:
+            print(f"[{get_kr_time()}][ROS] ROS2 스핀 루프 종료")
+    
+    # ROS2 스핀 스레드 시작
+    ros_thread = threading.Thread(target=ros_spin_thread)
+    ros_thread.daemon = True
+    ros_thread.start()
+    print(f"[{get_kr_time()}][ROS] ROS2 스핀 스레드 시작됨 - 이제 '/voice_command' 토픽을 구독합니다")
+    
+    # ========== 3. Porcupine 웨이크워드 엔진 ==========
     print(f"[{get_kr_time()}][INIT] Porcupine 웨이크워드 엔진 초기화 중...")
     porcupine = pvporcupine.create(
         access_key=PICOVOICE_ACCESS_KEY,
@@ -242,7 +506,7 @@ def main():
     print(f"[{get_kr_time()}][talker_manager] Ready for wakeword detection: '리보야'")
     buffer = b''
 
-    # ========== 3. OpenAI 클라이언트 ==========
+    # ========== 4. OpenAI 클라이언트 ==========
     client = openai.OpenAI(api_key=OPENAI_API_KEY)
     recognizer = sr.Recognizer()
 
@@ -268,44 +532,52 @@ def main():
                     print(f"\n[{get_kr_time()}][WAKE] 🟢 Wakeword('리보야') 감지됨!")
                     print(f"[{get_kr_time()}][AUDIO] 현재 버퍼 크기: {len(buffer)} bytes")
                     
-                    # 웨이크워드 감지 시 "네? 무엇을 도와드릴까요?" TTS 출력
+                    # 웨이크워드 감지 시 응답 출력
                     print(f"[{get_kr_time()}][TTS] 웨이크워드 확인 응답 생성 중...")
                     
-                    wake_response = "네? 무엇을 도와드릴까요?"
-                    synthesis_input = texttospeech.SynthesisInput(text=wake_response)
-                    
-                    voice = texttospeech.VoiceSelectionParams(
-                        language_code="ko-KR",
-                        name="ko-KR-Standard-A",
-                        ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
-                    )
-                    
-                    audio_config = texttospeech.AudioConfig(
-                        audio_encoding=texttospeech.AudioEncoding.LINEAR16,
-                        sample_rate_hertz=TTS_RATE,
-                    )
-                    
-                    try:
-                        wake_tts_response = tts_client.synthesize_speech(
-                            input=synthesis_input,
-                            voice=voice,
-                            audio_config=audio_config
-                        )
+                    # 'called_by_staff' 액션을 사용하여 응답
+                    if comm_manager.play_voice_command("assist", "called_by_staff"):
+                        print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 완료 (MP3)")
+                    else:
+                        # MP3 파일 재생 실패 시 기본 TTS 사용
+                        wake_response = "네? 무엇을 도와드릴까요?"
+                        print(f"[{get_kr_time()}][TTS] TTS로 대체 응답 생성 중...")
                         
-                        # 오디오 데이터를 float32로 변환
-                        wake_audio_data = np.frombuffer(wake_tts_response.audio_content, dtype=np.int16)
-                        wake_audio_float32 = wake_audio_data.astype(np.float32) / 32768.0
-                        
-                        # TCP를 통해 스피커 노드로 전송
-                        print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 중...")
-                        
-                        if comm_manager.send_audio_data(wake_audio_float32):
-                            print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 완료")
-                        else:
-                            print(f"[{get_kr_time()}][AUDIO] ❌ 웨이크워드 응답 전송 실패")
+                        try:
+                            # TTS 직접 생성
+                            synthesis_input = texttospeech.SynthesisInput(text=wake_response)
                             
-                    except Exception as e:
-                        print(f"[{get_kr_time()}][ERROR] 웨이크워드 TTS 오류: {str(e)}")
+                            voice = texttospeech.VoiceSelectionParams(
+                                language_code="ko-KR",
+                                name="ko-KR-Standard-A",
+                                ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
+                            )
+                            
+                            audio_config = texttospeech.AudioConfig(
+                                audio_encoding=texttospeech.AudioEncoding.LINEAR16,
+                                sample_rate_hertz=TTS_RATE,
+                            )
+                            
+                            wake_tts_response = tts_client.synthesize_speech(
+                                input=synthesis_input,
+                                voice=voice,
+                                audio_config=audio_config
+                            )
+                            
+                            # 오디오 데이터를 float32로 변환
+                            wake_audio_data = np.frombuffer(wake_tts_response.audio_content, dtype=np.int16)
+                            wake_audio_float32 = wake_audio_data.astype(np.float32) / 32768.0
+                            
+                            # TCP를 통해 스피커 노드로 전송
+                            print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 중...")
+                            
+                            if comm_manager.send_audio_data(wake_audio_float32):
+                                print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 완료 (TTS)")
+                            else:
+                                print(f"[{get_kr_time()}][AUDIO] ❌ 웨이크워드 응답 전송 실패")
+                                
+                        except Exception as e:
+                            print(f"[{get_kr_time()}][ERROR] 웨이크워드 TTS 오류: {str(e)}")
                     
                     # 여기서 마이크 스트림 닫거나 모드 전환 필요 없음 (이미 UDP 입력중)
                     # 이후: 명령어 인식 단계
@@ -441,55 +713,37 @@ def main():
                             intent = "ignore"
                             print(f"[{get_kr_time()}][INTENT] ⚠️ 의도 분석 실패, 기본값 'ignore' 사용")
 
-                        intent_responses = {
-                            "pause_navigation": "네, 일시정지 하겠습니다.",
-                            "resume_follow": "네, 팔로윙을 다시 시작하겠습니다.",
-                            "end_follow": "네, 팔로윙을 종료하겠습니다.",
-                            "ignore": "등록되지 않은 명령입니다. 무시하겠습니다."
+                        # 명령어에 따라 적절한 카테고리와 액션 매핑
+                        # 기존 명령어 처리 로직
+                        intent_action_map = {
+                            "pause_navigation": {"category": "escort", "action": "escort_pause"},
+                            "resume_follow": {"category": "escort", "action": "escort_resume"},
+                            "end_follow": {"category": "escort", "action": "stop_following"},
+                            "ignore": {"category": "common", "action": "basic_sound"}
                         }
-                        response = intent_responses.get(intent, "등록되지 않은 명령입니다.")
-                        print(f"[{get_kr_time()}][RESPONSE] {response}")
                         
-                        # TTS로 응답 생성
-                        print(f"[{get_kr_time()}][TTS] 음성 응답 생성 중...")
-                        synthesis_input = texttospeech.SynthesisInput(text=response)
-                        
-                        voice = texttospeech.VoiceSelectionParams(
-                            language_code="ko-KR",
-                            name="ko-KR-Standard-A",
-                            ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
-                        )
-                        
-                        audio_config = texttospeech.AudioConfig(
-                            audio_encoding=texttospeech.AudioEncoding.LINEAR16,
-                            sample_rate_hertz=TTS_RATE,
-                        )
-                        
-                        try:
-                            tts_response = tts_client.synthesize_speech(
-                                input=synthesis_input,
-                                voice=voice,
-                                audio_config=audio_config
+                        # 명령어가 매핑에 있으면 해당 카테고리/액션 사용, 없으면 기본 응답
+                        if intent in intent_action_map:
+                            mapping = intent_action_map[intent]
+                            print(f"[{get_kr_time()}][RESPONSE] 명령 '{intent}'에 대한 음성 응답 실행")
+                            success = comm_manager.play_voice_command(
+                                mapping["category"], 
+                                mapping["action"]
                             )
-                            
-                            # 오디오 데이터를 float32로 변환
-                            audio_data = np.frombuffer(tts_response.audio_content, dtype=np.int16)
-                            audio_float32 = audio_data.astype(np.float32) / 32768.0
-                            
-                            # TCP를 통해 스피커 노드로 전송
-                            print(f"[{get_kr_time()}][AUDIO] 오디오 데이터 전송 중...")
-                            
-                            if comm_manager.send_audio_data(audio_float32):
-                                print(f"[{get_kr_time()}][AUDIO] 전송 완료")
-                            else:
-                                print(f"[{get_kr_time()}][AUDIO] ❌ 전송 실패")
-                            
-                        except Exception as e:
-                            print(f"[{get_kr_time()}][ERROR] TTS/전송 오류: {str(e)}")
+                            if not success:
+                                # 실패 시 기본 텍스트로 응답
+                                default_response = "등록되지 않은 명령입니다. 무시하겠습니다."
+                                comm_manager.play_tts_response(default_response)
+                        else:
+                            # 기본 응답
+                            default_response = "등록되지 않은 명령입니다. 무시하겠습니다."
+                            print(f"[{get_kr_time()}][RESPONSE] {default_response}")
+                            comm_manager.play_tts_response(default_response)
                             
                     print(f"[{get_kr_time()}][SYSTEM] '리보야' 이후 명령 처리 완료, 다시 웨이크워드 대기 중...")
 
             time.sleep(0.01)
+            
     except KeyboardInterrupt:
         print("[talker_manager] 종료 요청됨.")
     finally:
@@ -497,6 +751,11 @@ def main():
         comm_manager.cleanup()
         udp_thread.join()
         tcp_thread.join()
+        
+        # ROS2 종료
+        talker_node.destroy_node()
+        rclpy.shutdown()
+        
         if 'porcupine' in locals():
             porcupine.delete()
         print(f"[{get_kr_time()}][SYSTEM] 프로그램이 안전하게 종료되었습니다.")
