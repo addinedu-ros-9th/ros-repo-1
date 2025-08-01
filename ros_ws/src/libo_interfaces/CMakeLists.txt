@@ -35,6 +35,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ActivateTracker.srv"
   "srv/EndTask.srv"
   "srv/DeactivateTalker.srv"
+  "msg/TalkCommand.msg"
   DEPENDENCIES builtin_interfaces
 )
 
