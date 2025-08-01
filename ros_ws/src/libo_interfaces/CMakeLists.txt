@@ -28,7 +28,9 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VoiceCommand.msg"  # 음성 명령 메시지
   "srv/CancelNavigation.srv"  # 네비게이션 취소 서비스
   "srv/NavigationResult.srv"  # 네비게이션 결과 서비스
-  "msg/TaskStatus.msg"  # 새로 만든 작업 상태 메시지 추가
+  "msg/TaskStatus.msg"
+  "srv/ActivateDetector.srv"
+  "srv/DeactivateDetector.srv"
   DEPENDENCIES builtin_interfaces
 )
 
