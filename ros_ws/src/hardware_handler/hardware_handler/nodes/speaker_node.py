@@ -59,19 +59,48 @@ class SpeakerNode:
     def receive_audio(self):
         """TCP로 오디오 데이터 수신"""
         print(f"[{get_kr_time()}][INIT] 오디오 수신 대기 중...")
-        while self.is_running:
+        connection_alive = True
+        
+        while self.is_running and connection_alive:
             try:
+                # 소켓에 1초 타임아웃 설정
+                self.tcp_socket.settimeout(1.0)
+                
                 # 데이터 크기 수신 (4바이트)
                 size_data = self.tcp_socket.recv(4)
                 if not size_data:
                     print(f"[{get_kr_time()}][TCP] 서버와의 연결이 종료되었습니다.")
+                    connection_alive = False
                     break
                     
                 total_size = int.from_bytes(size_data, byteorder='big')
                 received_size = 0
                 
-                # 메시지 유형 확인 (웨이크워드 응답인지 명령 응답인지)
-                message_type = "웨이크워드 응답" if total_size < 50000 else "명령 응답"
+                # 데이터 크기에 따른 메시지 유형 분류
+                if total_size < 1024:  # 1KB 미만은 무시
+                    # 매우 작은 데이터는 로그 출력하지 않고 무시
+                    while received_size < total_size and self.is_running:
+                        chunk_size = min(CHUNK * 4, total_size - received_size)
+                        data = self.tcp_socket.recv(chunk_size)
+                        if not data:
+                            break
+                        self.audio_queue.put(data)
+                        received_size += len(data)
+                    continue
+                
+                # 메시지 유형을 크기에 따라 더 세분화
+                if total_size < 10240:  # 10KB 미만
+                    message_type = "짧은 음성 응답"
+                    estimated_time = total_size / (RATE * CHANNELS * 4) 
+                elif total_size < 51200:  # 50KB 미만
+                    message_type = "중간 길이 음성 응답"
+                    estimated_time = total_size / (RATE * CHANNELS * 4)
+                elif total_size < 204800:  # 200KB 미만
+                    message_type = "일반 음성 응답"
+                    estimated_time = total_size / (RATE * CHANNELS * 4)
+                else:
+                    message_type = "긴 음성 응답"
+                    estimated_time = total_size / (RATE * CHANNELS * 4)
                 
                 # 전체 데이터 수신
                 while received_size < total_size and self.is_running:
@@ -82,11 +111,20 @@ class SpeakerNode:
                     self.audio_queue.put(data)
                     received_size += len(data)
                 
-                # 전체 데이터 수신 완료 후 디버깅 메시지
-                print(f"[{get_kr_time()}][AUDIO] 📢 {message_type} 수신 완료: {received_size/1024:.1f}KB ({received_size}/{total_size} bytes)")
+                # 데이터 크기가 일정 이상일 때만 수신 완료 메시지 출력
+                kb_size = received_size / 1024
+                print(f"[{get_kr_time()}][AUDIO] 📢 {message_type} 수신 완료: {kb_size:.1f}KB | 예상 재생 시간: {estimated_time:.2f}초")
                     
+            except socket.timeout:
+                # 타임아웃은 정상 - 조용히 넘어감
+                pass
+            except ConnectionResetError:
+                print(f"[{get_kr_time()}][TCP] 서버에 의해 연결이 재설정되었습니다.")
+                connection_alive = False
+                break
             except Exception as e:
                 print(f"[{get_kr_time()}][ERROR] 수신 오류: {str(e)}")
+                connection_alive = False
                 break
                 
         # 연결이 끊어진 경우 재연결 시도
@@ -100,10 +138,17 @@ class SpeakerNode:
         print(f"[{get_kr_time()}][INIT] 오디오 재생 스레드 시작")
         audio_chunk_count = 0  # 재생된 청크 수 카운터
         total_bytes_played = 0  # 총 재생된 바이트 수
+        start_time = None  # 재생 시작 시간
+        prev_queue_empty = True  # 이전 큐 상태 (빈 상태였는지)
         
         while self.is_running:
             try:
                 if not self.audio_queue.empty():
+                    # 재생 시작 시간 기록
+                    if prev_queue_empty:
+                        start_time = time.time()
+                        prev_queue_empty = False
+                    
                     data = self.audio_queue.get()
                     audio_data = np.frombuffer(data, dtype=np.float32)
                     self.stream.write(audio_data.tobytes())
@@ -112,10 +157,23 @@ class SpeakerNode:
                     audio_chunk_count += 1
                     total_bytes_played += len(data)
                     
-                    # 매 5개 청크마다 디버깅 정보 출력
-                    if audio_chunk_count % 5 == 0:
-                        print(f"[{get_kr_time()}][AUDIO] 🔊 재생 중: {audio_chunk_count}개 청크, "
-                              f"총 {total_bytes_played/1024:.1f}KB 재생됨")
+                    # 데이터 크기가 10KB 이상이고, 20개 청크마다 디버깅 정보 출력
+                    if audio_chunk_count % 20 == 0 and total_bytes_played > 10240:
+                        elapsed = time.time() - start_time if start_time else 0
+                        print(f"[{get_kr_time()}][AUDIO] 🔊 재생 중: {audio_chunk_count}개 청크 | "
+                              f"{total_bytes_played/1024:.1f}KB | 경과 시간: {elapsed:.2f}초")
+                else:
+                    # 큐가 빈 상태로 변경된 경우 (재생 완료)
+                    if not prev_queue_empty and audio_chunk_count > 0 and total_bytes_played > 1024:
+                        elapsed = time.time() - start_time if start_time else 0
+                        print(f"[{get_kr_time()}][AUDIO] ✅ 재생 완료: {audio_chunk_count}개 청크 | "
+                              f"{total_bytes_played/1024:.1f}KB | 소요 시간: {elapsed:.2f}초")
+                        audio_chunk_count = 0
+                        total_bytes_played = 0
+                    
+                    prev_queue_empty = True
+                    time.sleep(0.01)  # 큐가 비었을 때 CPU 사용량 감소
+                    
             except Exception as e:
                 print(f"[{get_kr_time()}][ERROR] 재생 오류: {str(e)}")
 
