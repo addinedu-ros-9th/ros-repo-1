@@ -10,6 +10,33 @@ from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
 import time  # 시간 관련 기능
 import uuid  # 고유 ID 생성
+import random  # 랜덤 좌표 생성용
+
+# 좌표 매핑 딕셔너리 (A1~E9까지 총 45개 좌표)
+LOCATION_COORDINATES = {
+    # A열 좌표들
+    'A1': (1.2, 3.4), 'A2': (2.1, 4.5), 'A3': (3.3, 2.8), 'A4': (4.7, 1.9), 'A5': (5.2, 6.1),
+    'A6': (6.8, 3.7), 'A7': (7.4, 5.2), 'A8': (8.1, 2.3), 'A9': (9.5, 4.8),
+    
+    # B열 좌표들
+    'B1': (1.8, 7.2), 'B2': (2.9, 8.4), 'B3': (3.6, 6.9), 'B4': (4.2, 9.1), 'B5': (5.8, 7.6),
+    'B6': (6.3, 8.9), 'B7': (7.1, 6.4), 'B8': (8.7, 9.3), 'B9': (9.2, 7.8),
+    
+    # C열 좌표들
+    'C1': (1.5, 1.2), 'C2': (2.4, 2.6), 'C3': (3.8, 1.8), 'C4': (4.5, 3.2), 'C5': (5.1, 1.5),
+    'C6': (6.2, 2.9), 'C7': (7.6, 1.3), 'C8': (8.3, 3.7), 'C9': (9.8, 2.1),
+    
+    # D열 좌표들
+    'D1': (1.9, 5.8), 'D2': (2.7, 6.3), 'D3': (3.4, 5.1), 'D4': (4.8, 6.7), 'D5': (5.3, 5.4),
+    'D6': (6.1, 7.2), 'D7': (7.9, 5.9), 'D8': (8.4, 6.8), 'D9': (9.1, 5.6),
+    
+    # E열 좌표들
+    'E1': (1.3, 8.7), 'E2': (2.6, 9.2), 'E3': (3.9, 8.1), 'E4': (4.1, 9.8), 'E5': (5.7, 8.3),
+    'E6': (6.5, 9.5), 'E7': (7.2, 8.6), 'E8': (8.9, 9.7), 'E9': (9.4, 8.4),
+    
+    # Base 좌표 (스테이지 3 완료 후 돌아갈 위치) - E3로 고정
+    'Base': (3.9, 8.1)  # E3 좌표와 동일
+}
 
 class Robot:  # 로봇 정보를 담는 클래스
     def __init__(self, robot_id):  # Robot 객체 초기화
@@ -141,6 +168,10 @@ class TaskManager(Node):
     
     def publish_robot_status(self):  # 로봇 상태 발행
         """1초마다 현재 활성 로봇들의 OverallStatus 발행"""
+        if not self.robots:  # 로봇이 없으면 로그만 출력
+            self.get_logger().debug(f'📡 발행할 로봇이 없음 (등록된 로봇: 0개)')
+            return
+            
         for robot_id, robot in self.robots.items():  # 현재 활성 로봇들에 대해 반복 (robot 객체도 가져옴)
             status_msg = OverallStatus()  # OverallStatus 메시지 생성
             status_msg.timestamp = self.get_clock().now().to_msg()  # 현재 시간 설정
@@ -153,6 +184,7 @@ class TaskManager(Node):
             status_msg.position_yaw = 0.0  # 기본값: 방향 알 수 없음
             
             self.status_publisher.publish(status_msg)  # 메시지 발행
+            self.get_logger().debug(f'📡 로봇 상태 발행: {robot_id} → {"사용가능" if robot.is_available else "사용중"}')
     
     def publish_task_status(self):  # 활성 작업들의 상태 발행
         """1초마다 현재 활성 Task들의 TaskStatus 발행"""
@@ -197,13 +229,20 @@ class TaskManager(Node):
         else:
             self.get_logger().warning(f'⚠️  로봇 <{request.robot_id}> 상태 변경 실패 - 로봇이 존재하지 않음')
         
-        # Navigator에게 더미 좌표 전송 테스트
-        self.get_logger().info(f'🧭 Navigator 통신 테스트 시작...')
-        navigator_success = self.send_goal_to_navigator(1.5, 2.3)  # 더미 좌표 (1.5, 2.3)
-        if navigator_success:
-            self.get_logger().info(f'📤 Navigator 요청 전송됨 - 응답은 비동기로 처리됩니다')
+        # 새로운 Task의 첫 번째 스테이지 좌표 전송
+        self.get_logger().info(f'🚀 새로운 Task의 Stage 1 좌표 전송 시작...')
+        if self.send_coordinate_for_stage(new_task):
+            self.get_logger().info(f'✅ Stage 1 좌표 전송 완료')
         else:
-            self.get_logger().warning(f'⚠️  Navigator 요청 전송 실패')
+            self.get_logger().error(f'❌ Stage 1 좌표 전송 실패')
+        
+        # Navigator에게 더미 좌표 전송 테스트 (기존 코드 제거)
+        # self.get_logger().info(f'🧭 Navigator 통신 테스트 시작...')
+        # navigator_success = self.send_goal_to_navigator(1.5, 2.3)  # 더미 좌표 (1.5, 2.3)
+        # if navigator_success:
+        #     self.get_logger().info(f'📤 Navigator 요청 전송됨 - 응답은 비동기로 처리됩니다')
+        # else:
+        #     self.get_logger().warning(f'⚠️  Navigator 요청 전송 실패')
         
         # 응답 설정
         response.success = True
@@ -215,13 +254,17 @@ class TaskManager(Node):
     
     def set_robot_available(self, robot_id, available):  # 로봇 사용 가능 상태 설정
         """특정 로봇의 사용 가능 상태를 설정하는 메서드"""
+        self.get_logger().info(f'🔍 로봇 상태 변경 시도: {robot_id} → {"사용가능" if available else "사용중"}')
+        self.get_logger().info(f'📋 현재 등록된 로봇들: {list(self.robots.keys())}')
+        
         if robot_id in self.robots:  # 로봇이 존재한다면
+            old_status = self.robots[robot_id].is_available  # 이전 상태 저장
             self.robots[robot_id].set_available(available)  # 상태 변경
             status_text = "사용가능" if available else "사용중"
-            self.get_logger().info(f'🔄 로봇 <{robot_id}> 상태 변경: {status_text}')
+            self.get_logger().info(f'🔄 로봇 <{robot_id}> 상태 변경 성공: {old_status} → {available} ({status_text})')
             return True
         else:
-            self.get_logger().warning(f'❌ 로봇 <{robot_id}> 찾을 수 없음')
+            self.get_logger().warning(f'❌ 로봇 <{robot_id}> 찾을 수 없음 - 등록된 로봇: {list(self.robots.keys())}')
             return False
     
     def set_robot_unavailable_for_task(self, robot_id):  # Task 할당 시 로봇을 사용중으로 설정
@@ -263,6 +306,37 @@ class TaskManager(Node):
                 
         except Exception as e:
             self.get_logger().error(f'❌ Navigator 통신 중 오류: {e}')
+            return False
+    
+    def send_coordinate_for_stage(self, task):  # 스테이지별로 해당하는 좌표 전송
+        """현재 스테이지에 따라 해당하는 좌표를 Navigator에게 전송하는 메서드"""
+        if not self.tasks:  # 활성 task가 없으면 리턴
+            self.get_logger().warning(f'⚠️  활성 task가 없어서 좌표 전송 불가')
+            return False
+        
+        current_stage = task.stage  # 현재 스테이지
+        target_location = None  # 목표 위치
+        
+        if current_stage == 1:  # 스테이지 1: CallLocation으로 이동
+            target_location = task.call_location
+            self.get_logger().info(f'🎯 Stage 1: CallLocation <{target_location}> 으로 이동')
+        elif current_stage == 2:  # 스테이지 2: GoalLocation으로 이동
+            target_location = task.goal_location
+            self.get_logger().info(f'🎯 Stage 2: GoalLocation <{target_location}> 으로 이동')
+        elif current_stage == 3:  # 스테이지 3: Base로 이동
+            target_location = 'Base'
+            self.get_logger().info(f'🎯 Stage 3: Base <{target_location}> 으로 이동')
+        else:
+            self.get_logger().warning(f'⚠️  알 수 없는 스테이지: {current_stage}')
+            return False
+        
+        # 좌표 딕셔너리에서 해당 위치의 좌표 찾기
+        if target_location in LOCATION_COORDINATES:
+            x, y = LOCATION_COORDINATES[target_location]  # 좌표 추출
+            self.get_logger().info(f'📍 좌표 매핑: {target_location} → ({x}, {y})')
+            return self.send_goal_to_navigator(x, y)  # Navigator에게 좌표 전송
+        else:
+            self.get_logger().error(f'❌ 위치 <{target_location}> 에 대한 좌표를 찾을 수 없음')
             return False
     
     def navigator_response_callback(self, future):  # Navigator 응답 콜백
@@ -340,6 +414,13 @@ class TaskManager(Node):
             # Stage 3 이하일 때 현재 상태 로그
             stage_desc = {1: "시작", 2: "진행중", 3: "완료직전"}.get(current_task.stage, f"Stage {current_task.stage}")
             self.get_logger().info(f'📍 현재 상태: {stage_icons.get(current_task.stage, "⚪")} Stage {current_task.stage} ({stage_desc})')
+            
+            # 스테이지가 바뀌었으므로 해당하는 좌표를 Navigator에게 전송
+            self.get_logger().info(f'🚀 새로운 스테이지에 맞는 좌표 전송 시작...')
+            if self.send_coordinate_for_stage(current_task):
+                self.get_logger().info(f'✅ 스테이지 {current_task.stage} 좌표 전송 완료')
+            else:
+                self.get_logger().error(f'❌ 스테이지 {current_task.stage} 좌표 전송 실패')
 
     def test_navigator_communication(self):  # Navigator 통신 테스트
         """더미 좌표로 Navigator 통신을 테스트하는 메서드"""
