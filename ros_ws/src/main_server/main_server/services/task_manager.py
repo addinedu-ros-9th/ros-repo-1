@@ -260,20 +260,40 @@ class TaskManager(Node):
         self.get_logger().info(f'   - Call Location: {request.call_location}')
         self.get_logger().info(f'   - Goal Location: {request.goal_location}')
         
-        # 새로운 Task 객체 생성
-        new_task = Task(request.robot_id, request.task_type, request.call_location, request.goal_location)  # Task 객체 생성
+        # escort task의 경우 로봇 ID를 무시하고 활성화된 로봇 중 하나를 임의로 선택
+        selected_robot_id = request.robot_id
+        
+        if request.task_type == 'escort' or request.task_type == 'assist':
+            self.get_logger().info(f'🚶 Escort/Assist task 감지됨 - 로봇 자동 할당 시작...')
+            
+            # 사용 가능한 로봇들 찾기
+            available_robots = self.get_available_robots()
+            
+            if not available_robots:
+                self.get_logger().error(f'❌ 사용 가능한 로봇이 없음 - Escort/Assist task 거절')
+                response.success = False
+                response.message = "사용 가능한 로봇이 없어서 Escort/Assist task를 수행할 수 없습니다."
+                return response
+            
+            # 사용 가능한 로봇 중 하나를 임의로 선택
+            import random
+            selected_robot_id = random.choice(available_robots)
+            self.get_logger().info(f'🎲 로봇 자동 할당: {selected_robot_id} (사용 가능한 로봇: {available_robots})')
+        
+        # 새로운 Task 객체 생성 (선택된 로봇 ID 사용)
+        new_task = Task(selected_robot_id, request.task_type, request.call_location, request.goal_location)  # Task 객체 생성
         self.tasks.append(new_task)  # 작업 목록에 추가
         
         self.get_logger().info(f'✅ 새로운 작업 생성됨: {new_task.get_info()}')  # 생성된 작업 정보 출력
         
         # Task 생성 후 자동으로 로봇을 사용중으로 설정
-        if self.set_robot_unavailable_for_task(request.robot_id):
-            self.get_logger().info(f'🔒 로봇 <{request.robot_id}> 자동으로 사용중 상태로 변경됨')
+        if self.set_robot_unavailable_for_task(selected_robot_id):
+            self.get_logger().info(f'🔒 로봇 <{selected_robot_id}> 자동으로 사용중 상태로 변경됨')
         else:
-            self.get_logger().warning(f'⚠️  로봇 <{request.robot_id}> 상태 변경 실패 - 로봇이 존재하지 않음')
+            self.get_logger().warning(f'⚠️  로봇 <{selected_robot_id}> 상태 변경 실패 - 로봇이 존재하지 않음')
         
         # 로봇의 state를 task type과 동일하게 변경
-        if request.robot_id in self.robots:
+        if selected_robot_id in self.robots:
             # task type을 RobotState enum으로 변환
             task_type_to_state = {
                 'escort': RobotState.ESCORT,
@@ -283,12 +303,12 @@ class TaskManager(Node):
             
             if request.task_type in task_type_to_state:
                 new_state = task_type_to_state[request.task_type]
-                old_state, _ = self.robots[request.robot_id].change_state(new_state)
-                self.get_logger().info(f'🔄 로봇 <{request.robot_id}> 상태 변경: {old_state.value} → {new_state.value} (Task Type: {request.task_type})')
+                old_state, _ = self.robots[selected_robot_id].change_state(new_state)
+                self.get_logger().info(f'🔄 로봇 <{selected_robot_id}> 상태 변경: {old_state.value} → {new_state.value} (Task Type: {request.task_type})')
             else:
                 self.get_logger().warning(f'⚠️  알 수 없는 Task Type: {request.task_type}')
         else:
-            self.get_logger().warning(f'⚠️  로봇 <{request.robot_id}> 찾을 수 없음 - state 변경 불가')
+            self.get_logger().warning(f'⚠️  로봇 <{selected_robot_id}> 찾을 수 없음 - state 변경 불가')
         
         # 새로운 Task의 첫 번째 스테이지 좌표 전송
         self.get_logger().info(f'🚀 새로운 Task의 Stage 1 좌표 전송 시작...')
@@ -299,7 +319,7 @@ class TaskManager(Node):
         
         # 응답 설정
         response.success = True
-        response.message = f"Task request 잘 받았음! Task ID: {new_task.task_id}"
+        response.message = f"Task request 잘 받았음! Task ID: {new_task.task_id}, 할당된 로봇: {selected_robot_id}"
         
         self.get_logger().info(f'✅ Task Request 처리 완료: {response.message}')
         
