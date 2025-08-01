@@ -3,6 +3,7 @@
 import rclpy
 from rclpy.node import Node
 from libo_interfaces.srv import TaskRequest
+from libo_interfaces.srv import SetGoal  # SetGoal 서비스 추가
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
@@ -60,6 +61,9 @@ class TaskManager(Node):
             self.task_request_callback
         )
         
+        # Navigator로 SetGoal 보내는 서비스 클라이언트 생성
+        self.navigator_client = self.create_client(SetGoal, 'set_navigation_goal')
+        
         # Heartbeat 토픽 구독자 생성
         self.heartbeat_subscription = self.create_subscription(
             Heartbeat,  # 메시지 타입
@@ -99,6 +103,7 @@ class TaskManager(Node):
         self.get_logger().info('💓 Heartbeat 구독 시작됨 - heartbeat 토픽 모니터링 중...')
         self.get_logger().info('📡 OverallStatus 발행 시작됨 - robot_status 토픽으로 1초마다 발행...')
         self.get_logger().info('📋 TaskStatus 발행 시작됨 - task_status 토픽으로 1초마다 발행...')  # TaskStatus 로그 추가
+        self.get_logger().info('🧭 Navigator 클라이언트 준비됨 - set_navigation_goal 서비스 연결...')  # Navigator 클라이언트 로그 추가
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -182,6 +187,13 @@ class TaskManager(Node):
         else:
             self.get_logger().warning(f'⚠️  로봇 <{request.robot_id}> 상태 변경 실패 - 로봇이 존재하지 않음')
         
+        # Navigator에게 더미 좌표 전송 테스트
+        self.get_logger().info(f'🧭 Navigator 통신 테스트 시작...')
+        if self.send_goal_to_navigator(1.5, 2.3):  # 더미 좌표 (1.5, 2.3)
+            self.get_logger().info(f'✅ Navigator 통신 성공!')
+        else:
+            self.get_logger().warning(f'⚠️  Navigator 통신 실패')
+        
         # 응답 설정
         response.success = True
         response.message = f"Task request 잘 받았음! Task ID: {new_task.task_id}"
@@ -216,6 +228,49 @@ class TaskManager(Node):
             if robot.is_available:  # is_active 체크 제거 (robots에 있다는 것 자체가 활성)
                 available_robots.append(robot_id)
         return available_robots
+    
+    def send_goal_to_navigator(self, x, y):  # Navigator에게 목표 좌표 전송
+        """Navigator에게 SetGoal 서비스 요청을 보내는 메서드"""
+        # Navigator 서비스가 준비될 때까지 대기
+        if not self.navigator_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ Navigator 서비스를 찾을 수 없음 (set_navigation_goal)')
+            return False
+        
+        # SetGoal 요청 생성
+        request = SetGoal.Request()
+        request.x = x  # 목표 x 좌표
+        request.y = y  # 목표 y 좌표
+        
+        self.get_logger().info(f'🧭 Navigator에게 목표 좌표 전송: ({x}, {y})')
+        
+        try:
+            # 비동기 서비스 호출
+            future = self.navigator_client.call_async(request)
+            # 간단한 동기 방식으로 응답 대기 (미니멀 시스템)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=5.0)
+            
+            if future.done():
+                response = future.result()
+                if response.success:
+                    self.get_logger().info(f'✅ Navigator 응답 성공: {response.message}')
+                    return True
+                else:
+                    self.get_logger().warning(f'⚠️  Navigator 응답 실패: {response.message}')
+                    return False
+            else:
+                self.get_logger().error('❌ Navigator 응답 타임아웃')
+                return False
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ Navigator 통신 중 오류: {e}')
+            return False
+    
+    def test_navigator_communication(self):  # Navigator 통신 테스트
+        """더미 좌표로 Navigator 통신을 테스트하는 메서드"""
+        test_x = 1.0  # 더미 x 좌표
+        test_y = 2.0  # 더미 y 좌표
+        self.get_logger().info(f'🧪 Navigator 통신 테스트 시작: ({test_x}, {test_y})')
+        return self.send_goal_to_navigator(test_x, test_y)
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)

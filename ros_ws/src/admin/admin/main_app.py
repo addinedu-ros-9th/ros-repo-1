@@ -12,6 +12,7 @@ from ament_index_python.packages import get_package_share_directory
 
 from admin.tabs.task_request_tab import TaskRequestTab # 우리가 만든 TaskRequestTab을 임포트
 from admin.tabs.heartbeat_monitor_tab import HeartbeatMonitorTab # 새로 만든 HeartbeatMonitorTab을 임포트
+from admin.tabs.navigator_tab import NavigatorTab # 새로 만든 NavigatorTab을 임포트
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 임포트 (String 대신)
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 임포트
 
@@ -41,6 +42,10 @@ class AdminWindow(QMainWindow):
         # Heartbeat Monitor 탭 추가
         self.heartbeat_monitor_tab = HeartbeatMonitorTab(self.ros_node) # HeartbeatMonitorTab 객체를 생성하고 메인 노드를 전달
         self.tabWidget.addTab(self.heartbeat_monitor_tab, "💓 Heartbeat 모니터") # 'tabWidget'에 새 탭을 추가
+
+        # Navigator 탭 추가
+        self.navigator_tab = NavigatorTab(self.ros_node) # NavigatorTab 객체를 생성하고 메인 노드를 전달
+        self.tabWidget.addTab(self.navigator_tab, "🧭 Navigator") # 'tabWidget'에 새 탭을 추가
 
     def init_robot_status_subscriber(self):  # OverallStatus 구독자 초기화
         """robot_status 토픽을 구독해서 로봇 상태를 실시간 업데이트"""
@@ -155,6 +160,10 @@ class AdminWindow(QMainWindow):
         if hasattr(self, 'heartbeat_monitor_tab') and hasattr(self.heartbeat_monitor_tab, 'node'):
             rclpy.spin_once(self.heartbeat_monitor_tab.node, timeout_sec=0)
 
+        # navigator_tab에 server_node가 존재하면 그것도 스핀
+        if hasattr(self, 'navigator_tab') and hasattr(self.navigator_tab, 'server_node'):
+            rclpy.spin_once(self.navigator_tab.server_node, timeout_sec=0)
+
     def init_robot_timeout_timer(self):  # 로봇 타임아웃 체크 타이머 초기화
         """5초마다 비활성 로봇들을 제거하는 타이머"""
         self.robot_timeout_timer = QTimer(self)  # 타이머 생성
@@ -191,6 +200,7 @@ class AdminWindow(QMainWindow):
     def closeEvent(self, event):
         self.task_request_tab.shutdown() # TaskRequest 탭의 정리 함수 호출
         self.heartbeat_monitor_tab.shutdown() # Heartbeat 탭의 정리 함수도 호출
+        self.navigator_tab.shutdown() # Navigator 탭의 정리 함수도 호출
         self.ros_node.destroy_node() # 메인 ROS 노드 종료
         rclpy.shutdown() # ROS2 시스템 전체 종료
         event.accept() # 창 닫기 이벤트 수락
