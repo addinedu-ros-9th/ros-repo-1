@@ -22,11 +22,11 @@ setup(
     entry_points={
         'console_scripts': [
             'io_controller_node = hardware_handler.nodes.io_controller_node:main',
-            'cam_sender = hardware_handler.nodes.cam_sender:main',
             'mic_streamer = hardware_handler.nodes.mic_streamer:main',
             'speaker_node = hardware_handler.nodes.speaker_node:main',
             'rgb_led_controller = hardware_handler.nodes.rgb_led_controller:main',
             'heartbeat_sender = hardware_handler.nodes.heartbeat_sender:main',
+            'cam_sender = hardware_handler.nodes.cam_sender:main',
         ],
     },
 )
