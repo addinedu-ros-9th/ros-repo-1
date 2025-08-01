@@ -18,13 +18,17 @@ class AiServerControlTab(QWidget):
         super().__init__(parent)
         self.ros_node = ros_node
         self.detector_log = []
+        self.server_active = False  # 서버 상태 (기본값: OFF)
         
-        # ROS 클라이언트들
-        self.activate_detector_client = self.ros_node.create_client(ActivateDetector, 'activate_detector')
-        self.deactivate_detector_client = self.ros_node.create_client(DeactivateDetector, 'deactivate_detector')
+        # ROS 서비스 서버들 (초기에는 None)
+        self.activate_detector_service = None
+        self.deactivate_detector_service = None
         
         self.init_ui()
-        self.init_connections()
+        
+        # 초기 로그 메시지
+        self.log_detector_message("👁️ AI Server Detector Control 탭이 시작되었습니다.")
+        self.log_detector_message("🔴 서버가 비활성화 상태입니다. 'Server ON' 버튼을 눌러 활성화하세요.")
     
     def init_ui(self):
         """UI 초기화 - ai_server_control_tab.ui 파일 로드"""
@@ -32,143 +36,129 @@ class AiServerControlTab(QWidget):
         uic.loadUi(ui_file_path, self)
         
         # 시그널 연결
-        self.activate_detector_button.clicked.connect(self.activate_detector)
-        self.deactivate_detector_button.clicked.connect(self.deactivate_detector)
+        self.toggle_server_button.clicked.connect(self.toggle_server)
         self.clear_log_button.clicked.connect(self.clear_log)
         
-        # 초기 로그 메시지
-        self.log_detector_message("👁️ AI Server Detector Control 탭이 시작되었습니다.")
-        self.log_detector_message("로봇 ID를 입력하고 Activate/Deactivate 버튼을 사용하세요.")
+        # 초기 버튼 상태 설정 (서버가 비활성화 상태이므로 OFF로 표시)
+        self.toggle_server_button.setText("🔴 Server OFF")
+        self.toggle_server_button.setStyleSheet("background-color: #e74c3c; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; font-size: 12px; min-height: 30px;")
     
-    def init_connections(self):
-        """서비스 연결 상태 확인"""
-        # 서비스 연결 상태를 주기적으로 확인
-        self.connection_timer = QTimer()
-        self.connection_timer.timeout.connect(self.check_service_connections)
-        self.connection_timer.start(5000)  # 5초마다 확인
-        
-        # 초기 연결 상태 확인
-        self.check_service_connections()
-    
-    def check_service_connections(self):
-        """서비스 연결 상태 확인 및 버튼 활성화/비활성화"""
-        activate_available = self.activate_detector_client.wait_for_service(timeout_sec=0.1)
-        deactivate_available = self.deactivate_detector_client.wait_for_service(timeout_sec=0.1)
-        
-        # ActivateDetector 서비스 상태
-        if activate_available:
-            self.activate_detector_button.setEnabled(True)
-            self.activate_detector_button.setToolTip("ActivateDetector 서비스 사용 가능")
+    def toggle_server(self):
+        """서버 ON/OFF 토글"""
+        if self.server_active:
+            # 서버 비활성화
+            self.stop_server()
+            self.toggle_server_button.setText("🔴 Server OFF")
+            self.toggle_server_button.setStyleSheet("background-color: #e74c3c; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; font-size: 12px; min-height: 30px;")
+            self.log_detector_message("🔴 서버가 비활성화되었습니다.")
         else:
-            self.activate_detector_button.setEnabled(False)
-            self.activate_detector_button.setToolTip("ActivateDetector 서비스를 찾을 수 없음")
-        
-        # DeactivateDetector 서비스 상태
-        if deactivate_available:
-            self.deactivate_detector_button.setEnabled(True)
-            self.deactivate_detector_button.setToolTip("DeactivateDetector 서비스 사용 가능")
-        else:
-            self.deactivate_detector_button.setEnabled(False)
-            self.deactivate_detector_button.setToolTip("DeactivateDetector 서비스를 찾을 수 없음")
-        
-        # 연결 상태 로그 (변경사항이 있을 때만)
-        if not hasattr(self, '_last_activate_status'):
-            self._last_activate_status = None
-            self._last_deactivate_status = None
-        
-        if self._last_activate_status != activate_available:
-            if activate_available:
-                self.log_detector_message("✅ ActivateDetector 서비스 연결됨")
-            else:
-                self.log_detector_message("❌ ActivateDetector 서비스 연결 끊어짐")
-            self._last_activate_status = activate_available
-        
-        if self._last_deactivate_status != deactivate_available:
-            if deactivate_available:
-                self.log_detector_message("✅ DeactivateDetector 서비스 연결됨")
-            else:
-                self.log_detector_message("❌ DeactivateDetector 서비스 연결 끊어짐")
-            self._last_deactivate_status = deactivate_available
+            # 서버 활성화
+            self.start_server()
+            self.toggle_server_button.setText("🟢 Server ON")
+            self.toggle_server_button.setStyleSheet("background-color: #27ae60; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; font-size: 12px; min-height: 30px;")
+            self.log_detector_message("🟢 서버가 활성화되었습니다. TaskManager 요청을 받을 준비가 되었습니다.")
     
-    def activate_detector(self):
-        """ActivateDetector 서비스 호출"""
-        robot_id = self.detector_robot_id_edit.text().strip()
-        
-        if not robot_id:
-            self.log_detector_message("❌ 로봇 ID를 입력해주세요.")
-            return
-        
-        if not self.activate_detector_client.wait_for_service(timeout_sec=1.0):
-            self.log_detector_message("❌ ActivateDetector 서비스를 찾을 수 없습니다.")
-            return
-        
-        # 버튼 비활성화 (중복 클릭 방지)
-        self.activate_detector_button.setEnabled(False)
-        self.activate_detector_button.setText("⏳ Activating...")
-        
-        # 서비스 요청
-        request = ActivateDetector.Request()
-        request.robot_id = robot_id
-        
-        future = self.activate_detector_client.call_async(request)
-        future.add_done_callback(self.activate_detector_callback)
-        
-        self.log_detector_message(f"📤 ActivateDetector 요청 전송: {robot_id}")
-    
-    def activate_detector_callback(self, future):
-        """ActivateDetector 응답 처리"""
+    def start_server(self):
+        """ActivateDetector/DeactivateDetector 서비스 서버 시작"""
         try:
-            response = future.result()
-            if response.success:
-                self.log_detector_message(f"✅ ActivateDetector 성공: {response.message}")
-            else:
-                self.log_detector_message(f"❌ ActivateDetector 실패: {response.message}")
+            # ActivateDetector 서비스 서버 생성
+            self.activate_detector_service = self.ros_node.create_service(
+                ActivateDetector,
+                'activate_detector',
+                self.activate_detector_service_callback
+            )
+            
+            # DeactivateDetector 서비스 서버 생성
+            self.deactivate_detector_service = self.ros_node.create_service(
+                DeactivateDetector,
+                'deactivate_detector',
+                self.deactivate_detector_service_callback
+            )
+            
+            self.server_active = True
+            self.log_detector_message("✅ ActivateDetector/DeactivateDetector 서비스 서버가 시작되었습니다.")
+            
         except Exception as e:
-            self.log_detector_message(f"❌ ActivateDetector 오류: {str(e)}")
-        finally:
-            # 버튼 상태 복원
-            self.activate_detector_button.setEnabled(True)
-            self.activate_detector_button.setText("🟢 Activate Detector")
+            self.log_detector_message(f"❌ 서버 시작 실패: {str(e)}")
+            self.server_active = False
     
-    def deactivate_detector(self):
-        """DeactivateDetector 서비스 호출"""
-        robot_id = self.detector_robot_id_edit.text().strip()
-        
-        if not robot_id:
-            self.log_detector_message("❌ 로봇 ID를 입력해주세요.")
-            return
-        
-        if not self.deactivate_detector_client.wait_for_service(timeout_sec=1.0):
-            self.log_detector_message("❌ DeactivateDetector 서비스를 찾을 수 없습니다.")
-            return
-        
-        # 버튼 비활성화 (중복 클릭 방지)
-        self.deactivate_detector_button.setEnabled(False)
-        self.deactivate_detector_button.setText("⏳ Deactivating...")
-        
-        # 서비스 요청
-        request = DeactivateDetector.Request()
-        request.robot_id = robot_id
-        
-        future = self.deactivate_detector_client.call_async(request)
-        future.add_done_callback(self.deactivate_detector_callback)
-        
-        self.log_detector_message(f"📤 DeactivateDetector 요청 전송: {robot_id}")
-    
-    def deactivate_detector_callback(self, future):
-        """DeactivateDetector 응답 처리"""
+    def stop_server(self):
+        """ActivateDetector/DeactivateDetector 서비스 서버 중지"""
         try:
-            response = future.result()
-            if response.success:
-                self.log_detector_message(f"✅ DeactivateDetector 성공: {response.message}")
-            else:
-                self.log_detector_message(f"❌ DeactivateDetector 실패: {response.message}")
+            # 서비스 서버 제거
+            if self.activate_detector_service:
+                self.ros_node.destroy_service(self.activate_detector_service)
+                self.activate_detector_service = None
+            
+            if self.deactivate_detector_service:
+                self.ros_node.destroy_service(self.deactivate_detector_service)
+                self.deactivate_detector_service = None
+            
+            self.server_active = False
+            self.log_detector_message("🛑 ActivateDetector/DeactivateDetector 서비스 서버가 중지되었습니다.")
+            
         except Exception as e:
-            self.log_detector_message(f"❌ DeactivateDetector 오류: {str(e)}")
-        finally:
-            # 버튼 상태 복원
-            self.deactivate_detector_button.setEnabled(True)
-            self.deactivate_detector_button.setText("🔴 Deactivate Detector")
+            self.log_detector_message(f"❌ 서버 중지 실패: {str(e)}")
+    
+    def activate_detector_service_callback(self, request, response):
+        """ActivateDetector 서비스 요청 처리 (TaskManager에서 호출)"""
+        if not self.server_active:
+            response.success = False
+            response.message = "서버가 비활성화 상태입니다."
+            return response
+        
+        robot_id = request.robot_id
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        self.log_detector_message(f"📤 ActivateDetector 요청 수신: {robot_id} at {current_time}")
+        
+        try:
+            # 여기서 실제 감지기 활성화 로직 구현
+            # 현재는 시뮬레이션으로 성공 응답
+            response.success = True
+            response.message = f"감지기 활성화 완료: {robot_id}"
+            
+            self.log_detector_message(f"✅ ActivateDetector 처리 완료: {robot_id}")
+            self.log_detector_message(f"📤 응답 전송: SUCCESS - {response.message}")
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"감지기 활성화 실패: {str(e)}"
+            
+            self.log_detector_message(f"❌ ActivateDetector 처리 실패: {str(e)}")
+            self.log_detector_message(f"📤 응답 전송: FAILED - {response.message}")
+        
+        return response
+    
+    def deactivate_detector_service_callback(self, request, response):
+        """DeactivateDetector 서비스 요청 처리 (TaskManager에서 호출)"""
+        if not self.server_active:
+            response.success = False
+            response.message = "서버가 비활성화 상태입니다."
+            return response
+        
+        robot_id = request.robot_id
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        self.log_detector_message(f"📤 DeactivateDetector 요청 수신: {robot_id} at {current_time}")
+        
+        try:
+            # 여기서 실제 감지기 비활성화 로직 구현
+            # 현재는 시뮬레이션으로 성공 응답
+            response.success = True
+            response.message = f"감지기 비활성화 완료: {robot_id}"
+            
+            self.log_detector_message(f"✅ DeactivateDetector 처리 완료: {robot_id}")
+            self.log_detector_message(f"📤 응답 전송: SUCCESS - {response.message}")
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"감지기 비활성화 실패: {str(e)}"
+            
+            self.log_detector_message(f"❌ DeactivateDetector 처리 실패: {str(e)}")
+            self.log_detector_message(f"📤 응답 전송: FAILED - {response.message}")
+        
+        return response
     
     def log_detector_message(self, message):
         """Detector 로그 메시지 출력"""
@@ -213,5 +203,5 @@ class AiServerControlTab(QWidget):
     
     def cleanup(self):
         """탭 종료 시 정리"""
-        # 현재는 특별한 정리 작업이 없음
-        pass 
+        if self.server_active:
+            self.stop_server() 

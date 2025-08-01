@@ -327,6 +327,10 @@ class MainControlTab(QWidget):
             'state': msg.robot_state,
             'is_available': msg.is_available,
             'battery': msg.battery,
+            'book_weight': msg.book_weight,
+            'position_x': msg.position_x,
+            'position_y': msg.position_y,
+            'position_yaw': msg.position_yaw,
             'timestamp': time.time()
         }
     
@@ -353,6 +357,9 @@ class MainControlTab(QWidget):
             robot_info += f"   상태: {status['state']}\n"
             robot_info += f"   {available_text}\n"
             robot_info += f"   배터리: {status['battery']}%\n"
+            robot_info += f"   무게: {status.get('book_weight', 0.0):.1f}kg\n"
+            robot_info += f"   위치: ({status.get('position_x', 0.0):.1f}, {status.get('position_y', 0.0):.1f})\n"
+            robot_info += f"   방향: {status.get('position_yaw', 0.0):.1f}°\n"
             robot_info += "─" * 20 + "\n"
             active_robots.append(robot_info)
         

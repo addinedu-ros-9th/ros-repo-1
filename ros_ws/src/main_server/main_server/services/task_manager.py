@@ -225,16 +225,70 @@ class TaskManager(Node):
                 # 충전 중일 때는 배터리가 점진적으로 증가 (최대 100%)
                 battery_increase = int((current_time - robot.state_start_time) * 2)  # 2% per second
                 status_msg.battery = min(100, 20 + battery_increase)  # 최소 20%에서 시작해서 최대 100%
+            elif robot.current_state == RobotState.STANDBY:
+                # 대기 상태일 때는 배터리가 닳지 않음 (현재 배터리 유지)
+                status_msg.battery = 100  # STANDBY 상태는 항상 100% 유지
             else:
                 # 다른 상태일 때는 배터리가 점진적으로 감소 (최소 10%)
                 battery_decrease = int((current_time - robot.state_start_time) * 0.5)  # 0.5% per second
                 status_msg.battery = max(10, 100 - battery_decrease)  # 최대 100%에서 시작해서 최소 10%
             
-            # 기본값들 (시뮬레이션 없음)
-            status_msg.book_weight = 0.0  # 기본값: 무게 없음
-            status_msg.position_x = 0.0  # 기본값: 위치 알 수 없음
-            status_msg.position_y = 0.0  # 기본값: 위치 알 수 없음
-            status_msg.position_yaw = 0.0  # 기본값: 방향 알 수 없음
+            # 위치 및 방향 시뮬레이션 (상태에 따라 다른 위치)
+            if robot.current_state == RobotState.INIT:
+                # 초기화 상태: 기본 위치
+                status_msg.position_x = 0.0
+                status_msg.position_y = 0.0
+                status_msg.position_yaw = 0.0
+            elif robot.current_state == RobotState.CHARGING:
+                # 충전 상태: 충전소 위치 (E3)
+                status_msg.position_x = 3.9
+                status_msg.position_y = 8.1
+                status_msg.position_yaw = 0.0
+            elif robot.current_state == RobotState.STANDBY:
+                # 대기 상태: 대기 구역 위치 (A2)
+                status_msg.position_x = 6.0
+                status_msg.position_y = 0.0
+                status_msg.position_yaw = 90.0
+            elif robot.current_state in [RobotState.ESCORT, RobotState.DELIVERY, RobotState.ASSIST]:
+                # 작업 상태: 현재 활성 task의 위치에 따라 설정
+                if self.tasks and self.tasks[0].robot_id == robot_id:
+                    current_task = self.tasks[0]
+                    if current_task.stage == 1:
+                        # Stage 1: CallLocation으로 이동 중
+                        if current_task.call_location in LOCATION_COORDINATES:
+                            x, y = LOCATION_COORDINATES[current_task.call_location]
+                            status_msg.position_x = x
+                            status_msg.position_y = y
+                            status_msg.position_yaw = 45.0
+                    elif current_task.stage == 2:
+                        # Stage 2: GoalLocation으로 이동 중
+                        if current_task.goal_location in LOCATION_COORDINATES:
+                            x, y = LOCATION_COORDINATES[current_task.goal_location]
+                            status_msg.position_x = x
+                            status_msg.position_y = y
+                            status_msg.position_yaw = 135.0
+                    elif current_task.stage == 3:
+                        # Stage 3: Base로 이동 중
+                        x, y = LOCATION_COORDINATES['Base']
+                        status_msg.position_x = x
+                        status_msg.position_y = y
+                        status_msg.position_yaw = 180.0
+                else:
+                    # Task가 없으면 기본 위치
+                    status_msg.position_x = 5.0
+                    status_msg.position_y = 5.0
+                    status_msg.position_yaw = 0.0
+            else:
+                # 기타 상태: 기본 위치
+                status_msg.position_x = 5.0
+                status_msg.position_y = 5.0
+                status_msg.position_yaw = 0.0
+            
+            # 무게 시뮬레이션 (작업 상태일 때만 무게 있음)
+            if robot.current_state in [RobotState.ESCORT, RobotState.DELIVERY, RobotState.ASSIST]:
+                status_msg.book_weight = 2.5  # 작업 중일 때 2.5kg
+            else:
+                status_msg.book_weight = 0.0  # 작업 중이 아닐 때 무게 없음
             
             self.status_publisher.publish(status_msg)  # 메시지 발행
             self.get_logger().debug(f'📡 로봇 상태 발행: {robot_id} → {robot.current_state.value} | {"사용가능" if robot.is_available else "사용중"} | 배터리: {status_msg.battery}%')
