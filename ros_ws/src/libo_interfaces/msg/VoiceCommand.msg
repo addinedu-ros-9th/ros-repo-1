@@ -1,3 +1,3 @@
 string robot_id
-string task
+string category
 string action
