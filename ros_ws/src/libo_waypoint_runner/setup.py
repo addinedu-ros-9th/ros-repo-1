@@ -20,7 +20,6 @@ setup(
     maintainer_email='your_email@todo.com',
     description='Waypoint runner for Libo robot',
     license='TODO: License declaration',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             # 우리 노드를 'waypoint_runner'라는 실행 명령어로 등록합니다.

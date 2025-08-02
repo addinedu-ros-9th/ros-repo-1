@@ -20,7 +20,6 @@ setup(
     maintainer_email='your_email@example.com',
     description='Robot face GUI package using PyQt5',
     license='MIT',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'robot_face_gui = libo_gui.robot_face_gui:main',

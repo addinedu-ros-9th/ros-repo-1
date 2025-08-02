@@ -21,7 +21,6 @@ setup(
     maintainer_email='kimdaren2@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'debug_tool = admin.debug_tool:main',

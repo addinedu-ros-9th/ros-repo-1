@@ -21,7 +21,6 @@ setup(
     maintainer_email='leesh20806@gmail.com',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
     entry_points={
         'console_scripts': [
             'main_ui = kiosk.ui.main_window:main', # main_window.py의 main 함수를 main_ui라는 이름으로 실행할 수 있게 등록
