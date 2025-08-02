@@ -17,7 +17,7 @@ from libo_interfaces.msg import OverallStatus, TaskStatus, Heartbeat
 from libo_interfaces.srv import TaskRequest, SetGoal, NavigationResult, CancelNavigation
 
 class NavigatorServerNode(Node):  # SetGoal 서비스 서버 노드
-    def __init__(self):
+    def __init__(self, log_callback=None):  # 로그 콜백 함수 추가
         super().__init__('navigator_debug_server', automatically_declare_parameters_from_overrides=True)
         
         # 서비스 서버들은 처음에 None (비활성 상태)
@@ -28,6 +28,9 @@ class NavigatorServerNode(Node):  # SetGoal 서비스 서버 노드
         # 수신된 메시지를 저장할 리스트
         self.received_messages = []
         self.cancel_messages = []  # CancelNavigation 메시지 저장
+        
+        # 로그 콜백 함수 저장
+        self.log_callback = log_callback
         
         self.get_logger().info('🧭 Navigator 디버그 서버 생성됨 (비활성 상태)')
     
@@ -92,6 +95,10 @@ class NavigatorServerNode(Node):  # SetGoal 서비스 서버 노드
             
             # 로그 출력
             self.get_logger().info(f'🎯 SetGoal 수신: ({request.x}, {request.y}) at {current_time}')
+            
+            # GUI 로그에도 추가
+            if self.log_callback:
+                self.log_callback(f'🎯 SetGoal 수신: ({request.x}, {request.y}) at {current_time}')
             
             # 성공 응답 생성
             response.success = True
@@ -181,7 +188,7 @@ class MainControlTab(QWidget):
         self.navigation_result_logs = []
         
         # Navigator 서버 노드 생성
-        self.navigator_server = NavigatorServerNode()
+        self.navigator_server = NavigatorServerNode(log_callback=self.log_navigator_message)
         
         # ROS 클라이언트들
         self.task_request_client = self.ros_node.create_client(TaskRequest, '/task_request')
@@ -218,11 +225,6 @@ class MainControlTab(QWidget):
         self.cancel_log_timer = QTimer()
         self.cancel_log_timer.timeout.connect(self.update_cancel_navigation_log)
         self.cancel_log_timer.start(1000)  # 1초마다 업데이트
-        
-        # Navigator 메시지 업데이트 타이머
-        self.navigator_messages_timer = QTimer()
-        self.navigator_messages_timer.timeout.connect(self.update_navigator_messages)
-        self.navigator_messages_timer.start(1000)  # 1초마다 업데이트
     
     def init_ros_connections(self):
         """ROS 연결 초기화"""
@@ -351,6 +353,7 @@ class MainControlTab(QWidget):
                 self.toggle_navigator_button.setText("🔴 Stop Navigator Service")
                 self.toggle_navigator_button.setStyleSheet("background-color: #e74c3c;")
                 self.log_navigator_message("🟢 Navigator 서비스 시작됨 - set_navigation_goal, cancel_navigation 서비스 대기 중...")
+                self.log_navigator_message("📡 이제 task_manager.py에서 보내는 SetGoal 요청을 받을 수 있습니다!")
             else:
                 self.log_navigator_message("❌ Navigator 서비스 시작 실패")
         else:
@@ -359,6 +362,7 @@ class MainControlTab(QWidget):
                 self.toggle_navigator_button.setText("🟢 Start Navigator Service")
                 self.toggle_navigator_button.setStyleSheet("background-color: #27ae60;")
                 self.log_navigator_message("🔴 Navigator 서비스 중지됨")
+                self.log_navigator_message("⚠️ SetGoal 요청을 받을 수 없습니다. 서비스를 다시 시작하세요.")
             else:
                 self.log_navigator_message("❌ Navigator 서비스 중지 실패")
     
@@ -491,14 +495,6 @@ class MainControlTab(QWidget):
                 self.cancel_navigation_log_text.setPlainText(log_text)
             else:
                 self.cancel_navigation_log_text.setPlainText("취소 요청 없음")
-    
-    def update_navigator_messages(self):
-        """Navigator 서버에서 수신된 메시지를 텍스트 에디트에 표시"""
-        latest_messages = self.navigator_server.get_latest_messages(10) # 최근 10개 메시지
-        if latest_messages:
-            self.navigator_messages_text.setPlainText("".join([f"[{msg['time']}] {msg['x']}, {msg['y']}\n" for msg in latest_messages]))
-        else:
-            self.navigator_messages_text.setPlainText("Navigator 서버에서 수신된 메시지 없음")
     
     def cleanup(self):
         """탭 종료 시 정리"""
