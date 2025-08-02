@@ -13,6 +13,7 @@ from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
 from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
+from std_msgs.msg import Float32  # 무게 데이터 메시지 추가
 import time  # 시간 관련 기능
 import uuid  # 고유 ID 생성
 import random  # 랜덤 좌표 생성용
@@ -215,6 +216,14 @@ class TaskManager(Node):
             10  # QoS depth
         )
         
+        # 무게 데이터 토픽 구독자 생성
+        self.weight_subscription = self.create_subscription(
+            Float32,  # 메시지 타입
+            'weight_data',  # 토픽 이름
+            self.weight_callback,  # 콜백 함수
+            10  # QoS depth
+        )
+        
         # VoiceCommand 토픽 퍼블리셔 생성
         self.voice_command_publisher = self.create_publisher(VoiceCommand, 'voice_command', 10)
         
@@ -223,6 +232,10 @@ class TaskManager(Node):
         
         # 로봇 목록을 저장할 딕셔너리 (robot_id를 키로 사용)
         self.robots = {}  # 로봇들을 저장할 딕셔너리
+        
+        # 무게 데이터 저장 변수
+        self.current_weight = 0.0  # 현재 무게 (g 단위)
+        self.last_weight_update = None  # 마지막 무게 업데이트 시간
         
         # OverallStatus 퍼블리셔 생성
         self.status_publisher = self.create_publisher(OverallStatus, 'robot_status', 10)  # OverallStatus 토픽 퍼블리셔
@@ -253,6 +266,7 @@ class TaskManager(Node):
         self.get_logger().info('⏹️ CancelNavigation 클라이언트 준비됨 - cancel_navigation 서비스 연결...')
         self.get_logger().info('⏰ DetectionTimer 구독 시작됨 - detection_timer 토픽 모니터링 중...')
         self.get_logger().info('🗣️ VoiceCommand 퍼블리셔 준비됨 - voice_command 토픽으로 이벤트 기반 발행...')
+        self.get_logger().info('⚖️ 무게 데이터 구독 시작됨 - weight_data 토픽 모니터링 중...')
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -356,11 +370,20 @@ class TaskManager(Node):
                 status_msg.position_y = 5.0
                 status_msg.position_yaw = 0.0
             
-            # 무게 시뮬레이션 (작업 상태일 때만 무게 있음)
-            if robot.current_state in [RobotState.ESCORT, RobotState.DELIVERY, RobotState.ASSIST]:
-                status_msg.book_weight = 2.5  # 작업 중일 때 2.5kg
+            # 무게 데이터 처리 (libo_a 로봇에만 적용)
+            if robot_id == 'libo_a':
+                # libo_a 로봇의 경우 실제 무게 데이터 사용 (상태와 무관하게)
+                if self.is_weight_data_recent():  # 최근 무게 데이터가 있으면
+                    # 실제 무게 적용 (g → kg 변환)
+                    status_msg.book_weight = self.current_weight / 1000.0
+                    self.get_logger().debug(f'📊 [libo_a] 실제 무게 적용: {self.current_weight:.1f}g → {status_msg.book_weight:.3f}kg')
+                else:
+                    # 무게 데이터가 없거나 오래된 경우 0.0
+                    status_msg.book_weight = 0.0
+                    self.get_logger().debug(f'📊 [libo_a] 무게 데이터 없음: 0.0kg')
             else:
-                status_msg.book_weight = 0.0  # 작업 중이 아닐 때 무게 없음
+                # libo_a가 아닌 다른 로봇들은 0.0
+                status_msg.book_weight = 0.0
             
             self.status_publisher.publish(status_msg)  # 메시지 발행
             self.get_logger().debug(f'📡 로봇 상태 발행: {robot_id} → {robot.current_state.value} | {"사용가능" if robot.is_available else "사용중"} | 배터리: {status_msg.battery}%')
@@ -879,6 +902,26 @@ class TaskManager(Node):
             
         except Exception as e:  # 예외 발생 시 처리
             self.get_logger().error(f'❌ [DetectionTimer] 처리 중 오류: {e}')  # 에러 로그
+
+    def weight_callback(self, msg):  # 무게 데이터 수신 콜백
+        """무게 데이터를 받았을 때 호출되는 콜백 함수"""
+        self.current_weight = msg.data  # 무게 데이터 저장
+        self.last_weight_update = time.time()  # 마지막 무게 업데이트 시간 갱신
+        self.get_logger().debug(f'📊 [Weight] 수신됨! 무게: {self.current_weight:.1f}g')
+    
+    def get_current_weight(self):  # 현재 무게 반환
+        """현재 무게를 반환하는 메서드 (g 단위)"""
+        return self.current_weight
+    
+    def get_current_weight_kg(self):  # 현재 무게를 kg 단위로 반환
+        """현재 무게를 kg 단위로 반환하는 메서드"""
+        return self.current_weight / 1000.0
+    
+    def is_weight_data_recent(self, timeout_seconds=5):  # 최근 무게 데이터인지 확인
+        """최근 timeout_seconds 이내에 무게 데이터가 업데이트되었는지 확인"""
+        if self.last_weight_update is None:
+            return False
+        return (time.time() - self.last_weight_update) <= timeout_seconds
 
     def manage_robot_states(self):  # 로봇 상태 관리
         """각 로봇의 상태를 관리하는 메서드"""
