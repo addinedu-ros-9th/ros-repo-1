@@ -399,16 +399,9 @@ QTextEdit {
            <property name="minimumSize">
             <size>
              <width>0</width>
-             <height>100</height>
+             <height>200</height>
             </size>
            </property>
-           <property name="styleSheet">
-            <string>background-color: #f8f9fa; color: #2c3e50; font-size: 9px;</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QTextEdit" name="navigator_messages_text">
            <property name="styleSheet">
             <string>background-color: #f8f9fa; color: #2c3e50; font-size: 9px;</string>
            </property>

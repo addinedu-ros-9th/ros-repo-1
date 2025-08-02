@@ -14,6 +14,7 @@ from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
 from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
 from std_msgs.msg import Float32  # 무게 데이터 메시지 추가
+from std_msgs.msg import String  # LED 제어용 메시지
 import time  # 시간 관련 기능
 import uuid  # 고유 ID 생성
 import random  # 랜덤 좌표 생성용
@@ -226,6 +227,9 @@ class TaskManager(Node):
         
         # VoiceCommand 토픽 퍼블리셔 생성
         self.voice_command_publisher = self.create_publisher(VoiceCommand, 'voice_command', 10)
+        
+        # LED 제어용 퍼블리셔 생성
+        self.led_publisher = self.create_publisher(String, 'led_status', 10)
         
         # 작업 목록을 저장할 리스트
         self.tasks = []  # 생성된 작업들을 저장할 리스트
@@ -479,6 +483,11 @@ class TaskManager(Node):
         else:
             self.get_logger().warning(f'⚠️ 출발 음성 명령 발행 실패')
         
+        # Stage 1 시작 시 "기쁨" LED 명령 발행
+        self.get_logger().info(f'🎨 Stage 1 시작 - "기쁨" LED 명령 발행')
+        if not self.send_led_command("기쁨"):
+            self.get_logger().warn(f'⚠️ Stage 1 LED 명령 실패했지만 계속 진행')
+        
         if self.send_coordinate_for_stage(new_task):
             self.get_logger().info(f'✅ Stage 1 좌표 전송 완료')
         else:
@@ -694,6 +703,11 @@ class TaskManager(Node):
                     self.get_logger().info(f'✅ 키오스크 도착 음성 명령 발행 완료')
                 else:
                     self.get_logger().warning(f'⚠️ 키오스크 도착 음성 명령 발행 실패')
+                
+                # Stage 2 시작 시 "슬픔" LED 명령 발행
+                self.get_logger().info(f'🎨 Stage 2 시작 - "슬픔" LED 명령 발행')
+                if not self.send_led_command("슬픔"):
+                    self.get_logger().warn(f'⚠️ Stage 2 LED 명령 실패했지만 계속 진행')
             
             # Stage 2 → Stage 3으로 넘어갈 때 목적지 도착 음성 명령 발행
             if current_task.stage == 3:
@@ -702,6 +716,11 @@ class TaskManager(Node):
                     self.get_logger().info(f'✅ 목적지 도착 음성 명령 발행 완료')
                 else:
                     self.get_logger().warning(f'⚠️ 목적지 도착 음성 명령 발행 실패')
+                
+                # Stage 3 시작 시 "화남" LED 명령 발행
+                self.get_logger().info(f'🎨 Stage 3 시작 - "화남" LED 명령 발행')
+                if not self.send_led_command("화남"):
+                    self.get_logger().warn(f'⚠️ Stage 3 LED 명령 실패했지만 계속 진행')
             
             if self.send_coordinate_for_stage(current_task):
                 self.get_logger().info(f'✅ 스테이지 {current_task.stage} 좌표 전송 완료')
@@ -907,7 +926,7 @@ class TaskManager(Node):
         """무게 데이터를 받았을 때 호출되는 콜백 함수"""
         self.current_weight = msg.data  # 무게 데이터 저장
         self.last_weight_update = time.time()  # 마지막 무게 업데이트 시간 갱신
-        self.get_logger().debug(f'📊 [Weight] 수신됨! 무게: {self.current_weight:.1f}g')
+        # self.get_logger().info(f'⚖️ [libo_a Weight] 실시간 수신: {self.current_weight:.1f}g ({self.current_weight/1000.0:.3f}kg)')  # 실시간 무게 데이터 표시
     
     def get_current_weight(self):  # 현재 무게 반환
         """현재 무게를 반환하는 메서드 (g 단위)"""
@@ -1016,6 +1035,18 @@ class TaskManager(Node):
             
         except Exception as e:
             self.get_logger().error(f'❌ [VoiceCommand] Task 타입 기반 발행 중 오류: {e}')
+            return False
+
+    def send_led_command(self, emotion):
+        """감정에 따라 LED 색상 제어"""
+        try:
+            msg = String()
+            msg.data = emotion  # "기쁨", "슬픔", "화남"
+            self.led_publisher.publish(msg)
+            self.get_logger().info(f'🎨 [LED] 명령 발행 성공: {emotion}')
+            return True
+        except Exception as e:
+            self.get_logger().warn(f'⚠️ [LED] 명령 발행 실패: {emotion} (오류: {e}) - 무시하고 계속 진행')
             return False
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
