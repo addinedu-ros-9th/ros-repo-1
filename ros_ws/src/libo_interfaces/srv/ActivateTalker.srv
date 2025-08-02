@@ -1,0 +1,6 @@
+# 요청 (Request)
+string robot_id     # 로봇 id (libo_a)
+---
+# 응답 (Response)
+bool success        # True, False
+string message      # 오류 메시지 (실패 시)
