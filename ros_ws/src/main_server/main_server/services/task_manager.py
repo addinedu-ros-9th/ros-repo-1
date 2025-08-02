@@ -664,6 +664,22 @@ class TaskManager(Node):
             # 스테이지가 바뀌었으므로 해당하는 좌표를 Navigator에게 전송
             self.get_logger().info(f'🚀 새로운 스테이지에 맞는 좌표 전송 시작...')
             
+            # Stage 1 → Stage 2로 넘어갈 때 키오스크 도착 음성 명령 발행
+            if current_task.stage == 2:
+                self.get_logger().info(f'🗣️ Stage 2 시작 - 키오스크 도착 음성 명령 발행: {current_task.task_type}.arrived_kiosk')
+                if self.send_voice_command_by_task_type(current_task.robot_id, current_task.task_type, 'arrived_kiosk'):
+                    self.get_logger().info(f'✅ 키오스크 도착 음성 명령 발행 완료')
+                else:
+                    self.get_logger().warning(f'⚠️ 키오스크 도착 음성 명령 발행 실패')
+            
+            # Stage 2 → Stage 3으로 넘어갈 때 목적지 도착 음성 명령 발행
+            if current_task.stage == 3:
+                self.get_logger().info(f'🗣️ Stage 3 시작 - 목적지 도착 음성 명령 발행: {current_task.task_type}.arrived_destination')
+                if self.send_voice_command_by_task_type(current_task.robot_id, current_task.task_type, 'arrived_destination'):
+                    self.get_logger().info(f'✅ 목적지 도착 음성 명령 발행 완료')
+                else:
+                    self.get_logger().warning(f'⚠️ 목적지 도착 음성 명령 발행 실패')
+            
             if self.send_coordinate_for_stage(current_task):
                 self.get_logger().info(f'✅ 스테이지 {current_task.stage} 좌표 전송 완료')
             else:
@@ -879,12 +895,26 @@ class TaskManager(Node):
             if state_duration >= 5.0:
                 old_state, new_state = robot.change_state(RobotState.CHARGING)
                 self.get_logger().info(f'🔋 로봇 <{robot.robot_id}> 상태 변경: {old_state.value} → {new_state.value} (5초 경과)')
+                
+                # 초기화 완료 음성 명령 발행
+                self.get_logger().info(f'🗣️ 로봇 초기화 완료 음성 명령 발행: common.initialized')
+                if self.send_voice_command(robot.robot_id, 'common', 'initialized'):
+                    self.get_logger().info(f'✅ 초기화 완료 음성 명령 발행 완료')
+                else:
+                    self.get_logger().warning(f'⚠️ 초기화 완료 음성 명령 발행 실패')
         
         elif robot.current_state == RobotState.CHARGING:
             # CHARGING 상태에서 10초 후 STANDBY로 변경 (임시)
             if state_duration >= 10.0:
                 old_state, new_state = robot.change_state(RobotState.STANDBY)
                 self.get_logger().info(f'⚡ 로봇 <{robot.robot_id}> 상태 변경: {old_state.value} → {new_state.value} (10초 경과)')
+                
+                # 배터리 충분 음성 명령 발행
+                self.get_logger().info(f'🗣️ 배터리 충분 음성 명령 발행: common.battery_sufficient')
+                if self.send_voice_command(robot.robot_id, 'common', 'battery_sufficient'):
+                    self.get_logger().info(f'✅ 배터리 충분 음성 명령 발행 완료')
+                else:
+                    self.get_logger().warning(f'⚠️ 배터리 충분 음성 명령 발행 실패')
         
         # ESCORT, DELIVERY, ASSIST 상태는 Task 완료 시까지 자동 변경하지 않음
         # 이 상태들은 advance_task_stage에서만 변경됨
