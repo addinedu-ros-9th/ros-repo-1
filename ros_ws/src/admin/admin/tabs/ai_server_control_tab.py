@@ -13,6 +13,7 @@ from rclpy.node import Node
 
 from libo_interfaces.srv import ActivateDetector, DeactivateDetector
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
+from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
 
 class AiServerControlTab(QWidget):
     def __init__(self, ros_node, parent=None):
@@ -22,6 +23,11 @@ class AiServerControlTab(QWidget):
         self.detection_timer_log = []  # DetectionTimer 전용 로그
         self.server_active = False  # 서버 상태 (기본값: OFF)
         self.detection_timer_active = False  # DetectionTimer 발행 상태 (기본값: OFF)
+        
+        # VoiceCommand 구독 관련 변수들
+        self.voice_command_log = []  # VoiceCommand 전용 로그
+        self.voice_subscription_active = False  # VoiceCommand 구독 상태 (기본값: OFF)
+        self.voice_command_subscription = None  # VoiceCommand 구독자
         
         # DetectionTimer 발행 관련 변수들
         self.detection_timer_publisher = None  # DetectionTimer 퍼블리셔
@@ -40,6 +46,8 @@ class AiServerControlTab(QWidget):
         self.log_detector_message("🔴 서버가 비활성화 상태입니다. 'Server ON' 버튼을 눌러 활성화하세요.")
         self.log_detection_timer_message("⏰ DetectionTimer Control이 시작되었습니다.")
         self.log_detection_timer_message("🔴 DetectionTimer가 비활성화 상태입니다.")
+        self.log_voice_command_message("🗣️ VoiceCommand Monitor가 시작되었습니다.")
+        self.log_voice_command_message("🔴 VoiceCommand 구독이 비활성화 상태입니다.")
     
     def init_ui(self):
         """UI 초기화 - ai_server_control_tab.ui 파일 로드"""
@@ -53,6 +61,10 @@ class AiServerControlTab(QWidget):
         # DetectionTimer 관련 시그널 연결
         self.toggle_detection_timer_button.clicked.connect(self.toggle_detection_timer)
         self.clear_detection_log_button.clicked.connect(self.clear_detection_timer_log)
+        
+        # VoiceCommand 관련 시그널 연결
+        self.toggle_voice_subscription_button.clicked.connect(self.toggle_voice_subscription)
+        self.clear_voice_log_button.clicked.connect(self.clear_voice_command_log)
         
         # 초기 버튼 상태 설정 (서버가 비활성화 상태이므로 OFF로 표시)
         self.toggle_server_button.setText("🔴 Server OFF")
@@ -365,4 +377,116 @@ class AiServerControlTab(QWidget):
         if self.server_active:
             self.stop_server()
         if self.detection_timer_active:
-            self.stop_detection_timer() 
+            self.stop_detection_timer()
+        if self.voice_subscription_active:
+            self.stop_voice_subscription()
+    
+    def toggle_voice_subscription(self):
+        """VoiceCommand 구독 ON/OFF 토글"""
+        if self.voice_subscription_active:
+            # VoiceCommand 구독 비활성화
+            self.stop_voice_subscription()
+            self.toggle_voice_subscription_button.setText("🔴 구독 OFF")
+            self.toggle_voice_subscription_button.setStyleSheet("background-color: #e74c3c; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; font-size: 12px; min-height: 30px;")
+            self.subscription_status_display.setText("🔴 비활성화")
+            self.subscription_status_display.setStyleSheet("font-weight: bold; color: #e74c3c;")
+            self.log_voice_command_message("🔴 VoiceCommand 구독이 중지되었습니다.")
+        else:
+            # VoiceCommand 구독 활성화
+            self.start_voice_subscription()
+            self.toggle_voice_subscription_button.setText("🟢 구독 ON")
+            self.toggle_voice_subscription_button.setStyleSheet("background-color: #27ae60; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; font-size: 12px; min-height: 30px;")
+            self.subscription_status_display.setText("🟢 활성화")
+            self.subscription_status_display.setStyleSheet("font-weight: bold; color: #27ae60;")
+            self.log_voice_command_message("🟢 VoiceCommand 구독이 시작되었습니다.")
+    
+    def start_voice_subscription(self):
+        """VoiceCommand 구독 시작"""
+        try:
+            # VoiceCommand 구독자 생성
+            self.voice_command_subscription = self.ros_node.create_subscription(
+                VoiceCommand,
+                'voice_command',
+                self.voice_command_callback,
+                10
+            )
+            
+            self.voice_subscription_active = True
+            self.log_voice_command_message("✅ VoiceCommand 구독자가 생성되었습니다.")
+            self.log_voice_command_message("📡 TaskManager의 VoiceCommand 메시지를 모니터링 중...")
+            
+        except Exception as e:
+            self.log_voice_command_message(f"❌ VoiceCommand 구독 시작 실패: {str(e)}")
+            self.voice_subscription_active = False
+    
+    def stop_voice_subscription(self):
+        """VoiceCommand 구독 중지"""
+        try:
+            # 구독자 제거
+            if self.voice_command_subscription:
+                self.ros_node.destroy_subscription(self.voice_command_subscription)
+                self.voice_command_subscription = None
+            
+            self.voice_subscription_active = False
+            self.log_voice_command_message("⏹️ VoiceCommand 구독이 중지되었습니다.")
+            
+        except Exception as e:
+            self.log_voice_command_message(f"❌ VoiceCommand 구독 중지 실패: {str(e)}")
+    
+    def voice_command_callback(self, msg):
+        """VoiceCommand 메시지 수신 콜백"""
+        try:
+            robot_id = msg.robot_id
+            category = msg.category
+            action = msg.action
+            current_time = time.strftime('%H:%M:%S', time.localtime())
+            
+            # 로그 메시지 생성
+            log_message = f"📥 VoiceCommand 수신: robot_id={robot_id}, category={category}, action={action} at {current_time}"
+            self.log_voice_command_message(log_message)
+            
+            # 카테고리별 아이콘 추가
+            category_icons = {
+                "common": "🔧",
+                "escort": "🚶", 
+                "delivery": "📦",
+                "assist": "🤝"
+            }
+            
+            icon = category_icons.get(category, "❓")
+            detail_message = f"{icon} {category.upper()}: {action}"
+            self.log_voice_command_message(f"   → {detail_message}")
+            
+        except Exception as e:
+            self.log_voice_command_message(f"❌ VoiceCommand 처리 중 오류: {str(e)}")
+    
+    def clear_voice_command_log(self):
+        """VoiceCommand 로그 내용 지우기"""
+        self.voice_command_log = []
+        self.voice_command_log_text.clear()
+        self.log_voice_command_message("🧹 VoiceCommand 로그가 지워졌습니다.")
+    
+    def log_voice_command_message(self, message):
+        """VoiceCommand 전용 로그 메시지 출력"""
+        timestamp = time.strftime("%H:%M:%S")
+        log_entry = f"[{timestamp}] {message}"
+        
+        # 로그 리스트에 추가
+        self.voice_command_log.append(log_entry)
+        
+        # 최근 50개만 유지
+        if len(self.voice_command_log) > 50:
+            self.voice_command_log = self.voice_command_log[-50:]
+        
+        # UI 업데이트
+        self.update_voice_command_log_display()
+    
+    def update_voice_command_log_display(self):
+        """VoiceCommand 로그 표시 업데이트"""
+        log_text = "\n".join(self.voice_command_log)
+        self.voice_command_log_text.setPlainText(log_text)
+        
+        # 자동 스크롤
+        cursor = self.voice_command_log_text.textCursor()
+        cursor.movePosition(cursor.End)
+        self.voice_command_log_text.setTextCursor(cursor) 

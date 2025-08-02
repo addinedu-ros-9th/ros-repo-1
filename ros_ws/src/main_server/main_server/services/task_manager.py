@@ -12,6 +12,7 @@ from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
+from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
 import time  # 시간 관련 기능
 import uuid  # 고유 ID 생성
 import random  # 랜덤 좌표 생성용
@@ -42,6 +43,58 @@ LOCATION_COORDINATES = {
     
     # Base 좌표 (스테이지 3 완료 후 돌아갈 위치) - E3로 고정
     'Base': (0.05, -0.34)  # E3 좌표와 동일
+}
+
+# 음성 명령 상수 정의
+VOICE_COMMANDS = {
+    # 공통 음성 명령
+    "common": {
+        "power_on": "power_on.mp3",  # 전원 켜지는 소리 - 삐빅
+        "initialized": "robot_initialized.mp3",  # 초기화 완료 소리 - 띠리리리리링
+        "charging": "충전을 시작하겠습니다.",
+        "battery_sufficient": "배터리가 충분합니다. 대기모드로 전환합니다.",
+        "depart_base": "출발합니다~ (충전기를 뽑고)",
+        "obstacle_detected": "honk.mp3",  # 장애물이 감지됐습니다. 정지합니다. / 빵!!!!!!!!!!!
+        "reroute": "새로운 경로로 안내합니다.",
+        "return": "complete.mp3",  # 복귀하겠습니다. / (복귀음 소리 - 삐빅)
+        "arrived_base": "Base에 도착했습니다."
+    },
+    
+    # 안내 관련 음성 명령
+    "escort": {
+        "depart_base": "출발합니다~",
+        "arrived_kiosk": "책 위치까지 에스코팅을 시작하겠습니다, 뒤로 따라와주시길 바랍니다.",
+        "lost_user": "손님이 보이지 않습니다. 20초 뒤에 자동종료 됩니다.",
+        "user_reconnected": "reconnected.mp3",  # 다시 연결된 소리. 뾰로롱? 삐빅?
+        "arrived_destination": "도착했습니다. 더 필요한 것이 있으면 키오스크에서 불러주세요.",
+        "return": "complete.mp3",  # 복귀하겠습니다. / (복귀음 소리 - 삐빅)
+        "arrived_base": "Base에 도착했습니다."
+    },
+    
+    # 배송 관련 음성 명령
+    "delivery": {
+        "depart_base": "출발합니다~",
+        "arrived_admin_desk": "딜리버리 준비가 완료되었습니다. 다음 목적지를 선택해주세요.",
+        "receive_next_goal": "목적지를 수신하였습니다. 출발하겠습니다.",
+        "arrived_destination": "도착했습니다. 작업이 완료되면 말해주세요.",
+        "called_by_staff": "ribo_response.mp3",  # 네? / (삐빅)
+        "return": "complete.mp3",  # 복귀하겠습니다. / (복귀음 소리 - 삐빅)
+        "arrived_base": "Base에 도착했습니다."
+    },
+    
+    # 도움 관련 음성 명령
+    "assist": {
+        "depart_base": "출발합니다~",
+        "arrived_kiosk": "어시스트를 시작하시려면 QR 코드를 카메라 앞에 대주세요",
+        "qr_authenticated": "QR 인증 완료! 어시스트를 시작하려면 카메라 앞에서 대기 해주시길 바랍니다.",
+        "no_person_5s": "감지 실패!",
+        "person_detected": "감지 성공!",
+        "called_by_staff": "ribo_response.mp3",  # 네? / (삐빅)
+        "pause": "일시정지합니다.",
+        "resume": "어시스트를 재개합니다.",
+        "return": "complete.mp3",  # 복귀하겠습니다. / (복귀음 소리 - 삐빅)
+        "arrived_base": "Base에 도착했습니다."
+    }
 }
 
 # 로봇 상태 정의 (시스템 상태 제거)
@@ -162,6 +215,9 @@ class TaskManager(Node):
             10  # QoS depth
         )
         
+        # VoiceCommand 토픽 퍼블리셔 생성
+        self.voice_command_publisher = self.create_publisher(VoiceCommand, 'voice_command', 10)
+        
         # 작업 목록을 저장할 리스트
         self.tasks = []  # 생성된 작업들을 저장할 리스트
         
@@ -196,6 +252,7 @@ class TaskManager(Node):
         self.get_logger().info('👁️ DeactivateDetector 클라이언트 준비됨 - deactivate_detector 서비스 연결...')
         self.get_logger().info('⏹️ CancelNavigation 클라이언트 준비됨 - cancel_navigation 서비스 연결...')
         self.get_logger().info('⏰ DetectionTimer 구독 시작됨 - detection_timer 토픽 모니터링 중...')
+        self.get_logger().info('🗣️ VoiceCommand 퍼블리셔 준비됨 - voice_command 토픽으로 이벤트 기반 발행...')
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -391,6 +448,14 @@ class TaskManager(Node):
         
         # 새로운 Task의 첫 번째 스테이지 좌표 전송
         self.get_logger().info(f'🚀 새로운 Task의 Stage 1 좌표 전송 시작...')
+        
+        # Task 시작 시 출발 음성 명령 발행
+        self.get_logger().info(f'🗣️ Task 시작 음성 명령 발행: {request.task_type}.depart_base')
+        if self.send_voice_command_by_task_type(selected_robot_id, request.task_type, 'depart_base'):
+            self.get_logger().info(f'✅ 출발 음성 명령 발행 완료')
+        else:
+            self.get_logger().warning(f'⚠️ 출발 음성 명령 발행 실패')
+        
         if self.send_coordinate_for_stage(new_task):
             self.get_logger().info(f'✅ Stage 1 좌표 전송 완료')
         else:
@@ -478,6 +543,13 @@ class TaskManager(Node):
         elif current_stage == 3:  # 스테이지 3: Base로 이동
             target_location = 'Base'
             self.get_logger().info(f'🎯 Stage 3: Base <{target_location}> 으로 이동')
+            
+            # Stage 3 시작 시 복귀 음성 명령 발행
+            self.get_logger().info(f'🗣️ Stage 3 시작 - 복귀 음성 명령 발행: {task.task_type}.return')
+            if self.send_voice_command_by_task_type(task.robot_id, task.task_type, 'return'):
+                self.get_logger().info(f'✅ 복귀 음성 명령 발행 완료')
+            else:
+                self.get_logger().warning(f'⚠️ 복귀 음성 명령 발행 실패')
         else:
             self.get_logger().warning(f'⚠️  알 수 없는 스테이지: {current_stage}')
             return False
@@ -561,6 +633,13 @@ class TaskManager(Node):
             if current_task.robot_id in self.robots:
                 old_state, _ = self.robots[current_task.robot_id].change_state(RobotState.CHARGING)
                 self.get_logger().info(f'🔋 로봇 <{current_task.robot_id}> Task 완료 후 충전 상태로 변경: {old_state.value} → CHARGING')
+                
+                # Base 도착 음성 명령 발행
+                self.get_logger().info(f'🗣️ Base 도착 음성 명령 발행: {current_task.task_type}.arrived_base')
+                if self.send_voice_command_by_task_type(current_task.robot_id, current_task.task_type, 'arrived_base'):
+                    self.get_logger().info(f'✅ Base 도착 음성 명령 발행 완료')
+                else:
+                    self.get_logger().warning(f'⚠️ Base 도착 음성 명령 발행 실패')
             else:
                 self.get_logger().warning(f'⚠️  로봇 <{current_task.robot_id}> 찾을 수 없음 - state 변경 불가')
             
@@ -584,6 +663,7 @@ class TaskManager(Node):
             
             # 스테이지가 바뀌었으므로 해당하는 좌표를 Navigator에게 전송
             self.get_logger().info(f'🚀 새로운 스테이지에 맞는 좌표 전송 시작...')
+            
             if self.send_coordinate_for_stage(current_task):
                 self.get_logger().info(f'✅ 스테이지 {current_task.stage} 좌표 전송 완료')
             else:
@@ -724,32 +804,45 @@ class TaskManager(Node):
                         
                         # Escort task이고 Stage 2인 경우에만 특별 처리
                         if current_task.task_type == 'escort' and current_task.stage == 2:
-                            self.get_logger().warn(f'🚨 [DetectionTimer] Escort Stage 2에서 10초 초과! 자동 처리 시작')
+                            # 10초일 때는 lost_user 음성만 발행
+                            if counter_value == 10:
+                                self.get_logger().warn(f'🚨 [DetectionTimer] Escort Stage 2에서 10초 경과! 사용자 분실 경고')
+                                
+                                # 사용자 분실 음성 명령 발행
+                                self.get_logger().info(f'🗣️ [DetectionTimer] 사용자 분실 음성 명령 발행: escort.lost_user')
+                                if self.send_voice_command_by_task_type(current_task.robot_id, 'escort', 'lost_user'):
+                                    self.get_logger().info(f'✅ [DetectionTimer] 사용자 분실 음성 명령 발행 완료')
+                                else:
+                                    self.get_logger().warning(f'⚠️ [DetectionTimer] 사용자 분실 음성 명령 발행 실패')
                             
-                            # 1. CancelNavigation 발행
-                            self.get_logger().info(f'⏹️ [DetectionTimer] CancelNavigation 요청 전송...')
-                            if self.cancel_navigation():
-                                self.get_logger().info(f'✅ [DetectionTimer] CancelNavigation 요청 전송 완료')
-                            else:
-                                self.get_logger().error(f'❌ [DetectionTimer] CancelNavigation 요청 전송 실패')
-                            
-                            # 2. DeactivateDetector 발행
-                            self.get_logger().info(f'👁️ [DetectionTimer] DeactivateDetector 요청 전송...')
-                            if self.deactivate_detector(current_task.robot_id):
-                                self.get_logger().info(f'✅ [DetectionTimer] DeactivateDetector 요청 전송 완료')
-                            else:
-                                self.get_logger().error(f'❌ [DetectionTimer] DeactivateDetector 요청 전송 실패')
-                            
-                            # 3. Stage 3으로 강제 이동
-                            self.get_logger().warn(f'🔄 [DetectionTimer] Stage 3으로 강제 이동...')
-                            current_task.stage = 3
-                            self.get_logger().info(f'✅ [DetectionTimer] Stage 3으로 이동 완료')
-                            
-                            # 4. Stage 3 좌표 전송
-                            if self.send_coordinate_for_stage(current_task):
-                                self.get_logger().info(f'✅ [DetectionTimer] Stage 3 좌표 전송 완료')
-                            else:
-                                self.get_logger().error(f'❌ [DetectionTimer] Stage 3 좌표 전송 실패')
+                            # 30초일 때 Stage 3으로 강제 이동
+                            elif counter_value >= 30:
+                                self.get_logger().warn(f'🚨 [DetectionTimer] Escort Stage 2에서 30초 초과! 자동 Stage 3 전환 시작')
+                                
+                                # 1. CancelNavigation 발행
+                                self.get_logger().info(f'⏹️ [DetectionTimer] CancelNavigation 요청 전송...')
+                                if self.cancel_navigation():
+                                    self.get_logger().info(f'✅ [DetectionTimer] CancelNavigation 요청 전송 완료')
+                                else:
+                                    self.get_logger().error(f'❌ [DetectionTimer] CancelNavigation 요청 전송 실패')
+                                
+                                # 2. DeactivateDetector 발행
+                                self.get_logger().info(f'👁️ [DetectionTimer] DeactivateDetector 요청 전송...')
+                                if self.deactivate_detector(current_task.robot_id):
+                                    self.get_logger().info(f'✅ [DetectionTimer] DeactivateDetector 요청 전송 완료')
+                                else:
+                                    self.get_logger().error(f'❌ [DetectionTimer] DeactivateDetector 요청 전송 실패')
+                                
+                                # 3. Stage 3으로 강제 이동
+                                self.get_logger().warn(f'🔄 [DetectionTimer] Stage 3으로 강제 이동...')
+                                current_task.stage = 3
+                                self.get_logger().info(f'✅ [DetectionTimer] Stage 3으로 이동 완료')
+                                
+                                # 4. Stage 3 좌표 전송 (return 음성은 send_coordinate_for_stage에서 자동 발행)
+                                if self.send_coordinate_for_stage(current_task):
+                                    self.get_logger().info(f'✅ [DetectionTimer] Stage 3 좌표 전송 완료')
+                                else:
+                                    self.get_logger().error(f'❌ [DetectionTimer] Stage 3 좌표 전송 실패')
                             
                         else:
                             # Escort가 아니거나 Stage 2가 아닌 경우 일반 경고만
@@ -800,6 +893,57 @@ class TaskManager(Node):
             pass
         
         # 다른 상태들은 나중에 추가 예정
+
+    def send_voice_command(self, robot_id, category, action):  # VoiceCommand 메시지 발행
+        """VoiceCommand 메시지를 발행하는 메서드"""
+        try:
+            # 유효한 카테고리와 액션인지 확인
+            if category not in VOICE_COMMANDS:
+                self.get_logger().error(f'❌ [VoiceCommand] 유효하지 않은 카테고리: {category}')
+                return False
+                
+            if action not in VOICE_COMMANDS[category]:
+                self.get_logger().error(f'❌ [VoiceCommand] {category} 카테고리에 {action} 액션이 없습니다')
+                return False
+            
+            # VoiceCommand 메시지 생성
+            voice_msg = VoiceCommand()
+            voice_msg.robot_id = robot_id
+            voice_msg.category = category
+            voice_msg.action = action
+            
+            # 메시지 발행
+            self.voice_command_publisher.publish(voice_msg)
+            
+            # 로그 출력
+            self.get_logger().info(f'🗣️ [VoiceCommand] 발행: robot_id={robot_id}, category={category}, action={action}')
+            
+            return True
+            
+        except Exception as e:
+            self.get_logger().error(f'❌ [VoiceCommand] 발행 중 오류: {e}')
+            return False
+
+    def send_voice_command_by_task_type(self, robot_id, task_type, action):  # Task 타입에 따른 VoiceCommand 발행
+        """Task 타입에 따라 적절한 카테고리로 VoiceCommand를 발행하는 메서드"""
+        try:
+            # Task 타입을 카테고리로 매핑
+            task_to_category = {
+                'escort': 'escort',
+                'delivery': 'delivery', 
+                'assist': 'assist'
+            }
+            
+            if task_type not in task_to_category:
+                self.get_logger().error(f'❌ [VoiceCommand] 지원하지 않는 Task 타입: {task_type}')
+                return False
+            
+            category = task_to_category[task_type]
+            return self.send_voice_command(robot_id, category, action)
+            
+        except Exception as e:
+            self.get_logger().error(f'❌ [VoiceCommand] Task 타입 기반 발행 중 오류: {e}')
+            return False
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)
