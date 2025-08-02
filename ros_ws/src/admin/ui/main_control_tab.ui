@@ -328,22 +328,67 @@ QTextEdit {
           <layout class="QHBoxLayout" name="navigation_result_layout">
            <item>
             <widget class="QPushButton" name="send_success_button">
+             <property name="minimumSize">
+              <size>
+               <width>120</width>
+               <height>30</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>120</width>
+               <height>30</height>
+              </size>
+             </property>
              <property name="text">
               <string>✅ SUCCESS</string>
+             </property>
+             <property name="styleSheet">
+              <string>background-color: #27ae60; color: white; border: none; padding: 5px 10px; border-radius: 3px; font-weight: bold; font-size: 10px;</string>
              </property>
             </widget>
            </item>
            <item>
             <widget class="QPushButton" name="send_failed_button">
+             <property name="minimumSize">
+              <size>
+               <width>120</width>
+               <height>30</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>120</width>
+               <height>30</height>
+              </size>
+             </property>
              <property name="text">
               <string>❌ FAILED</string>
+             </property>
+             <property name="styleSheet">
+              <string>background-color: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 3px; font-weight: bold; font-size: 10px;</string>
              </property>
             </widget>
            </item>
            <item>
             <widget class="QPushButton" name="send_canceled_button">
+             <property name="minimumSize">
+              <size>
+               <width>120</width>
+               <height>30</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>120</width>
+               <height>30</height>
+              </size>
+             </property>
              <property name="text">
               <string>⏹️ CANCELED</string>
+             </property>
+             <property name="styleSheet">
+              <string>background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 3px; font-weight: bold; font-size: 10px;</string>
              </property>
             </widget>
            </item>
@@ -371,10 +416,13 @@ QTextEdit {
          </item>
          <item>
           <widget class="QLabel" name="cancel_navigation_label">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
            <property name="minimumSize">
             <size>
              <width>0</width>
-             <height>20</height>
+             <height>40</height>
             </size>
            </property>
            <property name="maximumSize">
@@ -461,17 +509,17 @@ QLabel#robot_list_label {
         <layout class="QVBoxLayout" name="robot_status_layout">
          <item>
           <widget class="QLabel" name="robot_status_title">
-           <property name="text">
-            <string>🤖 Active Robots</string>
-           </property>
-           <property name="styleSheet">
-            <string>font-size: 14px; font-weight: bold; color: #3498db;</string>
-           </property>
            <property name="minimumSize">
             <size>
              <width>0</width>
              <height>30</height>
             </size>
+           </property>
+           <property name="styleSheet">
+            <string>font-size: 14px; font-weight: bold; color: #3498db;</string>
+           </property>
+           <property name="text">
+            <string>🤖 Active Robots</string>
            </property>
           </widget>
          </item>

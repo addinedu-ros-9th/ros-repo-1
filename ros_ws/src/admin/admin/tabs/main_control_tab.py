@@ -218,6 +218,11 @@ class MainControlTab(QWidget):
         self.cancel_log_timer = QTimer()
         self.cancel_log_timer.timeout.connect(self.update_cancel_navigation_log)
         self.cancel_log_timer.start(1000)  # 1초마다 업데이트
+        
+        # Navigator 메시지 업데이트 타이머
+        self.navigator_messages_timer = QTimer()
+        self.navigator_messages_timer.timeout.connect(self.update_navigator_messages)
+        self.navigator_messages_timer.start(1000)  # 1초마다 업데이트
     
     def init_ros_connections(self):
         """ROS 연결 초기화"""
@@ -486,6 +491,14 @@ class MainControlTab(QWidget):
                 self.cancel_navigation_log_text.setPlainText(log_text)
             else:
                 self.cancel_navigation_log_text.setPlainText("취소 요청 없음")
+    
+    def update_navigator_messages(self):
+        """Navigator 서버에서 수신된 메시지를 텍스트 에디트에 표시"""
+        latest_messages = self.navigator_server.get_latest_messages(10) # 최근 10개 메시지
+        if latest_messages:
+            self.navigator_messages_text.setPlainText("".join([f"[{msg['time']}] {msg['x']}, {msg['y']}\n" for msg in latest_messages]))
+        else:
+            self.navigator_messages_text.setPlainText("Navigator 서버에서 수신된 메시지 없음")
     
     def cleanup(self):
         """탭 종료 시 정리"""
