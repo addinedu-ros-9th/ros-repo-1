@@ -907,7 +907,7 @@ class TaskManager(Node):
         """무게 데이터를 받았을 때 호출되는 콜백 함수"""
         self.current_weight = msg.data  # 무게 데이터 저장
         self.last_weight_update = time.time()  # 마지막 무게 업데이트 시간 갱신
-        self.get_logger().debug(f'📊 [Weight] 수신됨! 무게: {self.current_weight:.1f}g')
+        # self.get_logger().info(f'⚖️ [libo_a Weight] 실시간 수신: {self.current_weight:.1f}g ({self.current_weight/1000.0:.3f}kg)')  # 실시간 무게 데이터 표시
     
     def get_current_weight(self):  # 현재 무게 반환
         """현재 무게를 반환하는 메서드 (g 단위)"""
