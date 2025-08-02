@@ -12,6 +12,7 @@ import openai
 import numpy as np
 import resampy
 import pvporcupine
+import re
 import rclpy
 import speech_recognition as sr
 from datetime import datetime
@@ -19,7 +20,24 @@ from dotenv import load_dotenv
 from pydub import AudioSegment
 from google.cloud import texttospeech
 from rclpy.node import Node
-from libo_interfaces.msg import VoiceCommand
+from rclpy.callback_groups import ReentrantCallbackGroup
+from libo_interfaces.msg import VoiceCommand, TalkCommand
+from libo_interfaces.srv import EndTask
+
+
+# ================== 네트워크/오디오 기본 설정 ==================
+# 네트워크 설정
+HARDWARE_HANDLER_IP = "127.0.0.1"      # 🖥️ Hardware Handler IP (UDP/TCP 서버 주소)
+MIC_STREAM_PORT = 7010                 # 🎤 마이크 스트림 포트 (UDP 수신)
+SPEAKER_PORT = 7002                    # 🔊 스피커 출력 포트 (TCP 서버)
+
+# 오디오 설정
+NATIVE_RATE = 48000                    # 🎵 원본 샘플링 레이트 (mic_streamer와 동일 int16)
+TARGET_RATE = 16000                    # 🎯 웨이크워드 처리용 레이트
+TTS_RATE = 24000                       # 🗣️ TTS 출력 레이트
+
+print(f"[NETWORK CONFIG] 📡 UDP 서버: {HARDWARE_HANDLER_IP}:{MIC_STREAM_PORT} - 마이크 스트림 수신")
+print(f"[NETWORK CONFIG] 🔌 TCP 서버: {HARDWARE_HANDLER_IP}:{SPEAKER_PORT} - 스피커 노드 연결 수신")
 
 # ================== 프로젝트 루트 경로 세팅 ==================
 # 현재 실행 경로에서 ros-repo-1 위치 찾기
@@ -80,9 +98,6 @@ for path in [PORCUPINE_MODEL_PATH, PORCUPINE_KEYWORD_PATH]:
     if not os.path.exists(path):
         raise FileNotFoundError(f"필요한 모델 파일이 존재하지 않습니다: {path}")
 
-# ================== 네트워크/오디오 기본 설정 ==================
-HAEDWARE_HANDLER_IP = "127.0.0.1"       # Hardware Handler IP
-
 # ================== 음성 명령 응답 매핑 ==================
 # 음성 명령 응답 매핑 - 카테고리별로 구성
 VOICE_COMMANDS = {
@@ -135,12 +150,6 @@ VOICE_COMMANDS = {
         "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
     }
 }
-AI_SERVICE_IP = "127.0.0.1"            # AI Service IP
-MIC_STREAM_PORT = 7000                 # 마이크 스트림 포트 (UDP)
-SPEAKER_PORT = 7002                    # 스피커 출력 포트 (TCP)
-NATIVE_RATE = 48000                    # mic_streamer와 동일 int16
-TARGET_RATE = 16000                    # 웨이크워드 처리용
-TTS_RATE = 24000                      # TTS 출력 레이트
 CHANNELS = 1
 CHUNK = 2048                           # mic_streamer와 동일
 
@@ -166,27 +175,73 @@ class CommunicationManager:
         """UDP 수신기 초기화 및 시작"""
         def _udp_receiver():
             try:
+                print(f"[{get_kr_time()}][UDP] 🎤 마이크 스트림 UDP 서버 초기화 중...")
                 self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                self.udp_sock.bind((HAEDWARE_HANDLER_IP, MIC_STREAM_PORT))
-                print(f"[{get_kr_time()}][UDP] 마이크 스트림 수신 대기 중... ({HAEDWARE_HANDLER_IP}:{MIC_STREAM_PORT})")
+                # SO_REUSEADDR 설정으로 포트 재사용 허용
+                self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                
+                # UDP 소켓 바인딩 시도
+                try:
+                    self.udp_sock.bind((HARDWARE_HANDLER_IP, MIC_STREAM_PORT))
+                    print(f"[{get_kr_time()}][UDP] 📡 마이크 스트림 수신 대기 중... ({HARDWARE_HANDLER_IP}:{MIC_STREAM_PORT})")
+                except OSError as e:
+                    if e.errno == 98:  # Address already in use
+                        print(f"[{get_kr_time()}][UDP] ⚠️ 포트 {MIC_STREAM_PORT}가 이미 사용 중입니다. 바인딩 없이 계속 진행합니다.")
+                        # 바인딩 없이 계속 진행 - 다른 프로세스가 이미 수신 중이므로 오디오 데이터는 처리될 것임
+                    else:
+                        print(f"[{get_kr_time()}][UDP] ❌ UDP 바인딩 오류: {str(e)}")
+                        print(f"[{get_kr_time()}][UDP] ⚠️ 바인딩 없이 계속 진행합니다.")
+                        
+                print(f"[{get_kr_time()}][UDP] ⚙️  설정: CHUNK={CHUNK}, NATIVE_RATE={NATIVE_RATE}Hz, TARGET_RATE={TARGET_RATE}Hz")
+                print(f"[{get_kr_time()}][UDP] ⚙️  설정: CHUNK={CHUNK}, NATIVE_RATE={NATIVE_RATE}Hz, TARGET_RATE={TARGET_RATE}Hz")
                 
                 received_count = 0
                 start_time = time.time()
                 
-                while not self.stop_event.is_set():
-                    data, _ = self.udp_sock.recvfrom(CHUNK * 2)
-                    self.buffer_queue.put(data)
-                    received_count += 1
+                # 소켓이 바인딩되었는지 확인
+                is_socket_bound = True
+                try:
+                    # 소켓 바인딩 확인 (getpeername 또는 getsockname으로)
+                    local_addr = self.udp_sock.getsockname()
+                    if not local_addr:
+                        is_socket_bound = False
+                except:
+                    is_socket_bound = False
+                
+                # 바인딩 여부에 따라 동작 분리
+                if is_socket_bound:
+                    print(f"[{get_kr_time()}][UDP] ✅ UDP 소켓 바인딩 상태: 정상")
+                    while not self.stop_event.is_set():
+                        try:
+                            data, _ = self.udp_sock.recvfrom(CHUNK * 2)
+                            self.buffer_queue.put(data)
+                            received_count += 1
+                            
+                            if received_count % 1000 == 0:
+                                elapsed = time.time() - start_time
+                                rate = received_count / elapsed
+                                data_rate = (rate * CHUNK * 2) / 1024  # KB/s
+                                print(f"[{get_kr_time()}][UDP] 📊 수신 통계: {received_count}개 패킷, {rate:.2f} packets/sec, {data_rate:.1f} KB/s")
+                                print(f"[{get_kr_time()}][UDP] 🔄 활성 연결: {HARDWARE_HANDLER_IP}:{MIC_STREAM_PORT} ← 오디오 스트림 수신 중")
+                        except Exception as recv_e:
+                            print(f"[{get_kr_time()}][UDP] ⚠️ 데이터 수신 오류: {str(recv_e)}")
+                            time.sleep(0.1)  # 오류 시 잠시 대기
+                else:
+                    print(f"[{get_kr_time()}][UDP] ℹ️ 포트 {MIC_STREAM_PORT}에 바인딩되지 않았습니다. 마이크 스트리머가 별도 프로세스로 실행 중인 것으로 간주합니다.")
+                    print(f"[{get_kr_time()}][UDP] 🔄 웨이크워드 감지는 계속 진행됩니다.")
                     
-                    if received_count % 1000 == 0:
-                        elapsed = time.time() - start_time
-                        rate = received_count / elapsed
-                        print(f"[{get_kr_time()}][UDP] 수신 통계: {received_count}개 패킷, {rate:.2f} packets/sec")
+                    # 바인딩 없이 계속 실행 - 다른 방식으로 오디오 스트림을 받거나 필요한 처리 수행
+                    while not self.stop_event.is_set():
+                        time.sleep(0.5)  # 주기적으로 상태 확인
             except Exception as e:
-                print(f"[{get_kr_time()}][UDP] 오류 발생: {str(e)}")
+                print(f"[{get_kr_time()}][UDP] ❌ 오류 발생: {str(e)}")
             finally:
                 if self.udp_sock:
-                    self.udp_sock.close()
+                    try:
+                        self.udp_sock.close()
+                        print(f"[{get_kr_time()}][UDP] 🛑 UDP 소켓 닫힘 ({HARDWARE_HANDLER_IP}:{MIC_STREAM_PORT})")
+                    except Exception as close_e:
+                        print(f"[{get_kr_time()}][UDP] ⚠️ 소켓 닫기 오류: {str(close_e)}")
                     
         thread = threading.Thread(target=_udp_receiver)
         thread.daemon = True
@@ -197,18 +252,20 @@ class CommunicationManager:
         """TCP 서버 초기화 및 시작"""
         def _tcp_server():
             try:
+                print(f"[{get_kr_time()}][TCP] 🔊 스피커 TCP 서버 초기화 중...")
                 self.tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                self.tcp_server.bind((AI_SERVICE_IP, SPEAKER_PORT))
+                self.tcp_server.bind((HARDWARE_HANDLER_IP, SPEAKER_PORT))
                 self.tcp_server.listen(1)
                 
-                print(f"[{get_kr_time()}][TCP] 스피커 노드 연결 대기 중... (포트: {SPEAKER_PORT})")
+                print(f"[{get_kr_time()}][TCP] 🎧 스피커 노드 연결 대기 중... ({HARDWARE_HANDLER_IP}:{SPEAKER_PORT})")
+                print(f"[{get_kr_time()}][TCP] ⚙️  설정: TTS_RATE={TTS_RATE}Hz, CHUNK={CHUNK}")
                 
                 while not self.stop_event.is_set():
                     self.tcp_server.settimeout(1.0)  # 1초 타임아웃 설정
                     try:
                         self.tcp_client, addr = self.tcp_server.accept()
-                        print(f"[{get_kr_time()}][TCP] 스피커 노드 연결됨: {addr}")
+                        print(f"[{get_kr_time()}][TCP] ✅ 스피커 노드 연결됨: {addr} → {HARDWARE_HANDLER_IP}:{SPEAKER_PORT}")
                         self.tcp_ready.set()  # TCP 연결 완료 신호
                         
                         # 클라이언트 연결이 끊어질 때까지 대기
@@ -251,19 +308,30 @@ class CommunicationManager:
         try:
             # 데이터 크기 전송 (4바이트)
             total_size = len(audio_data) * 4  # float32는 4바이트
+            kb_size = total_size / 1024
+            print(f"[{get_kr_time()}][TCP] 📤 오디오 데이터 전송 시작: {kb_size:.2f}KB")
             self.tcp_client.send(total_size.to_bytes(4, byteorder='big'))
             
             # 청크 단위로 전송
+            chunks_sent = 0
             for i in range(0, len(audio_data), CHUNK):
                 chunk = audio_data[i:i + CHUNK]
                 if len(chunk) < CHUNK:
                     chunk = np.pad(chunk, (0, CHUNK - len(chunk)))
                 self.tcp_client.send(chunk.tobytes())
+                chunks_sent += 1
                 
+                # 큰 오디오 데이터인 경우에만 진행 상황 표시
+                if total_size > 100000 and chunks_sent % 20 == 0:
+                    progress = min(100, int((i+CHUNK) * 100 / len(audio_data)))
+                    print(f"[{get_kr_time()}][TCP] 🔄 오디오 전송 중: {progress}% 완료")
+            
+            print(f"[{get_kr_time()}][TCP] ✅ 오디오 데이터 전송 완료: {chunks_sent}개 청크")
             return True
             
         except Exception as e:
-            print(f"[{get_kr_time()}][TCP] 전송 오류: {str(e)}")
+            print(f"[{get_kr_time()}][TCP] ❌ 전송 오류: {str(e)}")
+            print(f"[{get_kr_time()}][TCP] 🔄 연결 상태 초기화 ({HARDWARE_HANDLER_IP}:{SPEAKER_PORT})")
             self.tcp_ready.clear()
             return False
 
@@ -402,7 +470,7 @@ class CommunicationManager:
 
 class TalkerNode(Node):
     """
-    ROS2 노드 클래스 - 음성 명령 토픽 구독자
+    ROS2 노드 클래스 - 음성 명령 토픽 구독자 및 제어 명령 발행자
     """
     def __init__(self, comm_manager):
         super().__init__('talker_node')
@@ -413,6 +481,9 @@ class TalkerNode(Node):
         # 로깅
         self.get_logger().info('TalkerNode 초기화 중...')
         
+        # 콜백 그룹 생성 - 동시에 여러 콜백을 처리하기 위함
+        self.callback_group = ReentrantCallbackGroup()
+        
         # VoiceCommand 토픽 구독
         self.voice_cmd_sub = self.create_subscription(
             VoiceCommand,
@@ -421,8 +492,71 @@ class TalkerNode(Node):
             10
         )
         
-        self.get_logger().info('VoiceCommand 구독 설정 완료!')
+        # TalkCommand 토픽 발행자
+        self.talk_cmd_pub = self.create_publisher(
+            TalkCommand,
+            '/talk_command',
+            10
+        )
+        
+        # EndTask 서비스 클라이언트
+        self.end_task_client = self.create_client(
+            EndTask, 
+            '/end_task',
+            callback_group=self.callback_group
+        )
+        
+        # 서비스 가용성 확인 (비차단식)
+        if not self.end_task_client.wait_for_service(timeout_sec=0.1):
+            self.get_logger().warning('EndTask 서비스가 아직 활성화되지 않았습니다. 필요할 때 다시 시도합니다.')
+        
+        self.get_logger().info('TalkerNode 초기화 완료!')
     
+    def call_end_task(self, robot_id, task_type):
+        """작업 종료 서비스 호출
+        
+        Args:
+            robot_id (str): 로봇 ID (예: "libo_a")
+            task_type (str): 작업 유형 ("assist" 또는 "delivery")
+        """
+        # 서비스 가용성 확인
+        if not self.end_task_client.service_is_ready():
+            self.get_logger().warning('EndTask 서비스가 준비되지 않았습니다. 5초간 대기 후 시도합니다.')
+            if not self.end_task_client.wait_for_service(timeout_sec=5.0):
+                self.get_logger().error('EndTask 서비스를 사용할 수 없습니다.')
+                return
+        
+        request = EndTask.Request()
+        request.robot_id = robot_id
+        request.task_type = task_type
+        
+        self.get_logger().info(f"EndTask 서비스 호출 중 (robot_id: {robot_id}, task_type: {task_type})")
+        future = self.end_task_client.call_async(request)
+        future.add_done_callback(self.on_end_task_response)
+        
+    def on_end_task_response(self, future):
+        """EndTask 서비스 응답 처리"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f"EndTask 서비스 성공: {response.message if response.message else 'No message'}")
+                print(f"[{get_kr_time()}][SERVICE] ✅ EndTask 서비스 호출 성공")
+            else:
+                self.get_logger().warning(f"EndTask 서비스 실패: {response.message if response.message else 'No message'}")
+                print(f"[{get_kr_time()}][SERVICE] ⚠️ EndTask 서비스 호출 실패: {response.message}")
+        except Exception as e:
+            self.get_logger().error(f"EndTask 서비스 호출 중 오류 발생: {e}")
+            print(f"[{get_kr_time()}][SERVICE] ❌ EndTask 서비스 호출 예외: {str(e)}")
+    
+    def publish_talk_command(self, robot_id, action):
+        """TalkCommand 메시지 발행"""
+        msg = TalkCommand()
+        msg.robot_id = robot_id
+        msg.action = action
+        
+        self.get_logger().info(f"TalkCommand 발행: robot_id={robot_id}, action={action}")
+        self.talk_cmd_pub.publish(msg)
+        
     def voice_command_callback(self, msg):
         """
         VoiceCommand 메시지 처리 콜백
@@ -453,21 +587,25 @@ def init_tcp_server():
     global tcp_server, tcp_client
     
     # TCP 서버 소켓 생성
+    print(f"[{get_kr_time()}][TCP] 🔊 글로벌 TCP 서버 초기화 중...")
     tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    tcp_server.bind((AI_SERVICE_IP, SPEAKER_PORT))
+    tcp_server.bind((HARDWARE_HANDLER_IP, SPEAKER_PORT))
     tcp_server.listen(1)
     
-    print(f"[{get_kr_time()}][TCP] 스피커 노드 연결 대기 중... (포트: {SPEAKER_PORT})")
+    print(f"[{get_kr_time()}][TCP] 🎧 스피커 노드 연결 대기 중... ({HARDWARE_HANDLER_IP}:{SPEAKER_PORT})")
     tcp_client, addr = tcp_server.accept()
-    print(f"[{get_kr_time()}][TCP] 스피커 노드 연결됨: {addr}")
+    print(f"[{get_kr_time()}][TCP] ✅ 스피커 노드 연결됨: {addr} → {HARDWARE_HANDLER_IP}:{SPEAKER_PORT}")
 
 def main(args=None):
     # ROS2 초기화
     rclpy.init(args=args)
     
     # ========== 1. 통신 관리자 초기화 ==========
-    print(f"[{get_kr_time()}][INIT] 통신 관리자 초기화 중...")
+    print(f"[{get_kr_time()}][INIT] 🚀 통신 관리자 초기화 중...")
+    print(f"[{get_kr_time()}][NETWORK] 📡 네트워크 설정 요약:")
+    print(f"[{get_kr_time()}][NETWORK] 🎤 UDP 서버: {HARDWARE_HANDLER_IP}:{MIC_STREAM_PORT} - 마이크 스트림")
+    print(f"[{get_kr_time()}][NETWORK] 🔊 TCP 서버: {HARDWARE_HANDLER_IP}:{SPEAKER_PORT} - 스피커 출력")
     comm_manager = CommunicationManager()
     
     # UDP 수신기 및 TCP 서버 시작 (비동기)
@@ -688,9 +826,9 @@ def main(args=None):
                         system_prompt = (
                             "당신은 로봇의 음성 명령을 분석하는 AI입니다.\n"
                             "사용자의 발화를 듣고, 아래 4가지 의도 중 하나로 분류하세요.\n\n"
-                            "- pause_navigation: '잠깐 멈춰', '멈춰봐' 등 일시정지 명령\n"
+                            "- pause_follow: '잠깐 멈춰', '멈춰봐' 등 일시정지 명령\n"
                             "- resume_follow: '다시 따라와', '다시 시작해' 등 팔로윙 재개 명령\n"
-                            "- end_follow: '그만 따라와', '팔로윙 종료' 등 팔로윙 종료 명령\n"
+                            "- stop_assist: '어시스트 그만하고 복귀해', '그만' 등 어시스트 종료 명령\n"
                             "- ignore: '고마워', '아니야' 등 기타 대화나 무시해도 되는 표현\n\n"
                             "결과는 반드시 다음 JSON 형식으로만 출력해야 합니다:\n"
                             '{"intent": "..."}'
@@ -704,7 +842,6 @@ def main(args=None):
                         )
                         ai_text = completion.choices[0].message.content
                         print(f"[{get_kr_time()}][GPT] AI 응답: {ai_text}")
-                        import re
                         match = re.search(r'{"intent":\s*"(\w+)"}', ai_text)
                         if match:
                             intent = match.group(1)
@@ -713,51 +850,78 @@ def main(args=None):
                             intent = "ignore"
                             print(f"[{get_kr_time()}][INTENT] ⚠️ 의도 분석 실패, 기본값 'ignore' 사용")
 
-                        # 명령어에 따라 적절한 카테고리와 액션 매핑
-                        # 기존 명령어 처리 로직
-                        intent_action_map = {
-                            "pause_navigation": {"category": "escort", "action": "escort_pause"},
-                            "resume_follow": {"category": "escort", "action": "escort_resume"},
-                            "end_follow": {"category": "escort", "action": "stop_following"},
-                            "ignore": {"category": "common", "action": "basic_sound"}
-                        }
+                        # 명령어에 따라 적절한 액션 실행
+                        robot_id = "libo_a"  # 기본 로봇 ID
                         
-                        # 명령어가 매핑에 있으면 해당 카테고리/액션 사용, 없으면 기본 응답
-                        if intent in intent_action_map:
-                            mapping = intent_action_map[intent]
-                            print(f"[{get_kr_time()}][RESPONSE] 명령 '{intent}'에 대한 음성 응답 실행")
-                            success = comm_manager.play_voice_command(
-                                mapping["category"], 
-                                mapping["action"]
-                            )
-                            if not success:
-                                # 실패 시 기본 텍스트로 응답
-                                default_response = "등록되지 않은 명령입니다. 무시하겠습니다."
-                                comm_manager.play_tts_response(default_response)
+                        # 의도에 따라 음성 응답 및 명령 발행
+                        if intent == "resume_follow":
+                            # 다시 따라와: TalkCommand 메시지 발행 (robot_id, "follow")
+                            print(f"[{get_kr_time()}][RESPONSE] '다시 따라와' 명령 처리")
+                            success = comm_manager.play_tts_response("네, 다시 따라가겠습니다.")
+                            if success:
+                                # Talk Command 발행
+                                talker_node.publish_talk_command(robot_id, "follow")
+                                
+                        elif intent == "pause_follow" or intent == "ignore":
+                            # 멈춰 또는 무시: TalkCommand 메시지 발행 (robot_id, "stop")
+                            print(f"[{get_kr_time()}][RESPONSE] '{intent}' 명령 처리")
+                            if intent == "pause_follow":
+                                success = comm_manager.play_tts_response("네, 잠시 멈추겠습니다.")
+                            else:
+                                success = comm_manager.play_tts_response("네, 알겠습니다.")
+                            if success:
+                                talker_node.publish_talk_command(robot_id, "stop")
+                                
+                        elif intent == "stop_assist":
+                            # 어시스트 종료: EndTask 서비스 호출
+                            print(f"[{get_kr_time()}][RESPONSE] '어시스트 종료' 명령 처리")
+                            success = comm_manager.play_tts_response("네, 어시스트를 종료하고 복귀하겠습니다.")
+                            if success:
+                                # EndTask 서비스 호출 - task_type은 "assist"로 고정
+                                talker_node.call_end_task(robot_id, task_type="assist")
+                        
+                        # 성공 여부에 따른 로그
+                        if success:
+                            print(f"[{get_kr_time()}][AUDIO] 음성 응답 전송 완료")
                         else:
-                            # 기본 응답
-                            default_response = "등록되지 않은 명령입니다. 무시하겠습니다."
-                            print(f"[{get_kr_time()}][RESPONSE] {default_response}")
-                            comm_manager.play_tts_response(default_response)
+                            print(f"[{get_kr_time()}][AUDIO] ❌ 음성 응답 전송 실패")
                             
                     print(f"[{get_kr_time()}][SYSTEM] '리보야' 이후 명령 처리 완료, 다시 웨이크워드 대기 중...")
 
             time.sleep(0.01)
             
     except KeyboardInterrupt:
-        print("[talker_manager] 종료 요청됨.")
+        print(f"[{get_kr_time()}][SYSTEM] 사용자에 의한 종료 요청됨.")
+    except Exception as e:
+        print(f"[{get_kr_time()}][ERROR] 예외 발생: {str(e)}")
     finally:
         print(f"[{get_kr_time()}][CLEANUP] 프로그램 종료 중...")
-        comm_manager.cleanup()
-        udp_thread.join()
-        tcp_thread.join()
         
+        # 통신 관리자 정리
+        if 'comm_manager' in locals():
+            print(f"[{get_kr_time()}][CLEANUP] 통신 관리자 리소스 정리 중...")
+            comm_manager.cleanup()
+            
+            # 스레드 종료 대기
+            if 'udp_thread' in locals() and udp_thread.is_alive():
+                udp_thread.join(timeout=2.0)
+            if 'tcp_thread' in locals() and tcp_thread.is_alive():
+                tcp_thread.join(timeout=2.0)
+                
         # ROS2 종료
-        talker_node.destroy_node()
-        rclpy.shutdown()
+        if 'talker_node' in locals():
+            print(f"[{get_kr_time()}][CLEANUP] ROS2 노드 정리 중...")
+            talker_node.destroy_node()
+            
+        if rclpy.ok():
+            print(f"[{get_kr_time()}][CLEANUP] ROS2 종료 중...")
+            rclpy.shutdown()
         
+        # Porcupine 리소스 정리
         if 'porcupine' in locals():
+            print(f"[{get_kr_time()}][CLEANUP] Porcupine 웨이크워드 엔진 정리 중...")
             porcupine.delete()
+            
         print(f"[{get_kr_time()}][SYSTEM] 프로그램이 안전하게 종료되었습니다.")
 
 if __name__ == '__main__':
