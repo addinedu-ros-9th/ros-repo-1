@@ -6,7 +6,7 @@ import time
 
 # ======================== 상수 정의 =========================
 AI_SERVICE = "127.0.0.1"                # 추후 AI 서비스 서버 IP
-MIC_STREAM_PORT = 7000           
+MIC_STREAM_PORT = 7010           
 
 MIC_INDEX = None                        # 자동 선택
 NATIVE_RATE = 48000                    
@@ -71,9 +71,10 @@ def main():
             input_device_index=mic_index
         )
         
-        print(f"[{get_kr_time()}][INIT] 스트리밍 시작...")
-        print(f"[{get_kr_time()}][CONFIG] 마이크: {device_info['name']}")
-        print(f"[{get_kr_time()}][CONFIG] 설정: {NATIVE_RATE}Hz, {supported_channels}채널, chunk={CHUNK}")
+        print(f"[{get_kr_time()}][INIT] 🚀 스트리밍 시작...")
+        print(f"[{get_kr_time()}][CONFIG] 🎤 마이크: {device_info['name']}")
+        print(f"[{get_kr_time()}][CONFIG] ⚙️ 설정: {NATIVE_RATE}Hz, {supported_channels}채널, chunk={CHUNK}")
+        print(f"[{get_kr_time()}][UDP] 📡 UDP 스트림 대상: {AI_SERVICE}:{MIC_STREAM_PORT}")
         
         # 성능 모니터링을 위한 변수들
         packets_sent = 0
@@ -100,7 +101,8 @@ def main():
                 elapsed = current_time - start_time
                 rate = packets_sent / elapsed
                 data_rate = (rate * CHUNK * 2) / 1024  # KB/s
-                print(f"[{get_kr_time()}][STATS] 전송량: {packets_sent}개 패킷, {rate:.1f} packets/sec, {data_rate:.1f} KB/s")
+                print(f"[{get_kr_time()}][STATS] 📊 전송량: {packets_sent}개 패킷, {rate:.1f} packets/sec, {data_rate:.1f} KB/s")
+                print(f"[{get_kr_time()}][UDP] 📡 활성 연결: {AI_SERVICE}:{MIC_STREAM_PORT} → 오디오 스트림 전송 중")
                 last_log_time = current_time
                 
     except KeyboardInterrupt:

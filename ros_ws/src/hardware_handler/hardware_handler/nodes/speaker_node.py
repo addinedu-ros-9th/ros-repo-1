@@ -42,23 +42,24 @@ class SpeakerNode:
     def connect_to_server(self):
         """AI 서비스에 TCP 연결"""
         retry_count = 0
+        print(f"[{get_kr_time()}][TCP] 🔌 연결 시도: {AI_SERVICE_IP}:{SPEAKER_PORT} → AI 서비스 TCP 서버")
         while retry_count < MAX_RETRY_COUNT:
             try:
                 self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.tcp_socket.connect((AI_SERVICE_IP, SPEAKER_PORT))
-                print(f"[{get_kr_time()}][TCP] AI 서비스 연결 성공")
+                print(f"[{get_kr_time()}][TCP] ✅ 연결 성공: {AI_SERVICE_IP}:{SPEAKER_PORT} → AI 서비스")
                 return True
             except ConnectionRefusedError:
                 retry_count += 1
-                print(f"[{get_kr_time()}][TCP] 연결 실패. {RETRY_INTERVAL}초 후 재시도... ({retry_count}/{MAX_RETRY_COUNT})")
+                print(f"[{get_kr_time()}][TCP] ❌ 연결 실패 ({retry_count}/{MAX_RETRY_COUNT}): {AI_SERVICE_IP}:{SPEAKER_PORT}. {RETRY_INTERVAL}초 후 재시도...")
                 time.sleep(RETRY_INTERVAL)
                 
-        print(f"[{get_kr_time()}][ERROR] 최대 재시도 횟수 초과. 프로그램을 종료합니다.")
+        print(f"[{get_kr_time()}][ERROR] ⛔ 최대 재시도 횟수 초과. 프로그램을 종료합니다.")
         return False
 
     def receive_audio(self):
         """TCP로 오디오 데이터 수신"""
-        print(f"[{get_kr_time()}][INIT] 오디오 수신 대기 중...")
+        print(f"[{get_kr_time()}][INIT] 🎧 오디오 수신 대기 중... ({AI_SERVICE_IP}:{SPEAKER_PORT})")
         connection_alive = True
         
         while self.is_running and connection_alive:
@@ -129,7 +130,7 @@ class SpeakerNode:
                 
         # 연결이 끊어진 경우 재연결 시도
         if self.is_running:
-            print(f"[{get_kr_time()}][TCP] 서버와의 연결이 끊어졌습니다. 재연결을 시도합니다.")
+            print(f"[{get_kr_time()}][TCP] 🔄 서버({AI_SERVICE_IP}:{SPEAKER_PORT})와의 연결이 끊어졌습니다. 재연결을 시도합니다.")
             if self.connect_to_server():
                 self.receive_audio()
 
