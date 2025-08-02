@@ -1,2 +1,2 @@
 string robot_id
-string command
+int16 count
