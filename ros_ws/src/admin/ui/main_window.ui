@@ -17,7 +17,7 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string>LIBO Administrator System v1.0</string>
+   <string>LIBO Administrator System v2.0</string>
   </property>
   <property name="windowIcon">
    <iconset>
@@ -51,155 +51,22 @@
     <property name="usesScrollButtons">
      <bool>false</bool>
     </property>
-    <widget class="QWidget" name="main_tab">
+    <!-- Main Control Tab -->
+    <widget class="QWidget" name="main_control_tab">
      <attribute name="title">
       <string>🤖 Main Control</string>
      </attribute>
-     <widget class="QFrame" name="robot_status_frame">
-      <property name="geometry">
-       <rect>
-        <x>1050</x>
-        <y>20</y>
-        <width>220</width>
-        <height>270</height>
-       </rect>
-      </property>
-      <property name="styleSheet">
-       <string>QFrame {
-    border: 2px solid #3498db;
-    border-radius: 8px;
-    background-color: #34495e;
-}
-
-QLabel {
-    color: white;
-    font-size: 12px;
-}
-
-QLabel#robot_status_title {
-    font-size: 14px;
-    font-weight: bold;
-    color: #3498db;
-}
-
-QLabel#robot_list_label {
-    font-size: 13px;
-    color: white;
-}</string>
-      </property>
-      <widget class="QLabel" name="robot_status_title">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>10</y>
-         <width>140</width>
-         <height>25</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>🤖 Active Robots</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="robot_count_label">
-       <property name="geometry">
-        <rect>
-         <x>155</x>
-         <y>10</y>
-         <width>60</width>
-         <height>25</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>Count: 0</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="robot_list_label">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>40</y>
-         <width>200</width>
-         <height>220</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>No robots detected...</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-       </property>
-       <property name="wordWrap">
-        <bool>true</bool>
-       </property>
-      </widget>
-     </widget>
-     <widget class="QFrame" name="task_status_frame">
-      <property name="geometry">
-       <rect>
-        <x>1050</x>
-        <y>300</y>
-        <width>220</width>
-        <height>200</height>
-       </rect>
-      </property>
-      <property name="styleSheet">
-       <string>QFrame {
-    border: 2px solid #e67e22;
-    border-radius: 8px;
-    background-color: #34495e;
-}
-
-QLabel {
-    color: white;
-    font-size: 12px;
-}
-
-QLabel#task_status_title {
-    font-size: 14px;
-    font-weight: bold;
-    color: #e67e22;
-}
-
-QLabel#task_status_label {
-    font-size: 12px;
-    color: white;
-}</string>
-      </property>
-      <widget class="QLabel" name="task_status_title">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>10</y>
-         <width>200</width>
-         <height>25</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>📋 Current Task</string>
-       </property>
-      </widget>
-      <widget class="QLabel" name="task_status_label">
-       <property name="geometry">
-        <rect>
-         <x>10</x>
-         <y>40</y>
-         <width>200</width>
-         <height>150</height>
-        </rect>
-       </property>
-       <property name="text">
-        <string>활성 작업 없음</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
-       </property>
-       <property name="wordWrap">
-        <bool>true</bool>
-       </property>
-      </widget>
-     </widget>
+     <layout class="QVBoxLayout" name="main_control_layout"/>
     </widget>
-    <widget class="QWidget" name="log_tab">
+    <!-- AI Server Control Tab -->
+    <widget class="QWidget" name="ai_server_control_tab">
+     <attribute name="title">
+      <string>👁️ AI Server Control</string>
+     </attribute>
+     <layout class="QVBoxLayout" name="ai_server_control_layout"/>
+    </widget>
+    <!-- System Logs Tab -->
+    <widget class="QWidget" name="system_logs_tab">
      <attribute name="title">
       <string>📋 System Logs</string>
      </attribute>
@@ -312,9 +179,6 @@ QLabel#task_status_label {
    <property name="text">
     <string>Connect Robot</string>
    </property>
-   <property name="shortcut">
-    <string>Ctrl+R</string>
-   </property>
   </action>
   <action name="actionDisconnect_Robot">
    <property name="text">
@@ -331,7 +195,7 @@ QLabel#task_status_label {
     <string>Emergency Stop</string>
    </property>
    <property name="shortcut">
-    <string>F1</string>
+    <string>Ctrl+E</string>
    </property>
   </action>
   <action name="actionFullscreen">
@@ -343,12 +207,6 @@ QLabel#task_status_label {
    </property>
   </action>
   <action name="actionShow_Status_Bar">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="checked">
-    <bool>true</bool>
-   </property>
    <property name="text">
     <string>Show Status Bar</string>
    </property>
@@ -365,9 +223,6 @@ QLabel#task_status_label {
    <property name="text">
     <string>User Manual</string>
    </property>
-   <property name="shortcut">
-    <string>F1</string>
-   </property>
   </action>
   <action name="actionSystem_Info">
    <property name="text">
@@ -376,10 +231,8 @@ QLabel#task_status_label {
   </action>
   <action name="actionAbout">
    <property name="text">
-    <string>About LIBO</string>
+    <string>About</string>
    </property>
   </action>
  </widget>
- <resources/>
- <connections/>
 </ui>

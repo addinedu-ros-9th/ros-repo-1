@@ -346,9 +346,9 @@ class BookDetailPopup(QDialog):
         try:
             print(f"🚀 에스코팅 요청: {self.book_info['title']}")
             
-            # 에스코팅 요청 데이터 준비
+            # 에스코팅 요청 데이터 준비 (로봇 ID는 task_manager에서 자동 선택)
             escort_data = {
-                'robot_id': 'robot_01',
+                'robot_id': '',  # 빈 문자열로 전송하여 task_manager에서 자동 선택
                 'book_title': self.book_info['title'],
                 'book_location': self.book_location,
                 'book_info': self.book_info

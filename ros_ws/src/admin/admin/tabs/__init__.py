@@ -1,2 +1,4 @@
 # 이 파일은 tabs 디렉토리가 파이썬 패키지임을 알려주는 역할을 합니다.
 # 내용은 비어 있어도 괜찮습니다. 
+from .main_control_tab import MainControlTab
+from .ai_server_control_tab import AiServerControlTab 
