@@ -10,6 +10,7 @@ from libo_interfaces.srv import DeactivateDetector  # DeactivateDetector 서비�
 from libo_interfaces.srv import ActivateQRScanner  # ActivateQRScanner 서비스 추가
 from libo_interfaces.srv import DeactivateQRScanner  # DeactivateQRScanner 서비스 추가
 from libo_interfaces.srv import CancelNavigation  # CancelNavigation 서비스 추가
+from libo_interfaces.srv import EndTask  # EndTask 서비스 추가
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
@@ -206,6 +207,13 @@ class TaskManager(Node):
         # CancelNavigation 서비스 클라이언트 생성
         self.cancel_navigation_client = self.create_client(CancelNavigation, 'cancel_navigation')
         
+        # EndTask 서비스 서버 생성
+        self.end_task_service = self.create_service(
+            EndTask,
+            'end_task',
+            self.end_task_callback
+        )
+        
         # Heartbeat 토픽 구독자 생성
         self.heartbeat_subscription = self.create_subscription(
             Heartbeat,  # 메시지 타입
@@ -363,12 +371,15 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'arrived_kiosk'}  # 키오스크 도착 음성
                     ],
                     'qr_scanner_activated': [  # QR Scanner 활성화 성공 시 실행할 액션들
-                        {'action': 'force_stage', 'target': 2}  # Stage 2로 강제 이동
+                        {'action': 'advance_stage'}  # Stage 2로 진행
                     ]
                 },
                 2: {  # Stage 2: QR 인증 대기하는 단계 (목적지 이동 없음)
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'led', 'emotion': '슬픔'}  # 슬픔 LED 표시 (네비게이션 없음)
+                    ],
+                    'end_task': [  # EndTask 요청 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Stage 3으로 진행
                     ]
                 },
                 3: {  # Stage 3: Base로 복귀하는 단계
@@ -406,6 +417,9 @@ class TaskManager(Node):
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'advance_stage'}  # Stage 3으로 진행
+                    ],
+                    'end_task': [  # EndTask 요청 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Stage 3으로 진행
                     ]
                 },
                 3: {  # Stage 3: Base로 복귀하는 단계
@@ -432,6 +446,7 @@ class TaskManager(Node):
         self.get_logger().info('👁️ ActivateQRScanner 클라이언트 준비됨 - activate_qr_scanner 서비스 연결...')
         self.get_logger().info('👁️ DeactivateQRScanner 클라이언트 준비됨 - deactivate_qr_scanner 서비스 연결...')
         self.get_logger().info('⏹️ CancelNavigation 클라이언트 준비됨 - cancel_navigation 서비스 연결...')
+        self.get_logger().info('🏁 EndTask 서비스 시작됨 - end_task 서비스 대기 중...')
         self.get_logger().info('⏰ DetectionTimer 구독 시작됨 - detection_timer 토픽 모니터링 중...')
         self.get_logger().info('🗣️ VoiceCommand 퍼블리셔 준비됨 - voice_command 토픽으로 이벤트 기반 발행...')
         self.get_logger().info('⚖️ 무게 데이터 구독 시작됨 - weight_data 토픽 모니터링 중...')
@@ -1308,6 +1323,30 @@ class TaskManager(Node):
                 self.get_logger().warning(f'⚠️  QR Scanner 비활성화 실패: {response.message}')
         except Exception as e:
             self.get_logger().error(f'❌ QR Scanner 비활성화 응답 처리 중 오류: {e}')
+
+    def end_task_callback(self, request, response):  # EndTask 서비스 콜백
+        """EndTask 서비스 콜백"""
+        self.get_logger().info(f'📥 EndTask 요청 받음!')
+        self.get_logger().info(f'   - 로봇 ID: {request.robot_id}')
+        self.get_logger().info(f'   - Task Type: {request.task_type}')
+        
+        # 해당 로봇의 활성 작업 찾기
+        active_task = None
+        for task in self.tasks:
+            if task.robot_id == request.robot_id and task.task_type == request.task_type:
+                active_task = task
+                break
+        
+        if active_task:
+            # task_stage_logic에서 end_task 이벤트 처리
+            self.process_task_stage_logic(active_task, active_task.stage, 'end_task')
+            response.success = True
+            response.message = f"EndTask 이벤트 처리 완료: {request.robot_id} - {request.task_type}"
+        else:
+            response.success = False
+            response.message = f"로봇 <{request.robot_id}>의 {request.task_type} 작업을 찾을 수 없습니다"
+        
+        return response
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)

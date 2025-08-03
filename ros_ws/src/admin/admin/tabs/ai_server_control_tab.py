@@ -13,6 +13,7 @@ from rclpy.node import Node
 
 from libo_interfaces.srv import ActivateDetector, DeactivateDetector
 from libo_interfaces.srv import ActivateQRScanner, DeactivateQRScanner  # QR Scanner 서비스 추가
+from libo_interfaces.srv import EndTask  # EndTask 서비스 추가
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
 from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
 
@@ -42,15 +43,24 @@ class AiServerControlTab(QWidget):
         self.activate_qr_scanner_service = None  # QR Scanner 활성화 서비스
         self.deactivate_qr_scanner_service = None  # QR Scanner 비활성화 서비스
         
+        # EndTask 서비스 클라이언트
+        self.end_task_client = None
+        self.end_task_robot_id = "libo_a"  # 기본 로봇 ID
+        self.end_task_type = "assist"  # 기본 작업 타입
+        
         self.init_ui()
         
+        # EndTask 클라이언트 초기화 (서버 활성화와 독립적)
+        self.end_task_client = self.ros_node.create_client(EndTask, 'end_task')
+        
         # 초기 로그 메시지
-        self.log_detector_message("👁️ AI Server Detector Control 탭이 시작되었습니다.")
+        self.log_detector_message("👁️ Vision Manager Control 탭이 시작되었습니다.")
         self.log_detector_message("🔴 서버가 비활성화 상태입니다. 'Server ON' 버튼을 눌러 활성화하세요.")
         self.log_detection_timer_message("⏰ DetectionTimer Control이 시작되었습니다.")
         self.log_detection_timer_message("🔴 DetectionTimer가 비활성화 상태입니다.")
-        self.log_voice_command_message("🗣️ VoiceCommand Monitor가 시작되었습니다.")
+        self.log_voice_command_message("🗣️ Talker Manager Control이 시작되었습니다.")
         self.log_voice_command_message("🔴 VoiceCommand 구독이 비활성화 상태입니다.")
+        self.log_voice_command_message("🏁 EndTask 기능이 준비되었습니다. (Vision Manager와 독립적)")
     
     def init_ui(self):
         """UI 초기화 - ai_server_control_tab.ui 파일 로드"""
@@ -68,6 +78,9 @@ class AiServerControlTab(QWidget):
         # VoiceCommand 관련 시그널 연결
         self.toggle_voice_subscription_button.clicked.connect(self.toggle_voice_subscription)
         self.clear_voice_log_button.clicked.connect(self.clear_voice_command_log)
+        
+        # EndTask 관련 시그널 연결
+        self.end_task_button.clicked.connect(self.send_end_task)
         
         # 초기 버튼 상태 설정 (서버가 비활성화 상태이므로 OFF로 표시)
         self.toggle_server_button.setText("🔴 Server OFF")
@@ -551,6 +564,51 @@ class AiServerControlTab(QWidget):
         self.voice_command_log = []
         self.voice_command_log_text.clear()
         self.log_voice_command_message("🧹 VoiceCommand 로그가 지워졌습니다.")
+    
+    def send_end_task(self):
+        """EndTask 서비스 요청 발행"""
+        if not self.end_task_client:
+            self.log_voice_command_message("❌ EndTask 클라이언트가 초기화되지 않았습니다.")
+            return
+        
+        try:
+            # UI에서 입력된 값 읽기
+            robot_id = self.end_task_robot_id_edit.text().strip()
+            task_type = self.end_task_type_edit.text().strip()
+            
+            # 입력값 검증
+            if not robot_id:
+                self.log_voice_command_message("❌ Robot ID를 입력해주세요.")
+                return
+            
+            if not task_type:
+                self.log_voice_command_message("❌ Task Type을 입력해주세요.")
+                return
+            
+            # EndTask 서비스 요청 생성
+            request = EndTask.Request()
+            request.robot_id = robot_id
+            request.task_type = task_type
+            
+            self.log_voice_command_message(f"📤 EndTask 요청 발행: robot_id={request.robot_id}, task_type={request.task_type}")
+            
+            # 비동기 서비스 호출
+            future = self.end_task_client.call_async(request)
+            future.add_done_callback(self.end_task_response_callback)
+            
+        except Exception as e:
+            self.log_voice_command_message(f"❌ EndTask 요청 발행 실패: {str(e)}")
+    
+    def end_task_response_callback(self, future):
+        """EndTask 서비스 응답 처리"""
+        try:
+            response = future.result()
+            if response.success:
+                self.log_voice_command_message(f"✅ EndTask 성공: {response.message}")
+            else:
+                self.log_voice_command_message(f"❌ EndTask 실패: {response.message}")
+        except Exception as e:
+            self.log_voice_command_message(f"❌ EndTask 응답 처리 중 오류: {str(e)}")
     
     def log_voice_command_message(self, message):
         """VoiceCommand 전용 로그 메시지 출력"""

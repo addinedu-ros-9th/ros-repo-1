@@ -77,7 +77,7 @@ QTextEdit {
          <string>font-size: 16px; font-weight: bold; color: #e67e22; margin: 5px;</string>
         </property>
         <property name="text">
-         <string>👁️ AI Server Detector Control</string>
+         <string>👁️ Vision Manager Control</string>
         </property>
        </widget>
       </item>
@@ -87,7 +87,7 @@ QTextEdit {
          <string>font-size: 12px; color: #7f8c8d; margin: 5px;</string>
         </property>
         <property name="text">
-         <string>TaskManager에서 ActivateDetector/DeactivateDetector 요청을 받아서 처리합니다.</string>
+         <string>TaskManager에서 ActivateDetector/DeactivateDetector/QR Scanner 요청을 받아서 처리합니다.</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>
@@ -430,7 +430,7 @@ QLineEdit {
          <string>font-size: 16px; font-weight: bold; color: #3498db; margin: 5px;</string>
         </property>
         <property name="text">
-         <string>🗣️ VoiceCommand Monitor</string>
+         <string>🗣️ Talker Manager Control</string>
         </property>
        </widget>
       </item>
@@ -440,7 +440,7 @@ QLineEdit {
          <string>font-size: 12px; color: #7f8c8d; margin: 5px;</string>
         </property>
         <property name="text">
-         <string>TaskManager에서 발행하는 VoiceCommand 메시지를 실시간으로 모니터링합니다.</string>
+         <string>TaskManager의 VoiceCommand 메시지를 모니터링하고 EndTask를 발행합니다.</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>
@@ -482,6 +482,63 @@ QLineEdit {
        </layout>
       </item>
       <item>
+       <layout class="QHBoxLayout" name="end_task_input_layout">
+        <item>
+         <widget class="QLabel" name="robot_id_label_2">
+          <property name="text">
+           <string>Robot ID:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="end_task_robot_id_edit">
+          <property name="maximumSize">
+           <size>
+            <width>80</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>libo_a</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="task_type_label">
+          <property name="text">
+           <string>Task Type:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="end_task_type_edit">
+          <property name="maximumSize">
+           <size>
+            <width>80</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>assist</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer6">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
        <layout class="QHBoxLayout" name="voice_command_button_layout">
         <item>
          <widget class="QPushButton" name="toggle_voice_subscription_button">
@@ -490,6 +547,16 @@ QLineEdit {
           </property>
           <property name="text">
            <string>🔴 구독 OFF</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="end_task_button">
+          <property name="styleSheet">
+           <string>background-color: #e67e22; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; font-size: 12px; min-height: 30px;</string>
+          </property>
+          <property name="text">
+           <string>🏁 End Task</string>
           </property>
          </widget>
         </item>
