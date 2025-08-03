@@ -19,6 +19,8 @@ from libo_interfaces.srv import ActivateTalker, DeactivateTalker  # Talker 서�
 from libo_interfaces.srv import ActivateTracker, DeactivateTracker  # Tracker 서비스 추가
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
 from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
+from libo_interfaces.msg import Expression  # Expression 메시지 추가
+from std_msgs.msg import String  # LED 메시지 추가
 
 class AiServerControlTab(QWidget):
     def __init__(self, ros_node, parent=None):
@@ -33,6 +35,20 @@ class AiServerControlTab(QWidget):
         self.voice_command_log = []  # VoiceCommand 전용 로그
         self.voice_subscription_active = False  # VoiceCommand 구독 상태 (기본값: OFF)
         self.voice_command_subscription = None  # VoiceCommand 구독자
+        
+        # Expression 구독 관련 변수들
+        self.expression_log = []  # Expression 전용 로그
+        self.expression_subscription_active = False  # Expression 구독 상태 (기본값: OFF)
+        self.expression_subscription = None  # Expression 구독자
+        self.current_robot_expression = "😐"  # 현재 로봇 표정 (기본값: 무표정)
+        self.current_robot_id = "none"  # 현재 로봇 ID
+        self.current_robot_status = "none"  # 현재 로봇 상태
+        
+        # LED 구독 관련 변수들
+        self.led_log = []  # LED 전용 로그
+        self.led_subscription_active = False  # LED 구독 상태 (기본값: OFF)
+        self.led_subscription = None  # LED 구독자
+        self.current_led_status = "none"  # 현재 LED 상태
         
         # DetectionTimer 발행 관련 변수들
         self.detection_timer_publisher = None  # DetectionTimer 퍼블리셔
@@ -77,6 +93,10 @@ class AiServerControlTab(QWidget):
         self.log_voice_command_message("🔴 VoiceCommand 구독이 비활성화 상태입니다.")
         self.log_voice_command_message("🏁 EndTask 기능이 준비되었습니다. (Vision Manager와 독립적)")
         self.log_detector_message("🔍 RobotQRCheck 기능이 준비되었습니다. (Vision Manager와 독립적)")
+        self.log_expression_message("😊 Expression Monitor가 시작되었습니다.")
+        self.log_expression_message("🔴 Expression 구독이 비활성화 상태입니다.")
+        self.log_led_message("🎨 LED Monitor가 시작되었습니다.")
+        self.log_led_message("🔴 LED 구독이 비활성화 상태입니다.")
     
     def init_ui(self):
         """UI 초기화 - ai_server_control_tab.ui 파일 로드"""
@@ -94,7 +114,7 @@ class AiServerControlTab(QWidget):
         
         # VoiceCommand 관련 시그널 연결
         self.toggle_voice_subscription_button.clicked.connect(self.toggle_voice_subscription)
-        self.clear_voice_log_button.clicked.connect(self.clear_voice_command_log)
+        self.clear_voice_log_button.clicked.connect(self.clear_all_logs)
         
         # EndTask 관련 시그널 연결
         self.end_task_button.clicked.connect(self.send_end_task)
@@ -685,25 +705,194 @@ class AiServerControlTab(QWidget):
             self.stop_detection_timer()
         if self.voice_subscription_active:
             self.stop_voice_subscription()
+        if self.expression_subscription_active:
+            self.stop_expression_subscription()
+        if self.led_subscription_active:
+            self.stop_led_subscription()
+    
+    def start_expression_subscription(self):
+        """Expression 구독 시작"""
+        try:
+            # Expression 구독자 생성
+            self.expression_subscription = self.ros_node.create_subscription(
+                Expression,
+                'expression',
+                self.expression_callback,
+                10
+            )
+            
+            self.expression_subscription_active = True
+            self.log_expression_message("✅ Expression 구독자가 생성되었습니다.")
+            self.log_expression_message("📡 TaskManager의 Expression 메시지를 모니터링 중...")
+            
+        except Exception as e:
+            self.log_expression_message(f"❌ Expression 구독 시작 실패: {str(e)}")
+            self.expression_subscription_active = False
+    
+    def start_led_subscription(self):
+        """LED 구독 시작"""
+        try:
+            # LED 구독자 생성
+            self.led_subscription = self.ros_node.create_subscription(
+                String,
+                'led_status',
+                self.led_callback,
+                10
+            )
+            
+            self.led_subscription_active = True
+            self.log_led_message("✅ LED 구독자가 생성되었습니다.")
+            self.log_led_message("📡 TaskManager의 LED 메시지를 모니터링 중...")
+            
+        except Exception as e:
+            self.log_led_message(f"❌ LED 구독 시작 실패: {str(e)}")
+            self.led_subscription_active = False
+    
+    def stop_expression_subscription(self):
+        """Expression 구독 중지"""
+        try:
+            # 구독자 제거
+            if self.expression_subscription:
+                self.ros_node.destroy_subscription(self.expression_subscription)
+                self.expression_subscription = None
+            
+            self.expression_subscription_active = False
+            self.log_expression_message("⏹️ Expression 구독이 중지되었습니다.")
+            
+        except Exception as e:
+            self.log_expression_message(f"❌ Expression 구독 중지 실패: {str(e)}")
+    
+    def stop_led_subscription(self):
+        """LED 구독 중지"""
+        try:
+            # 구독자 제거
+            if self.led_subscription:
+                self.ros_node.destroy_subscription(self.led_subscription)
+                self.led_subscription = None
+            
+            self.led_subscription_active = False
+            self.log_led_message("⏹️ LED 구독이 중지되었습니다.")
+            
+        except Exception as e:
+            self.log_led_message(f"❌ LED 구독 중지 실패: {str(e)}")
+    
+    def expression_callback(self, msg):
+        """Expression 메시지 수신 콜백"""
+        try:
+            robot_id = msg.robot_id
+            robot_status = msg.robot_status
+            current_time = time.strftime('%H:%M:%S', time.localtime())
+            
+            # 현재 로봇 정보 업데이트
+            self.current_robot_id = robot_id
+            self.current_robot_status = robot_status
+            
+            # 상태에 따른 이모지 매핑
+            expression_emojis = {
+                "기쁨": "😊",
+                "슬픔": "😢", 
+                "화남": "😠",
+                "escort": "🚶",
+                "assist": "🤝",
+                "delivery": "📦"
+            }
+            
+            # 현재 표정 업데이트
+            self.current_robot_expression = expression_emojis.get(robot_status, "😐")
+            
+            # 로그 메시지 생성
+            log_message = f"📥 Expression 수신: {robot_id} - {robot_status} {self.current_robot_expression} at {current_time}"
+            self.log_expression_message(log_message)
+            
+            # UI 업데이트 (표정 표시 + LED 상태 반영)
+            self.update_expression_display()
+            
+        except Exception as e:
+            self.log_expression_message(f"❌ Expression 처리 중 오류: {str(e)}")
+    
+    def update_expression_display(self):
+        """Expression 표시 업데이트"""
+        try:
+            # 현재 로봇 표정과 상태를 표시
+            display_text = f"{self.current_robot_expression} {self.current_robot_id} - {self.current_robot_status}"
+            self.expression_display.setText(display_text)
+            
+            # LED 상태에 따른 배경색 설정 (은은한 색상)
+            if self.current_led_status == "기쁨":
+                self.expression_display.setStyleSheet("font-weight: bold; color: #27ae60; font-size: 14px; background-color: #e8f5e8; border: 2px solid #27ae60; border-radius: 5px; padding: 5px;")  # 은은한 초록색
+            elif self.current_led_status == "슬픔":
+                self.expression_display.setStyleSheet("font-weight: bold; color: #3498db; font-size: 14px; background-color: #e8f4fd; border: 2px solid #3498db; border-radius: 5px; padding: 5px;")  # 은은한 파란색
+            elif self.current_led_status == "화남":
+                self.expression_display.setStyleSheet("font-weight: bold; color: #e74c3c; font-size: 14px; background-color: #fde8e8; border: 2px solid #e74c3c; border-radius: 5px; padding: 5px;")  # 은은한 빨간색
+            else:
+                # LED 상태가 없거나 다른 경우 기본 스타일
+                if self.current_robot_status in ["기쁨"]:
+                    self.expression_display.setStyleSheet("font-weight: bold; color: #27ae60; font-size: 14px; background-color: #f8f9fa; border: 2px solid #95a5a6; border-radius: 5px; padding: 5px;")  # 기본 배경
+                elif self.current_robot_status in ["슬픔"]:
+                    self.expression_display.setStyleSheet("font-weight: bold; color: #3498db; font-size: 14px; background-color: #f8f9fa; border: 2px solid #95a5a6; border-radius: 5px; padding: 5px;")  # 기본 배경
+                elif self.current_robot_status in ["화남"]:
+                    self.expression_display.setStyleSheet("font-weight: bold; color: #e74c3c; font-size: 14px; background-color: #f8f9fa; border: 2px solid #95a5a6; border-radius: 5px; padding: 5px;")  # 기본 배경
+                elif self.current_robot_status in ["escort", "assist", "delivery"]:
+                    self.expression_display.setStyleSheet("font-weight: bold; color: #f39c12; font-size: 14px; background-color: #f8f9fa; border: 2px solid #95a5a6; border-radius: 5px; padding: 5px;")  # 기본 배경
+                else:
+                    self.expression_display.setStyleSheet("font-weight: bold; color: #7f8c8d; font-size: 14px; background-color: #f8f9fa; border: 2px solid #95a5a6; border-radius: 5px; padding: 5px;")  # 기본 배경
+                
+        except Exception as e:
+            self.log_expression_message(f"❌ Expression 표시 업데이트 실패: {str(e)}")
+    
+    def clear_expression_log(self):
+        """Expression 로그 내용 지우기"""
+        self.expression_log = []
+        self.expression_log_text.clear()
+        self.log_expression_message("🧹 Expression 로그가 지워졌습니다.")
+    
+    def log_expression_message(self, message):
+        """Expression 전용 로그 메시지 출력"""
+        timestamp = time.strftime("%H:%M:%S")
+        log_entry = f"[{timestamp}] {message}"
+        
+        # 로그 리스트에 추가
+        self.expression_log.append(log_entry)
+        
+        # 최근 50개만 유지
+        if len(self.expression_log) > 50:
+            self.expression_log = self.expression_log[-50:]
+        
+        # UI 업데이트
+        self.update_expression_log_display()
+    
+    def update_expression_log_display(self):
+        """Expression 로그 표시 업데이트"""
+        log_text = "\n".join(self.expression_log)
+        self.expression_log_text.setPlainText(log_text)
+        
+        # 자동 스크롤
+        cursor = self.expression_log_text.textCursor()
+        cursor.movePosition(cursor.End)
+        self.expression_log_text.setTextCursor(cursor) 
     
     def toggle_voice_subscription(self):
-        """VoiceCommand 구독 ON/OFF 토글"""
-        if self.voice_subscription_active:
-            # VoiceCommand 구독 비활성화
+        """VoiceCommand & Expression & LED 구독 ON/OFF 토글"""
+        if self.voice_subscription_active and self.expression_subscription_active and self.led_subscription_active:
+            # VoiceCommand & Expression & LED 구독 비활성화
             self.stop_voice_subscription()
+            self.stop_expression_subscription()
+            self.stop_led_subscription()
             self.toggle_voice_subscription_button.setText("🔴 구독 OFF")
             self.toggle_voice_subscription_button.setStyleSheet("background-color: #e74c3c; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; font-size: 12px; min-height: 30px;")
             self.subscription_status_display.setText("🔴 비활성화")
             self.subscription_status_display.setStyleSheet("font-weight: bold; color: #e74c3c;")
-            self.log_voice_command_message("🔴 VoiceCommand 구독이 중지되었습니다.")
+            self.log_voice_command_message("🔴 VoiceCommand & Expression & LED 구독이 중지되었습니다.")
         else:
-            # VoiceCommand 구독 활성화
+            # VoiceCommand & Expression & LED 구독 활성화
             self.start_voice_subscription()
+            self.start_expression_subscription()
+            self.start_led_subscription()
             self.toggle_voice_subscription_button.setText("🟢 구독 ON")
             self.toggle_voice_subscription_button.setStyleSheet("background-color: #27ae60; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; font-size: 12px; min-height: 30px;")
             self.subscription_status_display.setText("🟢 활성화")
             self.subscription_status_display.setStyleSheet("font-weight: bold; color: #27ae60;")
-            self.log_voice_command_message("🟢 VoiceCommand 구독이 시작되었습니다.")
+            self.log_voice_command_message("🟢 VoiceCommand & Expression & LED 구독이 시작되었습니다.")
     
     def start_voice_subscription(self):
         """VoiceCommand 구독 시작"""
@@ -796,6 +985,16 @@ class AiServerControlTab(QWidget):
         self.voice_command_log_text.clear()
         self.log_voice_command_message("🧹 VoiceCommand 로그가 지워졌습니다.")
     
+    def clear_all_logs(self):
+        """VoiceCommand & Expression & LED 로그 내용 지우기"""
+        self.voice_command_log = []
+        self.voice_command_log_text.clear()
+        self.expression_log = []
+        self.expression_log_text.clear()
+        self.led_log = []
+        self.led_log_text.clear()
+        self.log_voice_command_message("🧹 VoiceCommand & Expression & LED 로그가 지워졌습니다.")
+    
     def send_end_task(self):
         """EndTask 서비스 요청 발행"""
         if not self.end_task_client:
@@ -865,3 +1064,71 @@ class AiServerControlTab(QWidget):
         cursor = self.voice_command_log_text.textCursor()
         cursor.movePosition(cursor.End)
         self.voice_command_log_text.setTextCursor(cursor) 
+    
+    def led_callback(self, msg):
+        """LED 메시지 수신 콜백"""
+        try:
+            led_status = msg.data
+            current_time = time.strftime('%H:%M:%S', time.localtime())
+            
+            # 현재 LED 상태 업데이트
+            self.current_led_status = led_status
+            
+            # 로그 메시지 생성
+            log_message = f"📥 LED 수신: {led_status} at {current_time}"
+            self.log_led_message(log_message)
+            
+            # UI 업데이트 (LED 상태 표시 + expression_display 배경색 변경)
+            self.update_expression_display()
+            
+        except Exception as e:
+            self.log_led_message(f"❌ LED 처리 중 오류: {str(e)}")
+    
+    def update_led_display(self):
+        """LED 상태 표시 업데이트"""
+        try:
+            # 현재 LED 상태를 표시
+            display_text = f"LED: {self.current_led_status}"
+            self.led_display.setText(display_text)
+            
+            # 상태에 따른 색상 설정
+            if self.current_led_status == "on":
+                self.led_display.setStyleSheet("font-weight: bold; color: #27ae60; font-size: 14px;")  # 초록색
+            elif self.current_led_status == "off":
+                self.led_display.setStyleSheet("font-weight: bold; color: #e74c3c; font-size: 14px;")  # 빨간색
+            else:
+                self.led_display.setStyleSheet("font-weight: bold; color: #7f8c8d; font-size: 14px;")  # 회색
+                
+        except Exception as e:
+            self.log_led_message(f"❌ LED 표시 업데이트 실패: {str(e)}")
+    
+    def clear_led_log(self):
+        """LED 로그 내용 지우기"""
+        self.led_log = []
+        self.led_log_text.clear()
+        self.log_led_message("🧹 LED 로그가 지워졌습니다.")
+    
+    def log_led_message(self, message):
+        """LED 전용 로그 메시지 출력"""
+        timestamp = time.strftime("%H:%M:%S")
+        log_entry = f"[{timestamp}] {message}"
+        
+        # 로그 리스트에 추가
+        self.led_log.append(log_entry)
+        
+        # 최근 50개만 유지
+        if len(self.led_log) > 50:
+            self.led_log = self.led_log[-50:]
+        
+        # UI 업데이트
+        self.update_led_log_display()
+    
+    def update_led_log_display(self):
+        """LED 로그 표시 업데이트"""
+        log_text = "\n".join(self.led_log)
+        self.led_log_text.setPlainText(log_text)
+        
+        # 자동 스크롤
+        cursor = self.led_log_text.textCursor()
+        cursor.movePosition(cursor.End)
+        self.led_log_text.setTextCursor(cursor) 

@@ -666,6 +666,67 @@ QLineEdit {
         </property>
        </widget>
       </item>
+      <item>
+       <layout class="QHBoxLayout" name="expression_log_header_layout">
+        <item>
+         <widget class="QLabel" name="expression_log_text_label">
+          <property name="styleSheet">
+           <string>font-size: 14px; font-weight: bold; color: #2c3e50; margin: 5px;</string>
+          </property>
+          <property name="text">
+           <string>📋 Expression Log:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="expression_display">
+          <property name="styleSheet">
+           <string>font-weight: bold; color: #7f8c8d; font-size: 14px;</string>
+          </property>
+          <property name="text">
+           <string>😐 none - none</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer8">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QTextEdit" name="expression_log_text">
+        <property name="styleSheet">
+         <string>background-color: #f8f9fa; color: #2c3e50; font-size: 10px; border: 1px solid #95a5a6; border-radius: 5px;</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="led_log_title_label">
+        <property name="styleSheet">
+         <string>font-size: 14px; font-weight: bold; color: #2c3e50; margin: 5px;</string>
+        </property>
+        <property name="text">
+         <string>📋 LED Log:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QTextEdit" name="led_log_text">
+        <property name="styleSheet">
+         <string>background-color: #f8f9fa; color: #2c3e50; font-size: 10px; border: 1px solid #95a5a6; border-radius: 5px;</string>
+        </property>
+       </widget>
+      </item>
      </layout>
     </widget>
    </item>
