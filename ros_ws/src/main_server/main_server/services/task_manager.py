@@ -76,7 +76,9 @@ VOICE_COMMANDS = {
         "reroute": "새로운 경로로 안내합니다.",
         "return": "complete.mp3",  # 복귀하겠습니다. / (복귀음 소리 - 삐빅)
         "arrived_base": "Base에 도착했습니다.",
-        "navigation_canceled": "네비게이션이 취소되었습니다."
+        "navigation_canceled": "네비게이션이 취소되었습니다.",
+        "emergency_stop": "비상 정지! 안전을 위해 모든 작업을 중단합니다.",  # 비상 정지 알림
+        "emergency_recovery": "비상 상황이 해결되었습니다. 정상 상태로 복구합니다."  # 복구 완료 알림
     },
     
     # 안내 관련 음성 명령
@@ -124,6 +126,7 @@ class RobotState(Enum):  # 개별 로봇 상태
     ESCORT = "ESCORT"  # 에스코트 작업
     DELIVERY = "DELIVERY"  # 딜리버리 작업
     ASSIST = "ASSIST"  # 어시스트 작업
+    EMERGENCY = "EMERGENCY"  # 비상 상황 (모든 작업 중단, 안전 대기)
 
 class Robot:  # 로봇 정보를 담는 클래스
     def __init__(self, robot_id):  # Robot 객체 초기화
@@ -156,6 +159,8 @@ class Robot:  # 로봇 정보를 담는 클래스
         # 상태에 따른 availability 자동 설정
         if new_state == RobotState.STANDBY:
             self.is_available = True  # 대기 상태일 때만 사용 가능
+        elif new_state == RobotState.EMERGENCY:
+            self.is_available = False  # 비상 상황 시 사용 불가
         else:
             self.is_available = False  # 나머지 상태는 모두 사용 불가
         
@@ -364,10 +369,6 @@ class TaskManager(Node):
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_kiosk'},  # 키오스크 도착 음성
                         {'action': 'advance_stage'}  # Stage 2로 진행
-                    ],
-                    'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
-                        {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
-                        {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
                     ]
                 },
                 2: {  # Stage 2: 사용자 추적 및 목적지로 이동하는 단계
@@ -381,10 +382,6 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'arrived_destination'},  # 목적지 도착 음성 명령
                         {'action': 'deactivate_detector'},  # 감지기 비활성화
                         {'action': 'advance_stage'}  # Stage 3으로 진행
-                    ],
-                    'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
-                        {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
-                        {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
                     ],
                     'timer_10s': [  # 10초 타이머 시 실행할 액션들
                         {'action': 'voice', 'command': 'lost_user'}  # 사용자 분실 경고 음성
@@ -937,8 +934,8 @@ class TaskManager(Node):
                 
             elif request.result == "CANCELED":
                 self.get_logger().info(f'⏹️ 네비게이션 취소됨! Task[{current_task.task_id}] Stage {current_task.stage}')
-                # navigation_canceled 이벤트를 task_stage_logic에서 처리
-                self.process_task_stage_logic(current_task, current_task.stage, 'navigation_canceled')
+                # navigation_canceled 공통 처리 로직 호출
+                self.handle_navigation_canceled(current_task)
                 
             else:
                 self.get_logger().warning(f'⚠️ 알 수 없는 결과: {request.result}')
@@ -1234,8 +1231,14 @@ class TaskManager(Node):
         return (time.time() - self.last_weight_update) <= timeout_seconds
 
     def manage_robot_states(self):  # 로봇 상태 관리
-        """각 로봇의 상태를 관리하는 메서드"""
+        """로봇들의 상태를 주기적으로 관리하는 메서드"""
         for robot_id, robot in self.robots.items():
+            # 비상 상황 체크 (EMERGENCY 상태가 아닐 때만)
+            if robot.current_state != RobotState.EMERGENCY:
+                if self.check_emergency_conditions(robot_id):
+                    continue  # 비상 상황 발생 시 다른 처리는 중단
+            
+            # 기존 상태 관리 로직
             self.process_robot_state(robot)
     
     def process_robot_state(self, robot):  # 개별 로봇 상태 처리
@@ -1765,6 +1768,95 @@ class TaskManager(Node):
             response.message = f'목표 위치 추가 실패: {str(e)}'
         
         return response
+
+    def emergency_stop(self, robot_id, reason="비상 상황 발생"):
+        """비상 정지 - 로봇을 EMERGENCY 상태로 변경하고 모든 작업 중단"""
+        if robot_id in self.robots:
+            # 현재 활성 task가 있다면 중단
+            if self.tasks:
+                current_task = self.tasks[0]
+                if current_task.robot_id == robot_id:
+                    self.get_logger().error(f'🚨 비상 정지! Task[{current_task.task_id}] 중단 - {reason}')
+                    # 네비게이션 취소
+                    self.cancel_navigation()
+                    # 모든 감지기/스캐너 비활성화
+                    self.deactivate_detector(robot_id)
+                    self.deactivate_qr_scanner(robot_id)
+                    self.deactivate_talker(robot_id)
+                    self.deactivate_tracker(robot_id)
+            
+            # 로봇을 EMERGENCY 상태로 변경
+            old_state, _ = self.robots[robot_id].change_state(RobotState.EMERGENCY)
+            self.get_logger().error(f' 로봇 <{robot_id}> 비상 정지: {old_state.value} → EMERGENCY ({reason})')
+            
+            # 비상 상황 음성 알림
+            self.send_voice_command(robot_id, 'common', 'emergency_stop')
+            
+            return True
+        else:
+            self.get_logger().error(f'❌ 비상 정지 실패: 로봇 <{robot_id}> 찾을 수 없음')
+            return False
+    
+    def emergency_recovery(self, robot_id):
+        """비상 상황 복구 - 로봇을 STANDBY 상태로 복구"""
+        if robot_id in self.robots:
+            if self.robots[robot_id].current_state == RobotState.EMERGENCY:
+                old_state, _ = self.robots[robot_id].change_state(RobotState.STANDBY)
+                self.get_logger().info(f'✅ 로봇 <{robot_id}> 비상 상황 복구: {old_state.value} → STANDBY')
+                
+                # 복구 완료 음성 알림
+                self.send_voice_command(robot_id, 'common', 'emergency_recovery')
+                
+                return True
+            else:
+                self.get_logger().warning(f'⚠️ 복구 실패: 로봇 <{robot_id}>이 EMERGENCY 상태가 아님')
+                return False
+        else:
+            self.get_logger().error(f'❌ 복구 실패: 로봇 <{robot_id}> 찾을 수 없음')
+            return False
+    
+    def check_emergency_conditions(self, robot_id):
+        """비상 상황 조건 체크 (예: 배터리 부족, 통신 오류 등)"""
+        if robot_id not in self.robots:
+            return False
+        
+        robot = self.robots[robot_id]
+        
+        # 배터리 부족 체크 (예: 10% 이하)
+        if hasattr(robot, 'battery') and robot.battery < 10:
+            self.emergency_stop(robot_id, "배터리 부족")
+            return True
+        
+        # 하트비트 타임아웃 체크 (예: 10초 이상)
+        if not robot.check_timeout(timeout_seconds=10):
+            self.emergency_stop(robot_id, "통신 오류")
+            return True
+        
+        # 기타 비상 상황 조건들 추가 가능
+        # - 센서 오류
+        # - 모터 오류
+        # - 장애물 감지
+        # - 기울기 과다 등
+        
+        return False
+
+    def handle_navigation_canceled(self, task):
+        """네비게이션 취소 시 공통 처리 로직"""
+        self.get_logger().info(f'⏹️ 네비게이션 취소 처리: Task[{task.task_id}] Stage {task.stage}')
+        
+        # 네비게이션 취소 음성 알림
+        self.send_voice_command_by_task_type(task.robot_id, task.task_type, 'navigation_canceled')
+        
+        # Stage 3으로 강제 진행 (복귀)
+        if task.stage < 3:
+            old_stage = task.stage
+            task.stage = 3
+            self.get_logger().info(f' Task[{task.task_id}] 강제 Stage 변경: {old_stage} → 3')
+            
+            # Stage 3 시작 로직 실행
+            self.process_task_stage_logic(task, 3, 'stage_start')
+        else:
+            self.get_logger().warning(f'⚠️ Task[{task.task_id}] 이미 Stage {task.stage} - 강제 변경 불필요')
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)
