@@ -356,6 +356,7 @@ class TaskManager(Node):
                         {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'deactivate_detector'},  # 감지기 비활성화
                         {'action': 'advance_stage'}  # Stage 3으로 진행
                     ],
                     'timer_10s': [  # 10초 타이머 시 실행할 액션들
@@ -400,14 +401,27 @@ class TaskManager(Node):
                     ],
                     'qr_check_completed': [  # QR Check 완료 시 실행할 액션들
                         {'action': 'deactivate_qr_scanner'},  # QR Scanner 비활성화
+                        {'action': 'voice', 'command': 'qr_authenticated'},  # QR 인증 완료 음성 명령
                         {'action': 'advance_stage'}  # Stage 2로 진행
                     ]
                 },
                 2: {  # Stage 2: QR 인증 대기하는 단계 (목적지 이동 없음)
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
-                        {'action': 'led', 'emotion': '슬픔'}  # 슬픔 LED 표시 (네비게이션 없음)
+                        {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시 (네비게이션 없음)
+                        {'action': 'activate_tracker'},  # Tracker 활성화
+                        {'action': 'activate_talker'}  # Talker 활성화
+                    ],
+                    'tracker_failed': [  # Tracker 활성화 실패 시 실행할 액션들
+                        {'action': 'deactivate_talker'},  # Talker 비활성화
+                        {'action': 'advance_stage'}  # 다음 스테이지로 진행
+                    ],
+                    'talker_failed': [  # Talker 활성화 실패 시 실행할 액션들
+                        {'action': 'deactivate_tracker'},  # Tracker 비활성화
+                        {'action': 'advance_stage'}  # 다음 스테이지로 진행
                     ],
                     'end_task': [  # EndTask 요청 시 실행할 액션들
+                        {'action': 'deactivate_tracker'},  # Tracker 비활성화
+                        {'action': 'deactivate_talker'},  # Talker 비활성화
                         {'action': 'advance_stage'}  # Stage 3으로 진행
                     ]
                 },
@@ -1308,6 +1322,18 @@ class TaskManager(Node):
         elif action_type == 'deactivate_qr_scanner':
             self.deactivate_qr_scanner(task.robot_id)
             
+        elif action_type == 'activate_tracker':
+            self.activate_tracker(task.robot_id)
+            
+        elif action_type == 'activate_talker':
+            self.activate_talker(task.robot_id)
+            
+        elif action_type == 'deactivate_talker':
+            self.deactivate_talker(task.robot_id)
+            
+        elif action_type == 'deactivate_tracker':
+            self.deactivate_tracker(task.robot_id)
+            
         elif action_type == 'cancel_navigation':
             self.cancel_navigation()
             
@@ -1510,8 +1536,19 @@ class TaskManager(Node):
                 self.get_logger().info(f'✅ Talker 활성화 성공: {response.message}')
             else:
                 self.get_logger().warning(f'⚠️ Talker 활성화 실패: {response.message}')
+                
+                # Talker 활성화 실패를 이벤트로 발행
+                if self.tasks and len(self.tasks) > 0:
+                    current_task = self.tasks[0]
+                    self.process_task_stage_logic(current_task, current_task.stage, 'talker_failed')
+                
         except Exception as e:
             self.get_logger().error(f'❌ Talker 활성화 응답 처리 중 오류: {e}')
+            
+            # 예외 발생 시에도 실패 이벤트 발행
+            if self.tasks and len(self.tasks) > 0:
+                current_task = self.tasks[0]
+                self.process_task_stage_logic(current_task, current_task.stage, 'talker_failed')
 
     def deactivate_talker_response_callback(self, future):  # DeactivateTalker 응답 콜백
         """DeactivateTalker 서비스 응답을 처리하는 콜백"""
@@ -1532,8 +1569,19 @@ class TaskManager(Node):
                 self.get_logger().info(f'✅ Tracker 활성화 성공: {response.message}')
             else:
                 self.get_logger().warning(f'⚠️ Tracker 활성화 실패: {response.message}')
+                
+                # Tracker 활성화 실패를 이벤트로 발행
+                if self.tasks and len(self.tasks) > 0:
+                    current_task = self.tasks[0]
+                    self.process_task_stage_logic(current_task, current_task.stage, 'tracker_failed')
+                
         except Exception as e:
             self.get_logger().error(f'❌ Tracker 활성화 응답 처리 중 오류: {e}')
+            
+            # 예외 발생 시에도 실패 이벤트 발행
+            if self.tasks and len(self.tasks) > 0:
+                current_task = self.tasks[0]
+                self.process_task_stage_logic(current_task, current_task.stage, 'tracker_failed')
 
     def deactivate_tracker_response_callback(self, future):  # DeactivateTracker 응답 콜백
         """DeactivateTracker 서비스 응답을 처리하는 콜백"""
