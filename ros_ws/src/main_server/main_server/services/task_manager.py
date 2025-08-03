@@ -12,6 +12,10 @@ from libo_interfaces.srv import DeactivateQRScanner  # DeactivateQRScanner 서�
 from libo_interfaces.srv import CancelNavigation  # CancelNavigation 서비스 추가
 from libo_interfaces.srv import EndTask  # EndTask 서비스 추가
 from libo_interfaces.srv import RobotQRCheck  # RobotQRCheck 서비스 추가
+from libo_interfaces.srv import ActivateTalker  # ActivateTalker 서비스 추가
+from libo_interfaces.srv import DeactivateTalker  # DeactivateTalker 서비스 추가
+from libo_interfaces.srv import ActivateTracker  # ActivateTracker 서비스 추가
+from libo_interfaces.srv import DeactivateTracker  # DeactivateTracker 서비스 추가
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
@@ -207,6 +211,18 @@ class TaskManager(Node):
         
         # CancelNavigation 서비스 클라이언트 생성
         self.cancel_navigation_client = self.create_client(CancelNavigation, 'cancel_navigation')
+        
+        # ActivateTalker 서비스 클라이언트 생성
+        self.activate_talker_client = self.create_client(ActivateTalker, 'activate_talker')
+        
+        # DeactivateTalker 서비스 클라이언트 생성
+        self.deactivate_talker_client = self.create_client(DeactivateTalker, 'deactivate_talker')
+        
+        # ActivateTracker 서비스 클라이언트 생성
+        self.activate_tracker_client = self.create_client(ActivateTracker, 'activate_tracker')
+        
+        # DeactivateTracker 서비스 클라이언트 생성
+        self.deactivate_tracker_client = self.create_client(DeactivateTracker, 'deactivate_tracker')
         
         # EndTask 서비스 서버 생성
         self.end_task_service = self.create_service(
@@ -465,6 +481,10 @@ class TaskManager(Node):
         self.get_logger().info('🗣️ VoiceCommand 퍼블리셔 준비됨 - voice_command 토픽으로 이벤트 기반 발행...')
         self.get_logger().info('⚖️ 무게 데이터 구독 시작됨 - weight_data 토픽 모니터링 중...')
         self.get_logger().info('🔄 통합 Task Stage 로직 시스템 활성화됨')
+        self.get_logger().info('🗣️ ActivateTalker 클라이언트 준비됨 - activate_talker 서비스 연결...')
+        self.get_logger().info('🗣️ DeactivateTalker 클라이언트 준비됨 - deactivate_talker 서비스 연결...')
+        self.get_logger().info('🎯 ActivateTracker 클라이언트 준비됨 - activate_tracker 서비스 연결...')
+        self.get_logger().info('🎯 DeactivateTracker 클라이언트 준비됨 - deactivate_tracker 서비스 연결...')
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -1385,6 +1405,146 @@ class TaskManager(Node):
             self.get_logger().debug(f'📝 QR Check 완료했지만 활성 task 없음 - 이벤트 발생 안함')
         
         return response
+
+    def activate_talker(self, robot_id):  # Talker 활성화 요청
+        """Talker를 활성화하는 메서드"""
+        # ActivateTalker 서비스가 준비될 때까지 대기
+        if not self.activate_talker_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ ActivateTalker 서비스를 찾을 수 없음')
+            return False
+        
+        # ActivateTalker 요청 생성
+        request = ActivateTalker.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'🗣️ Talker 활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.activate_talker_client.call_async(request)
+            future.add_done_callback(self.activate_talker_response_callback)
+            self.get_logger().info(f'📤 Talker 활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ ActivateTalker 통신 중 오류: {e}')
+            return False
+
+    def deactivate_talker(self, robot_id):  # Talker 비활성화 요청
+        """Talker를 비활성화하는 메서드"""
+        # DeactivateTalker 서비스가 준비될 때까지 대기
+        if not self.deactivate_talker_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ DeactivateTalker 서비스를 찾을 수 없음')
+            return False
+        
+        # DeactivateTalker 요청 생성
+        request = DeactivateTalker.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'🗣️ Talker 비활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.deactivate_talker_client.call_async(request)
+            future.add_done_callback(self.deactivate_talker_response_callback)
+            self.get_logger().info(f'📤 Talker 비활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ DeactivateTalker 통신 중 오류: {e}')
+            return False
+
+    def activate_tracker(self, robot_id):  # Tracker 활성화 요청
+        """Tracker를 활성화하는 메서드"""
+        # ActivateTracker 서비스가 준비될 때까지 대기
+        if not self.activate_tracker_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ ActivateTracker 서비스를 찾을 수 없음')
+            return False
+        
+        # ActivateTracker 요청 생성
+        request = ActivateTracker.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'🎯 Tracker 활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.activate_tracker_client.call_async(request)
+            future.add_done_callback(self.activate_tracker_response_callback)
+            self.get_logger().info(f'📤 Tracker 활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ ActivateTracker 통신 중 오류: {e}')
+            return False
+
+    def deactivate_tracker(self, robot_id):  # Tracker 비활성화 요청
+        """Tracker를 비활성화하는 메서드"""
+        # DeactivateTracker 서비스가 준비될 때까지 대기
+        if not self.deactivate_tracker_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ DeactivateTracker 서비스를 찾을 수 없음')
+            return False
+        
+        # DeactivateTracker 요청 생성
+        request = DeactivateTracker.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'🎯 Tracker 비활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.deactivate_tracker_client.call_async(request)
+            future.add_done_callback(self.deactivate_tracker_response_callback)
+            self.get_logger().info(f'📤 Tracker 비활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ DeactivateTracker 통신 중 오류: {e}')
+            return False
+
+    def activate_talker_response_callback(self, future):  # ActivateTalker 응답 콜백
+        """ActivateTalker 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ Talker 활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️ Talker 활성화 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ Talker 활성화 응답 처리 중 오류: {e}')
+
+    def deactivate_talker_response_callback(self, future):  # DeactivateTalker 응답 콜백
+        """DeactivateTalker 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ Talker 비활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️ Talker 비활성화 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ Talker 비활성화 응답 처리 중 오류: {e}')
+
+    def activate_tracker_response_callback(self, future):  # ActivateTracker 응답 콜백
+        """ActivateTracker 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ Tracker 활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️ Tracker 활성화 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ Tracker 활성화 응답 처리 중 오류: {e}')
+
+    def deactivate_tracker_response_callback(self, future):  # DeactivateTracker 응답 콜백
+        """DeactivateTracker 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ Tracker 비활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️ Tracker 비활성화 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ Tracker 비활성화 응답 처리 중 오류: {e}')
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)

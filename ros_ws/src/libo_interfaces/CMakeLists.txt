@@ -36,6 +36,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/DeactivateDetector.srv"
   "srv/DeactivateQRScanner.srv" # QR 스캐너 비활성화 서비스
   "srv/DeactivateTalker.srv"
+  "srv/DeactivateTracker.srv"   # Tracker 비활성화 서비스
   "srv/EscortRequest.srv"
   "srv/EndTask.srv"
   "srv/Navigate.srv"
