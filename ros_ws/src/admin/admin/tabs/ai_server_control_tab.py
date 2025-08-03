@@ -12,6 +12,11 @@ from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 
 from libo_interfaces.srv import ActivateDetector, DeactivateDetector
+from libo_interfaces.srv import ActivateQRScanner, DeactivateQRScanner  # QR Scanner 서비스 추가
+from libo_interfaces.srv import EndTask  # EndTask 서비스 추가
+from libo_interfaces.srv import RobotQRCheck  # RobotQRCheck 서비스 추가
+from libo_interfaces.srv import ActivateTalker, DeactivateTalker  # Talker 서비스 추가
+from libo_interfaces.srv import ActivateTracker, DeactivateTracker  # Tracker 서비스 추가
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
 from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
 
@@ -38,16 +43,40 @@ class AiServerControlTab(QWidget):
         # ROS 서비스 서버들 (초기에는 None)
         self.activate_detector_service = None
         self.deactivate_detector_service = None
+        self.activate_qr_scanner_service = None  # QR Scanner 활성화 서비스
+        self.deactivate_qr_scanner_service = None  # QR Scanner 비활성화 서비스
+        self.activate_talker_service = None  # Talker 활성화 서비스
+        self.deactivate_talker_service = None  # Talker 비활성화 서비스
+        self.activate_tracker_service = None  # Tracker 활성화 서비스
+        self.deactivate_tracker_service = None  # Tracker 비활성화 서비스
+        
+        # EndTask 서비스 클라이언트
+        self.end_task_client = None
+        self.end_task_robot_id = "libo_a"  # 기본 로봇 ID
+        self.end_task_type = "assist"  # 기본 작업 타입
+        
+        # RobotQRCheck 서비스 클라이언트
+        self.robot_qr_check_client = None
+        self.robot_qr_check_robot_id = "libo_a"  # 기본 로봇 ID
+        self.robot_qr_check_admin_name = "김민수"  # 기본 관리자 이름
         
         self.init_ui()
         
+        # EndTask 클라이언트 초기화 (서버 활성화와 독립적)
+        self.end_task_client = self.ros_node.create_client(EndTask, 'end_task')
+        
+        # RobotQRCheck 클라이언트 초기화 (서버 활성화와 독립적)
+        self.robot_qr_check_client = self.ros_node.create_client(RobotQRCheck, 'robot_qr_check')
+        
         # 초기 로그 메시지
-        self.log_detector_message("👁️ AI Server Detector Control 탭이 시작되었습니다.")
+        self.log_detector_message("👁️ Vision Manager Control 탭이 시작되었습니다.")
         self.log_detector_message("🔴 서버가 비활성화 상태입니다. 'Server ON' 버튼을 눌러 활성화하세요.")
         self.log_detection_timer_message("⏰ DetectionTimer Control이 시작되었습니다.")
         self.log_detection_timer_message("🔴 DetectionTimer가 비활성화 상태입니다.")
-        self.log_voice_command_message("🗣️ VoiceCommand Monitor가 시작되었습니다.")
+        self.log_voice_command_message("🗣️ Talker Manager Control이 시작되었습니다.")
         self.log_voice_command_message("🔴 VoiceCommand 구독이 비활성화 상태입니다.")
+        self.log_voice_command_message("🏁 EndTask 기능이 준비되었습니다. (Vision Manager와 독립적)")
+        self.log_detector_message("🔍 RobotQRCheck 기능이 준비되었습니다. (Vision Manager와 독립적)")
     
     def init_ui(self):
         """UI 초기화 - ai_server_control_tab.ui 파일 로드"""
@@ -57,6 +86,7 @@ class AiServerControlTab(QWidget):
         # 시그널 연결
         self.toggle_server_button.clicked.connect(self.toggle_server)
         self.clear_log_button.clicked.connect(self.clear_log)
+        self.send_robot_qr_check_button.clicked.connect(self.send_robot_qr_check)
         
         # DetectionTimer 관련 시그널 연결
         self.toggle_detection_timer_button.clicked.connect(self.toggle_detection_timer)
@@ -65,6 +95,9 @@ class AiServerControlTab(QWidget):
         # VoiceCommand 관련 시그널 연결
         self.toggle_voice_subscription_button.clicked.connect(self.toggle_voice_subscription)
         self.clear_voice_log_button.clicked.connect(self.clear_voice_command_log)
+        
+        # EndTask 관련 시그널 연결
+        self.end_task_button.clicked.connect(self.send_end_task)
         
         # 초기 버튼 상태 설정 (서버가 비활성화 상태이므로 OFF로 표시)
         self.toggle_server_button.setText("🔴 Server OFF")
@@ -109,6 +142,35 @@ class AiServerControlTab(QWidget):
                 self.deactivate_detector_service_callback
             )
             
+            # ActivateQRScanner 서비스 서버 생성
+            self.activate_qr_scanner_service = self.ros_node.create_service(
+                ActivateQRScanner,
+                'activate_qr_scanner',
+                self.activate_qr_scanner_service_callback
+            )
+            
+            # DeactivateQRScanner 서비스 서버 생성
+            self.deactivate_qr_scanner_service = self.ros_node.create_service(
+                DeactivateQRScanner,
+                'deactivate_qr_scanner',
+                self.deactivate_qr_scanner_service_callback
+            )
+            
+            
+            # ActivateTracker 서비스 서버 생성
+            self.activate_tracker_service = self.ros_node.create_service(
+                ActivateTracker,
+                'activate_tracker',
+                self.activate_tracker_service_callback
+            )
+            
+            # DeactivateTracker 서비스 서버 생성
+            self.deactivate_tracker_service = self.ros_node.create_service(
+                DeactivateTracker,
+                'deactivate_tracker',
+                self.deactivate_tracker_service_callback
+            )
+            
             # DetectionTimer 퍼블리셔 생성
             self.detection_timer_publisher = self.ros_node.create_publisher(
                 DetectionTimer,
@@ -123,6 +185,8 @@ class AiServerControlTab(QWidget):
             self.detection_timer.start(1000)  # 1초마다 발행
             
             self.log_detector_message("✅ ActivateDetector/DeactivateDetector 서비스 서버가 시작되었습니다.")
+            self.log_detector_message("✅ ActivateQRScanner/DeactivateQRScanner 서비스 서버가 시작되었습니다.")
+            self.log_detector_message("✅ ActivateTracker/DeactivateTracker 서비스 서버가 시작되었습니다.")
             self.log_detector_message("⏰ DetectionTimer 발행이 시작되었습니다. (1초마다)")
             
         except Exception as e:
@@ -150,6 +214,22 @@ class AiServerControlTab(QWidget):
             if self.deactivate_detector_service:
                 self.ros_node.destroy_service(self.deactivate_detector_service)
                 self.deactivate_detector_service = None
+            
+            if self.activate_qr_scanner_service:
+                self.ros_node.destroy_service(self.activate_qr_scanner_service)
+                self.activate_qr_scanner_service = None
+            
+            if self.deactivate_qr_scanner_service:
+                self.ros_node.destroy_service(self.deactivate_qr_scanner_service)
+                self.deactivate_qr_scanner_service = None
+            
+            if self.activate_tracker_service:
+                self.ros_node.destroy_service(self.activate_tracker_service)
+                self.activate_tracker_service = None
+            
+            if self.deactivate_tracker_service:
+                self.ros_node.destroy_service(self.deactivate_tracker_service)
+                self.deactivate_tracker_service = None
             
             self.server_active = False
             self.log_detector_message("🛑 ActivateDetector/DeactivateDetector 서비스 서버가 중지되었습니다.")
@@ -213,6 +293,186 @@ class AiServerControlTab(QWidget):
             response.message = f"감지기 비활성화 실패: {str(e)}"
             
             self.log_detector_message(f"❌ DeactivateDetector 처리 실패: {str(e)}")
+            self.log_detector_message(f"📤 응답 전송: FAILED - {response.message}")
+        
+        return response
+    
+    def activate_qr_scanner_service_callback(self, request, response):
+        """ActivateQRScanner 서비스 요청 처리 (TaskManager에서 호출)"""
+        if not self.server_active:
+            response.success = False
+            response.message = "서버가 비활성화 상태입니다."
+            return response
+        
+        robot_id = request.robot_id
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        self.log_detector_message(f"📤 ActivateQRScanner 요청 수신: {robot_id} at {current_time}")
+        
+        try:
+            # 여기서 실제 QR 스캐너 활성화 로직 구현
+            # 현재는 시뮬레이션으로 성공 응답
+            response.success = True
+            response.message = f"QR 스캐너 활성화 완료: {robot_id}"
+            
+            self.log_detector_message(f"✅ ActivateQRScanner 처리 완료: {robot_id}")
+            self.log_detector_message(f"📤 응답 전송: SUCCESS - {response.message}")
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"QR 스캐너 활성화 실패: {str(e)}"
+            
+            self.log_detector_message(f"❌ ActivateQRScanner 처리 실패: {str(e)}")
+            self.log_detector_message(f"📤 응답 전송: FAILED - {response.message}")
+        
+        return response
+    
+    def deactivate_qr_scanner_service_callback(self, request, response):
+        """DeactivateQRScanner 서비스 요청 처리 (TaskManager에서 호출)"""
+        if not self.server_active:
+            response.success = False
+            response.message = "서버가 비활성화 상태입니다."
+            return response
+        
+        robot_id = request.robot_id
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        self.log_detector_message(f"📤 DeactivateQRScanner 요청 수신: {robot_id} at {current_time}")
+        
+        try:
+            # 여기서 실제 QR 스캐너 비활성화 로직 구현
+            # 현재는 시뮬레이션으로 성공 응답
+            response.success = True
+            response.message = f"QR 스캐너 비활성화 완료: {robot_id}"
+            
+            self.log_detector_message(f"✅ DeactivateQRScanner 처리 완료: {robot_id}")
+            self.log_detector_message(f"📤 응답 전송: SUCCESS - {response.message}")
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"QR 스캐너 비활성화 실패: {str(e)}"
+            
+            self.log_detector_message(f"❌ DeactivateQRScanner 처리 실패: {str(e)}")
+            self.log_detector_message(f"📤 응답 전송: FAILED - {response.message}")
+        
+        return response
+    
+    def activate_talker_service_callback(self, request, response):
+        """ActivateTalker 서비스 요청 처리 (TaskManager에서 호출)"""
+        if not self.server_active:
+            response.success = False
+            response.message = "서버가 비활성화 상태입니다."
+            return response
+        
+        robot_id = request.robot_id
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        self.log_voice_command_message(f"📤 ActivateTalker 요청 수신: {robot_id} at {current_time}")
+        
+        try:
+            # 여기서 실제 Talker 활성화 로직 구현
+            # 현재는 시뮬레이션으로 성공 응답
+            response.success = True
+            response.message = f"Talker 활성화 완료: {robot_id}"
+            
+            self.log_voice_command_message(f"✅ ActivateTalker 처리 완료: {robot_id}")
+            self.log_voice_command_message(f"📤 응답 전송: SUCCESS - {response.message}")
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"Talker 활성화 실패: {str(e)}"
+            
+            self.log_voice_command_message(f"❌ ActivateTalker 처리 실패: {str(e)}")
+            self.log_voice_command_message(f"📤 응답 전송: FAILED - {response.message}")
+        
+        return response
+    
+    def deactivate_talker_service_callback(self, request, response):
+        """DeactivateTalker 서비스 요청 처리 (TaskManager에서 호출)"""
+        if not self.server_active:
+            response.success = False
+            response.message = "서버가 비활성화 상태입니다."
+            return response
+        
+        robot_id = request.robot_id
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        self.log_voice_command_message(f"📤 DeactivateTalker 요청 수신: {robot_id} at {current_time}")
+        
+        try:
+            # 여기서 실제 Talker 비활성화 로직 구현
+            # 현재는 시뮬레이션으로 성공 응답
+            response.success = True
+            response.message = f"Talker 비활성화 완료: {robot_id}"
+            
+            self.log_voice_command_message(f"✅ DeactivateTalker 처리 완료: {robot_id}")
+            self.log_voice_command_message(f"📤 응답 전송: SUCCESS - {response.message}")
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"Talker 비활성화 실패: {str(e)}"
+            
+            self.log_voice_command_message(f"❌ DeactivateTalker 처리 실패: {str(e)}")
+            self.log_voice_command_message(f"📤 응답 전송: FAILED - {response.message}")
+        
+        return response
+    
+    def activate_tracker_service_callback(self, request, response):
+        """ActivateTracker 서비스 요청 처리 (TaskManager에서 호출)"""
+        if not self.server_active:
+            response.success = False
+            response.message = "서버가 비활성화 상태입니다."
+            return response
+        
+        robot_id = request.robot_id
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        self.log_detector_message(f"📤 ActivateTracker 요청 수신: {robot_id} at {current_time}")
+        
+        try:
+            # 여기서 실제 Tracker 활성화 로직 구현
+            # 현재는 시뮬레이션으로 성공 응답
+            response.success = True
+            response.message = f"Tracker 활성화 완료: {robot_id}"
+            
+            self.log_detector_message(f"✅ ActivateTracker 처리 완료: {robot_id}")
+            self.log_detector_message(f"📤 응답 전송: SUCCESS - {response.message}")
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"Tracker 활성화 실패: {str(e)}"
+            
+            self.log_detector_message(f"❌ ActivateTracker 처리 실패: {str(e)}")
+            self.log_detector_message(f"📤 응답 전송: FAILED - {response.message}")
+        
+        return response
+    
+    def deactivate_tracker_service_callback(self, request, response):
+        """DeactivateTracker 서비스 요청 처리 (TaskManager에서 호출)"""
+        if not self.server_active:
+            response.success = False
+            response.message = "서버가 비활성화 상태입니다."
+            return response
+        
+        robot_id = request.robot_id
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        self.log_detector_message(f"📤 DeactivateTracker 요청 수신: {robot_id} at {current_time}")
+        
+        try:
+            # 여기서 실제 Tracker 비활성화 로직 구현
+            # 현재는 시뮬레이션으로 성공 응답
+            response.success = True
+            response.message = f"Tracker 비활성화 완료: {robot_id}"
+            
+            self.log_detector_message(f"✅ DeactivateTracker 처리 완료: {robot_id}")
+            self.log_detector_message(f"📤 응답 전송: SUCCESS - {response.message}")
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"Tracker 비활성화 실패: {str(e)}"
+            
+            self.log_detector_message(f"❌ DeactivateTracker 처리 실패: {str(e)}")
             self.log_detector_message(f"📤 응답 전송: FAILED - {response.message}")
         
         return response
@@ -337,6 +597,51 @@ class AiServerControlTab(QWidget):
         self.detector_log_text.clear()
         self.log_detector_message("🧹 로그가 지워졌습니다.")
     
+    def send_robot_qr_check(self):
+        """RobotQRCheck 서비스 요청 발행"""
+        if not self.robot_qr_check_client:
+            self.log_detector_message("❌ RobotQRCheck 클라이언트가 초기화되지 않았습니다.")
+            return
+        
+        try:
+            # UI에서 입력된 값 읽기
+            robot_id = self.qr_robot_id_edit.text().strip()
+            admin_name = self.qr_admin_name_edit.text().strip()
+            
+            # 입력값 검증
+            if not robot_id:
+                self.log_detector_message("❌ Robot ID를 입력해주세요.")
+                return
+            
+            if not admin_name:
+                self.log_detector_message("❌ Admin Name을 입력해주세요.")
+                return
+            
+            # RobotQRCheck 서비스 요청 생성
+            request = RobotQRCheck.Request()
+            request.robot_id = robot_id
+            request.admin_name = admin_name
+            
+            self.log_detector_message(f"📤 RobotQRCheck 요청 발행: robot_id={request.robot_id}, admin_name={request.admin_name}")
+            
+            # 비동기 서비스 호출
+            future = self.robot_qr_check_client.call_async(request)
+            future.add_done_callback(self.robot_qr_check_response_callback)
+            
+        except Exception as e:
+            self.log_detector_message(f"❌ RobotQRCheck 요청 발행 실패: {str(e)}")
+    
+    def robot_qr_check_response_callback(self, future):
+        """RobotQRCheck 서비스 응답 처리"""
+        try:
+            response = future.result()
+            if response.success:
+                self.log_detector_message(f"✅ RobotQRCheck 성공: {response.message}")
+            else:
+                self.log_detector_message(f"❌ RobotQRCheck 실패: {response.message}")
+        except Exception as e:
+            self.log_detector_message(f"❌ RobotQRCheck 응답 처리 중 오류: {str(e)}")
+    
     def get_log_count(self):
         """현재 로그 개수 반환"""
         return len(self.detector_log)
@@ -411,8 +716,23 @@ class AiServerControlTab(QWidget):
                 10
             )
             
+            # ActivateTalker 서비스 서버 생성
+            self.activate_talker_service = self.ros_node.create_service(
+                ActivateTalker,
+                'activate_talker',
+                self.activate_talker_service_callback
+            )
+            
+            # DeactivateTalker 서비스 서버 생성
+            self.deactivate_talker_service = self.ros_node.create_service(
+                DeactivateTalker,
+                'deactivate_talker',
+                self.deactivate_talker_service_callback
+            )
+            
             self.voice_subscription_active = True
             self.log_voice_command_message("✅ VoiceCommand 구독자가 생성되었습니다.")
+            self.log_voice_command_message("✅ ActivateTalker/DeactivateTalker 서비스 서버가 시작되었습니다.")
             self.log_voice_command_message("📡 TaskManager의 VoiceCommand 메시지를 모니터링 중...")
             
         except Exception as e:
@@ -427,8 +747,18 @@ class AiServerControlTab(QWidget):
                 self.ros_node.destroy_subscription(self.voice_command_subscription)
                 self.voice_command_subscription = None
             
+            # Talker 서비스 서버 제거
+            if self.activate_talker_service:
+                self.ros_node.destroy_service(self.activate_talker_service)
+                self.activate_talker_service = None
+            
+            if self.deactivate_talker_service:
+                self.ros_node.destroy_service(self.deactivate_talker_service)
+                self.deactivate_talker_service = None
+            
             self.voice_subscription_active = False
             self.log_voice_command_message("⏹️ VoiceCommand 구독이 중지되었습니다.")
+            self.log_voice_command_message("⏹️ ActivateTalker/DeactivateTalker 서비스 서버가 중지되었습니다.")
             
         except Exception as e:
             self.log_voice_command_message(f"❌ VoiceCommand 구독 중지 실패: {str(e)}")
@@ -465,6 +795,51 @@ class AiServerControlTab(QWidget):
         self.voice_command_log = []
         self.voice_command_log_text.clear()
         self.log_voice_command_message("🧹 VoiceCommand 로그가 지워졌습니다.")
+    
+    def send_end_task(self):
+        """EndTask 서비스 요청 발행"""
+        if not self.end_task_client:
+            self.log_voice_command_message("❌ EndTask 클라이언트가 초기화되지 않았습니다.")
+            return
+        
+        try:
+            # UI에서 입력된 값 읽기
+            robot_id = self.end_task_robot_id_edit.text().strip()
+            task_type = self.end_task_type_edit.text().strip()
+            
+            # 입력값 검증
+            if not robot_id:
+                self.log_voice_command_message("❌ Robot ID를 입력해주세요.")
+                return
+            
+            if not task_type:
+                self.log_voice_command_message("❌ Task Type을 입력해주세요.")
+                return
+            
+            # EndTask 서비스 요청 생성
+            request = EndTask.Request()
+            request.robot_id = robot_id
+            request.task_type = task_type
+            
+            self.log_voice_command_message(f"📤 EndTask 요청 발행: robot_id={request.robot_id}, task_type={request.task_type}")
+            
+            # 비동기 서비스 호출
+            future = self.end_task_client.call_async(request)
+            future.add_done_callback(self.end_task_response_callback)
+            
+        except Exception as e:
+            self.log_voice_command_message(f"❌ EndTask 요청 발행 실패: {str(e)}")
+    
+    def end_task_response_callback(self, future):
+        """EndTask 서비스 응답 처리"""
+        try:
+            response = future.result()
+            if response.success:
+                self.log_voice_command_message(f"✅ EndTask 성공: {response.message}")
+            else:
+                self.log_voice_command_message(f"❌ EndTask 실패: {response.message}")
+        except Exception as e:
+            self.log_voice_command_message(f"❌ EndTask 응답 처리 중 오류: {str(e)}")
     
     def log_voice_command_message(self, message):
         """VoiceCommand 전용 로그 메시지 출력"""

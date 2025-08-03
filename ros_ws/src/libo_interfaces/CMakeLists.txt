@@ -28,16 +28,21 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
   # === srv ===
   "srv/ActivateDetector.srv"
+  "srv/ActivateQRScanner.srv"   # QR 스캐너 활성화 서비스
   "srv/ActivateTalker.srv"
   "srv/ActivateTracker.srv"
+  "srv/AddGoalLocation.srv"    # 목표 위치 추가 서비스
   "srv/BookSearch.srv"
   "srv/CancelNavigation.srv"    # 네비게이션 취소 서비스
   "srv/DeactivateDetector.srv"
+  "srv/DeactivateQRScanner.srv" # QR 스캐너 비활성화 서비스
   "srv/DeactivateTalker.srv"
+  "srv/DeactivateTracker.srv"   # Tracker 비활성화 서비스
   "srv/EscortRequest.srv"
   "srv/EndTask.srv"
   "srv/Navigate.srv"
   "srv/NavigationResult.srv"    # 네비게이션 결과 서비스
+  "srv/KioskQRCheck.srv"        # 키오스크 QR 체크 서비스
   "srv/RobotQRCheck.srv"
   "srv/SetGoal.srv"
   "srv/TaskRequest.srv"

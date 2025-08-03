@@ -7,7 +7,16 @@ from libo_interfaces.srv import SetGoal  # SetGoal 서비스 추가
 from libo_interfaces.srv import NavigationResult  # NavigationResult 서비스 추가
 from libo_interfaces.srv import ActivateDetector  # ActivateDetector 서비스 추가
 from libo_interfaces.srv import DeactivateDetector  # DeactivateDetector 서비스 추가
+from libo_interfaces.srv import ActivateQRScanner  # ActivateQRScanner 서비스 추가
+from libo_interfaces.srv import DeactivateQRScanner  # DeactivateQRScanner 서비스 추가
 from libo_interfaces.srv import CancelNavigation  # CancelNavigation 서비스 추가
+from libo_interfaces.srv import EndTask  # EndTask 서비스 추가
+from libo_interfaces.srv import RobotQRCheck  # RobotQRCheck 서비스 추가
+from libo_interfaces.srv import ActivateTalker  # ActivateTalker 서비스 추가
+from libo_interfaces.srv import DeactivateTalker  # DeactivateTalker 서비스 추가
+from libo_interfaces.srv import ActivateTracker  # ActivateTracker 서비스 추가
+from libo_interfaces.srv import DeactivateTracker  # DeactivateTracker 서비스 추가
+from libo_interfaces.srv import AddGoalLocation  # AddGoalLocation 서비스 추가
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
@@ -44,8 +53,14 @@ LOCATION_COORDINATES = {
     'E6': (4.53, -0.53), 'E7': (5.74, -0.12), 'E8': (7.67, -0.10), 'E9': (8.98, -0.16),
     
     # Base 좌표 (스테이지 3 완료 후 돌아갈 위치) - E3로 고정
-    'Base': (0.05, -0.34)  # E3 좌표와 동일
+    'Base': (0.05, -0.34),  # E3 좌표와 동일
+    
+    # Admin Desk 좌표 (Delivery Task용)
+    'admin_desk': (-5.79, 3.25)  # 관리자 데스크 위치
 }
+
+# 관리자 이름 리스트 (QR Check용)
+ADMIN_NAMES = ['김대인', '김민수', '박태환', '이건우', '이승훈']
 
 # 음성 명령 상수 정의
 VOICE_COMMANDS = {
@@ -192,8 +207,47 @@ class TaskManager(Node):
         # DeactivateDetector 서비스 클라이언트 생성
         self.deactivate_detector_client = self.create_client(DeactivateDetector, 'deactivate_detector')
         
+        # ActivateQRScanner 서비스 클라이언트 생성
+        self.activate_qr_scanner_client = self.create_client(ActivateQRScanner, 'activate_qr_scanner')
+        
+        # DeactivateQRScanner 서비스 클라이언트 생성
+        self.deactivate_qr_scanner_client = self.create_client(DeactivateQRScanner, 'deactivate_qr_scanner')
+        
         # CancelNavigation 서비스 클라이언트 생성
         self.cancel_navigation_client = self.create_client(CancelNavigation, 'cancel_navigation')
+        
+        # ActivateTalker 서비스 클라이언트 생성
+        self.activate_talker_client = self.create_client(ActivateTalker, 'activate_talker')
+        
+        # DeactivateTalker 서비스 클라이언트 생성
+        self.deactivate_talker_client = self.create_client(DeactivateTalker, 'deactivate_talker')
+        
+        # ActivateTracker 서비스 클라이언트 생성
+        self.activate_tracker_client = self.create_client(ActivateTracker, 'activate_tracker')
+        
+        # DeactivateTracker 서비스 클라이언트 생성
+        self.deactivate_tracker_client = self.create_client(DeactivateTracker, 'deactivate_tracker')
+        
+        # EndTask 서비스 서버 생성
+        self.end_task_service = self.create_service(
+            EndTask,
+            'end_task',
+            self.end_task_callback
+        )
+        
+        # RobotQRCheck 서비스 서버 생성
+        self.robot_qr_check_service = self.create_service(
+            RobotQRCheck,
+            'robot_qr_check',
+            self.robot_qr_check_callback
+        )
+        
+        # AddGoalLocation 서비스 서버 생성
+        self.add_goal_location_service = self.create_service(
+            AddGoalLocation,
+            'add_goal_location',
+            self.add_goal_location_callback
+        )
         
         # Heartbeat 토픽 구독자 생성
         self.heartbeat_subscription = self.create_subscription(
@@ -259,6 +313,187 @@ class TaskManager(Node):
         # 로봇 상태 관리 타이머 (1초마다 실행)
         self.robot_state_timer = self.create_timer(1.0, self.manage_robot_states)  # 1초마다 로봇 상태 관리
         
+        # Task 타입별 Stage 로직 정의 (통합 관리)
+        self.task_stage_logic = {
+            
+            # 구조 설명:
+            # self.task_stage_logic = {
+            #     'task_type': {                    # 작업 타입 (escort, assist, delivery)
+            #         stage_number: {               # 스테이지 번호 (1, 2, 3)
+            #             'event_type': [           # 이벤트 타입 (stage_start, timer_10s, timer_30s 등)
+            #                 {'action': 'action_type', 'param': 'value'},  # 실행할 액션들
+            #                 ...
+            #             ]
+            #         }
+            #     }
+            # }
+            #
+            # 이벤트 타입 종류:
+            # - 'stage_start': 스테이지가 시작될 때 (Stage 1→2, 2→3, 3→완료 시)
+            # - 'timer_10s': 타이머가 10초일 때 (DetectionTimer에서 발생)
+            # - 'timer_30s': 타이머가 30초일 때 (DetectionTimer에서 발생)
+            #
+            # 액션 타입 종류:
+            # - 'voice': 음성 명령 발행 (command: 음성 명령 종류)
+            # - 'led': LED 제어 (emotion: 감정 상태)
+            # - 'navigate': 네비게이션 (target: 목표 위치)
+            # - 'activate_detector': 감지기 활성화
+            # - 'deactivate_detector': 감지기 비활성화
+            # - 'cancel_navigation': 네비게이션 취소
+            # - 'force_stage': 강제 스테이지 변경 (target: 목표 스테이지)
+
+
+            # Escort Task: 사용자 에스코팅 (사용자 추적 및 안내)
+            # - Stage 1: 호출지로 이동
+            # - Stage 2: 사용자 추적 (감지기 활성화) + 목적지로 이동
+            # - Stage 3: Base로 복귀
+            # - 특별 기능: timer_10s(사용자 분실 경고), timer_30s(강제 복귀)
+            'escort': {  # 에스코트 작업 타입 정의
+                1: {  # Stage 1: 호출지로 이동하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
+                        {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
+                        {'action': 'navigate', 'target': 'call_location'}  # 호출지로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'voice', 'command': 'arrived_kiosk'},  # 키오스크 도착 음성
+                        {'action': 'advance_stage'}  # Stage 2로 진행
+                    ]
+                },
+                2: {  # Stage 2: 사용자 추적 및 목적지로 이동하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'activate_detector'},  # 사용자 감지기 활성화
+                        {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
+                        {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'deactivate_detector'},  # 감지기 비활성화
+                        {'action': 'advance_stage'}  # Stage 3으로 진행
+                    ],
+                    'timer_10s': [  # 10초 타이머 시 실행할 액션들
+                        {'action': 'voice', 'command': 'lost_user'}  # 사용자 분실 경고 음성
+                    ],
+                    'timer_30s': [  # 30초 타이머 시 실행할 액션들
+                        {'action': 'cancel_navigation'},  # 네비게이션 취소
+                        {'action': 'deactivate_detector'},  # 감지기 비활성화
+                        {'action': 'force_stage', 'target': 3}  # 강제로 Stage 3으로 이동
+                    ]
+                },
+                3: {  # Stage 3: Base로 복귀하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
+                        {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
+                        {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
+                    ]
+                }
+            },
+            
+            # Assist Task: 사용자 어시스트 (QR 인증 및 도움)
+            # - Stage 1: 호출지로 이동
+            # - Stage 2: QR 인증 대기 (목적지 없음)
+            # - Stage 3: Base로 복귀
+            'assist': {  # 어시스트 작업 타입 정의
+                1: {  # Stage 1: 호출지로 이동하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
+                        {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
+                        {'action': 'navigate', 'target': 'call_location'}  # 호출지로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'activate_qr_scanner'},  # QR Scanner 활성화
+                        {'action': 'voice', 'command': 'arrived_kiosk'}  # 키오스크 도착 음성
+                    ],
+                    'qr_scanner_activated': [  # QR Scanner 활성화 성공 시 실행할 액션들
+                        # QR Scanner 활성화 완료 - QR Check 메시지 대기 중
+                        # TODO: KioskQRCheck.srv / RobotQRCheck 메시지 처리 후 qr_check_completed 이벤트 발생
+                    ],
+                    'qr_check_completed': [  # QR Check 완료 시 실행할 액션들
+                        {'action': 'deactivate_qr_scanner'},  # QR Scanner 비활성화
+                        {'action': 'voice', 'command': 'qr_authenticated'},  # QR 인증 완료 음성 명령
+                        {'action': 'advance_stage'}  # Stage 2로 진행
+                    ]
+                },
+                2: {  # Stage 2: QR 인증 대기하는 단계 (목적지 이동 없음)
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시 (네비게이션 없음)
+                        {'action': 'activate_tracker'},  # Tracker 활성화
+                        {'action': 'activate_talker'}  # Talker 활성화
+                    ],
+                    'tracker_failed': [  # Tracker 활성화 실패 시 실행할 액션들
+                        {'action': 'deactivate_talker'},  # Talker 비활성화
+                        {'action': 'advance_stage'}  # 다음 스테이지로 진행
+                    ],
+                    'talker_failed': [  # Talker 활성화 실패 시 실행할 액션들
+                        {'action': 'deactivate_tracker'},  # Tracker 비활성화
+                        {'action': 'advance_stage'}  # 다음 스테이지로 진행
+                    ],
+                    'end_task': [  # EndTask 요청 시 실행할 액션들
+                        {'action': 'deactivate_tracker'},  # Tracker 비활성화
+                        {'action': 'deactivate_talker'},  # Talker 비활성화
+                        {'action': 'advance_stage'}  # Stage 3으로 진행
+                    ]
+                },
+                3: {  # Stage 3: Base로 복귀하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
+                        {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
+                        {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
+                    ]
+                }
+            },
+            
+            # Delivery Task: 물품 배송
+            # - Stage 1: admin PC로 이동
+            # - Stage 2: 물품 수령 + 목적지로 이동
+            # - Stage 3: Base로 복귀
+            'delivery': {  # 배송 작업 타입 정의
+                1: {  # Stage 1: admin PC로 이동하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
+                        {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
+                        {'action': 'navigate', 'target': 'admin_desk'}  # admin PC로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'voice', 'command': 'arrived_admin_desk'},  # admin PC 도착 음성
+                        {'action': 'advance_stage'}  # Stage 2로 진행
+                    ]
+                },
+                2: {  # Stage 2: 물품 수령 및 목적지로 이동하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        # 도착후 대기 한다고 알림
+                        # 관리자가 맵으로 다음 목적지를 선택하기 전까지 대기
+                        {'action': 'led', 'emotion': '슬픔'}  # 슬픔 LED 표시
+                        # AddGoalLocation.srv가 성공적으로 도달할 때까지 대기
+                    ],
+                    'goal_location_updated': [  # AddGoalLocation 성공 시 실행할 액션들
+                        {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        # 관리자가 별도로 "이제 돌아가" 라고 지시 하지 않는이상 대기
+                    ],
+                    'end_task': [  # EndTask 요청 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Stage 3으로 진행
+                    ]
+                },
+                3: {  # Stage 3: Base로 복귀하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
+                        {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
+                        {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
+                    ]
+                }
+            }
+        }
+        
         self.get_logger().info('🎯 Task Manager 시작됨 - task_request 서비스 대기 중...')
         self.get_logger().info('💓 Heartbeat 구독 시작됨 - heartbeat 토픽 모니터링 중...')
         self.get_logger().info('📡 OverallStatus 발행 시작됨 - robot_status 토픽으로 1초마다 발행...')
@@ -267,10 +502,19 @@ class TaskManager(Node):
         self.get_logger().info('📍 NavigationResult 서비스 시작됨 - navigation_result 서비스 대기 중...')  # NavigationResult 서버 로그 추가
         self.get_logger().info('👁️ ActivateDetector 클라이언트 준비됨 - activate_detector 서비스 연결...')
         self.get_logger().info('👁️ DeactivateDetector 클라이언트 준비됨 - deactivate_detector 서비스 연결...')
+        self.get_logger().info('👁️ ActivateQRScanner 클라이언트 준비됨 - activate_qr_scanner 서비스 연결...')
+        self.get_logger().info('👁️ DeactivateQRScanner 클라이언트 준비됨 - deactivate_qr_scanner 서비스 연결...')
         self.get_logger().info('⏹️ CancelNavigation 클라이언트 준비됨 - cancel_navigation 서비스 연결...')
+        self.get_logger().info('🏁 EndTask 서비스 시작됨 - end_task 서비스 대기 중...')
+        self.get_logger().info('🔍 RobotQRCheck 서비스 시작됨 - robot_qr_check 서비스 대기 중...')
         self.get_logger().info('⏰ DetectionTimer 구독 시작됨 - detection_timer 토픽 모니터링 중...')
         self.get_logger().info('🗣️ VoiceCommand 퍼블리셔 준비됨 - voice_command 토픽으로 이벤트 기반 발행...')
         self.get_logger().info('⚖️ 무게 데이터 구독 시작됨 - weight_data 토픽 모니터링 중...')
+        self.get_logger().info('🔄 통합 Task Stage 로직 시스템 활성화됨')
+        self.get_logger().info('🗣️ ActivateTalker 클라이언트 준비됨 - activate_talker 서비스 연결...')
+        self.get_logger().info('🗣️ DeactivateTalker 클라이언트 준비됨 - deactivate_talker 서비스 연결...')
+        self.get_logger().info('🎯 ActivateTracker 클라이언트 준비됨 - activate_tracker 서비스 연결...')
+        self.get_logger().info('🎯 DeactivateTracker 클라이언트 준비됨 - deactivate_tracker 서비스 연결...')
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -423,6 +667,14 @@ class TaskManager(Node):
         self.get_logger().info(f'   - Call Location: {request.call_location}')
         self.get_logger().info(f'   - Goal Location: {request.goal_location}')
         
+        # 유효한 task type인지 먼저 확인
+        valid_task_types = list(self.task_stage_logic.keys())  # task_stage_logic의 키들을 자동으로 가져옴
+        if request.task_type not in valid_task_types:
+            self.get_logger().error(f'❌ 유효하지 않은 Task Type: {request.task_type} - 요청 거절')
+            response.success = False
+            response.message = f"유효하지 않은 Task Type입니다. 지원되는 타입: {', '.join(valid_task_types)}"
+            return response
+        
         # escort task의 경우 로봇 ID를 무시하고 활성화된 로봇 중 하나를 임의로 선택
         selected_robot_id = request.robot_id
         
@@ -442,6 +694,25 @@ class TaskManager(Node):
             import random
             selected_robot_id = random.choice(available_robots)
             self.get_logger().info(f'🎲 로봇 자동 할당: {selected_robot_id} (사용 가능한 로봇: {available_robots})')
+        
+        elif request.task_type == 'delivery':
+            self.get_logger().info(f'📦 Delivery task 감지됨 - 지정된 로봇 확인 중...')
+            
+            # delivery는 지정된 로봇이 존재하는지 확인
+            if request.robot_id not in self.robots:
+                self.get_logger().error(f'❌ 지정된 로봇 <{request.robot_id}>이 존재하지 않음 - Delivery task 거절')
+                response.success = False
+                response.message = f"지정된 로봇 <{request.robot_id}>이 존재하지 않아서 Delivery task를 수행할 수 없습니다."
+                return response
+            
+            # 지정된 로봇이 사용 가능한지 확인
+            if not self.robots[request.robot_id].is_available:
+                self.get_logger().error(f'❌ 지정된 로봇 <{request.robot_id}>이 사용중임 - Delivery task 거절')
+                response.success = False
+                response.message = f"지정된 로봇 <{request.robot_id}>이 현재 사용중이어서 Delivery task를 수행할 수 없습니다."
+                return response
+            
+            self.get_logger().info(f'✅ 지정된 로봇 <{request.robot_id}> 확인됨 - Delivery task 진행')
         
         # 새로운 Task 객체 생성 (선택된 로봇 ID 사용)
         new_task = Task(selected_robot_id, request.task_type, request.call_location, request.goal_location)  # Task 객체 생성
@@ -473,25 +744,9 @@ class TaskManager(Node):
         else:
             self.get_logger().warning(f'⚠️  로봇 <{selected_robot_id}> 찾을 수 없음 - state 변경 불가')
         
-        # 새로운 Task의 첫 번째 스테이지 좌표 전송
-        self.get_logger().info(f'🚀 새로운 Task의 Stage 1 좌표 전송 시작...')
-        
-        # Task 시작 시 출발 음성 명령 발행
-        self.get_logger().info(f'🗣️ Task 시작 음성 명령 발행: {request.task_type}.depart_base')
-        if self.send_voice_command_by_task_type(selected_robot_id, request.task_type, 'depart_base'):
-            self.get_logger().info(f'✅ 출발 음성 명령 발행 완료')
-        else:
-            self.get_logger().warning(f'⚠️ 출발 음성 명령 발행 실패')
-        
-        # Stage 1 시작 시 "기쁨" LED 명령 발행
-        self.get_logger().info(f'🎨 Stage 1 시작 - "기쁨" LED 명령 발행')
-        if not self.send_led_command("기쁨"):
-            self.get_logger().warn(f'⚠️ Stage 1 LED 명령 실패했지만 계속 진행')
-        
-        if self.send_coordinate_for_stage(new_task):
-            self.get_logger().info(f'✅ Stage 1 좌표 전송 완료')
-        else:
-            self.get_logger().error(f'❌ Stage 1 좌표 전송 실패')
+        # 새로운 Task의 Stage 1 시작 로직을 통합 시스템으로 처리
+        self.get_logger().info(f'🚀 새로운 Task의 Stage 1 시작...')
+        self.process_task_stage_logic(new_task, 1, 'stage_start')
         
         # 응답 설정
         response.success = True
@@ -575,13 +830,6 @@ class TaskManager(Node):
         elif current_stage == 3:  # 스테이지 3: Base로 이동
             target_location = 'Base'
             self.get_logger().info(f'🎯 Stage 3: Base <{target_location}> 으로 이동')
-            
-            # Stage 3 시작 시 복귀 음성 명령 발행
-            self.get_logger().info(f'🗣️ Stage 3 시작 - 복귀 음성 명령 발행: {task.task_type}.return')
-            if self.send_voice_command_by_task_type(task.robot_id, task.task_type, 'return'):
-                self.get_logger().info(f'✅ 복귀 음성 명령 발행 완료')
-            else:
-                self.get_logger().warning(f'⚠️ 복귀 음성 명령 발행 실패')
         else:
             self.get_logger().warning(f'⚠️  알 수 없는 스테이지: {current_stage}')
             return False
@@ -611,17 +859,33 @@ class TaskManager(Node):
         self.get_logger().info(f'📍 NavigationResult 받음: {request.result}')
         
         try:
-            # 현재는 단순히 로그만 출력 (나중에 task 상태 업데이트 등 추가 예정)
+            # 현재 활성 task가 있는지 확인
+            if not self.tasks or len(self.tasks) == 0:
+                self.get_logger().warning(f'⚠️ NavigationResult를 받았지만 활성 task가 없음')
+                response.success = True
+                response.message = f"NavigationResult 처리 완료: {request.result} (활성 task 없음)"
+                return response
+            
+            current_task = self.tasks[0]
+            
+            # NavigationResult를 이벤트로 변환하여 task_stage_logic에서 처리
             if request.result == "SUCCEEDED":
-                self.get_logger().info(f'✅ 네비게이션 성공!')
-                # SUCCEEDED를 받으면 현재 활성 task의 stage 증가
-                self.advance_task_stage()
+                self.get_logger().info(f'✅ 네비게이션 성공! Task[{current_task.task_id}] Stage {current_task.stage}')
+                # navigation_success 이벤트를 task_stage_logic에서 처리
+                self.process_task_stage_logic(current_task, current_task.stage, 'navigation_success')
+                
             elif request.result == "FAILED":
-                self.get_logger().warning(f'❌ 네비게이션 실패!')
+                self.get_logger().warning(f'❌ 네비게이션 실패! Task[{current_task.task_id}] Stage {current_task.stage}')
+                # navigation_failed 이벤트를 task_stage_logic에서 처리
+                self.process_task_stage_logic(current_task, current_task.stage, 'navigation_failed')
+                
             elif request.result == "CANCELED":
-                self.get_logger().info(f'⏹️  네비게이션 취소됨!')
+                self.get_logger().info(f'⏹️ 네비게이션 취소됨! Task[{current_task.task_id}] Stage {current_task.stage}')
+                # navigation_canceled 이벤트를 task_stage_logic에서 처리
+                self.process_task_stage_logic(current_task, current_task.stage, 'navigation_canceled')
+                
             else:
-                self.get_logger().warning(f'⚠️  알 수 없는 결과: {request.result}')
+                self.get_logger().warning(f'⚠️ 알 수 없는 결과: {request.result}')
             
             # 성공 응답
             response.success = True
@@ -635,7 +899,7 @@ class TaskManager(Node):
             response.message = f"처리 실패: {str(e)}"
             return response
     
-    def advance_task_stage(self):  # 활성 task의 stage 증가
+    def advance_stage(self):  # 활성 task의 stage 증가
         """현재 활성화된 task의 stage를 1단계씩 증가시키는 메서드"""
         if not self.tasks:  # 활성 task가 없으면 리턴
             self.get_logger().warning(f'⚠️  SUCCEEDED를 받았지만 활성 task가 없음')
@@ -685,47 +949,11 @@ class TaskManager(Node):
             stage_desc = {1: "시작", 2: "진행중", 3: "완료직전"}.get(current_task.stage, f"Stage {current_task.stage}")
             self.get_logger().info(f'📍 현재 상태: {stage_icons.get(current_task.stage, "⚪")} Stage {current_task.stage} ({stage_desc})')
             
-            # Escort task의 Stage 2 시작 시점에 감지기 활성화
-            if current_task.task_type == 'escort' and current_task.stage == 2:
-                self.get_logger().info(f'🚶 Escort task Stage 2 시작 - 감지기 활성화 요청...')
-                if self.activate_detector(current_task.robot_id):
-                    self.get_logger().info(f'✅ 감지기 활성화 요청 전송 완료')
-                else:
-                    self.get_logger().error(f'❌ 감지기 활성화 요청 전송 실패')
+            # 새로운 통합 시스템으로 stage_start 이벤트 처리
+            self.process_task_stage_logic(current_task, current_task.stage, 'stage_start')
             
-            # 스테이지가 바뀌었으므로 해당하는 좌표를 Navigator에게 전송
-            self.get_logger().info(f'🚀 새로운 스테이지에 맞는 좌표 전송 시작...')
-            
-            # Stage 1 → Stage 2로 넘어갈 때 키오스크 도착 음성 명령 발행
-            if current_task.stage == 2:
-                self.get_logger().info(f'🗣️ Stage 2 시작 - 키오스크 도착 음성 명령 발행: {current_task.task_type}.arrived_kiosk')
-                if self.send_voice_command_by_task_type(current_task.robot_id, current_task.task_type, 'arrived_kiosk'):
-                    self.get_logger().info(f'✅ 키오스크 도착 음성 명령 발행 완료')
-                else:
-                    self.get_logger().warning(f'⚠️ 키오스크 도착 음성 명령 발행 실패')
-                
-                # Stage 2 시작 시 "슬픔" LED 명령 발행
-                self.get_logger().info(f'🎨 Stage 2 시작 - "슬픔" LED 명령 발행')
-                if not self.send_led_command("슬픔"):
-                    self.get_logger().warn(f'⚠️ Stage 2 LED 명령 실패했지만 계속 진행')
-            
-            # Stage 2 → Stage 3으로 넘어갈 때 목적지 도착 음성 명령 발행
-            if current_task.stage == 3:
-                self.get_logger().info(f'🗣️ Stage 3 시작 - 목적지 도착 음성 명령 발행: {current_task.task_type}.arrived_destination')
-                if self.send_voice_command_by_task_type(current_task.robot_id, current_task.task_type, 'arrived_destination'):
-                    self.get_logger().info(f'✅ 목적지 도착 음성 명령 발행 완료')
-                else:
-                    self.get_logger().warning(f'⚠️ 목적지 도착 음성 명령 발행 실패')
-                
-                # Stage 3 시작 시 "화남" LED 명령 발행
-                self.get_logger().info(f'🎨 Stage 3 시작 - "화남" LED 명령 발행')
-                if not self.send_led_command("화남"):
-                    self.get_logger().warn(f'⚠️ Stage 3 LED 명령 실패했지만 계속 진행')
-            
-            if self.send_coordinate_for_stage(current_task):
-                self.get_logger().info(f'✅ 스테이지 {current_task.stage} 좌표 전송 완료')
-            else:
-                self.get_logger().error(f'❌ 스테이지 {current_task.stage} 좌표 전송 실패')
+            # 기존 좌표 전송 로직은 navigate 액션에서 처리되므로 제거
+            # (process_task_stage_logic에서 자동으로 처리됨)
 
     def test_navigator_communication(self):  # Navigator 통신 테스트
         """더미 좌표로 Navigator 통신을 테스트하는 메서드"""
@@ -807,6 +1035,54 @@ class TaskManager(Node):
         except Exception as e:
             self.get_logger().error(f'❌ 감지기 비활성화 응답 처리 중 오류: {e}')
 
+    def activate_qr_scanner(self, robot_id):  # Vision Manager에게 QR Scanner 활성화 요청
+        """Vision Manager에게 ActivateQRScanner 서비스 요청을 보내는 메서드"""
+        # Vision Manager 서비스가 준비될 때까지 대기
+        if not self.activate_qr_scanner_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ Vision Manager 서비스를 찾을 수 없음 (activate_qr_scanner)')
+            return False
+        
+        # ActivateQRScanner 요청 생성
+        request = ActivateQRScanner.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'👁️ Vision Manager에게 QR Scanner 활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.activate_qr_scanner_client.call_async(request)
+            future.add_done_callback(self.activate_qr_scanner_response_callback)
+            self.get_logger().info(f'📤 QR Scanner 활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ Vision Manager 통신 중 오류: {e}')
+            return False
+
+    def deactivate_qr_scanner(self, robot_id):  # Vision Manager에게 QR Scanner 비활성화 요청
+        """Vision Manager에게 DeactivateQRScanner 서비스 요청을 보내는 메서드"""
+        # Vision Manager 서비스가 준비될 때까지 대기
+        if not self.deactivate_qr_scanner_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ Vision Manager 서비스를 찾을 수 없음 (deactivate_qr_scanner)')
+            return False
+        
+        # DeactivateQRScanner 요청 생성
+        request = DeactivateQRScanner.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'👁️ Vision Manager에게 QR Scanner 비활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.deactivate_qr_scanner_client.call_async(request)
+            future.add_done_callback(self.deactivate_qr_scanner_response_callback)
+            self.get_logger().info(f'📤 QR Scanner 비활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ Vision Manager 통신 중 오류: {e}')
+            return False
+
     def cancel_navigation(self):  # 네비게이션 취소 요청
         """네비게이션을 취소하는 메서드"""
         # CancelNavigation 서비스가 준비될 때까지 대기
@@ -860,52 +1136,11 @@ class TaskManager(Node):
                     if self.tasks and len(self.tasks) > 0:
                         current_task = self.tasks[0]  # 첫 번째 활성 task
                         
-                        # Escort task이고 Stage 2인 경우에만 특별 처리
-                        if current_task.task_type == 'escort' and current_task.stage == 2:
-                            # 10초일 때는 lost_user 음성만 발행
-                            if counter_value == 10:
-                                self.get_logger().warn(f'🚨 [DetectionTimer] Escort Stage 2에서 10초 경과! 사용자 분실 경고')
-                                
-                                # 사용자 분실 음성 명령 발행
-                                self.get_logger().info(f'🗣️ [DetectionTimer] 사용자 분실 음성 명령 발행: escort.lost_user')
-                                if self.send_voice_command_by_task_type(current_task.robot_id, 'escort', 'lost_user'):
-                                    self.get_logger().info(f'✅ [DetectionTimer] 사용자 분실 음성 명령 발행 완료')
-                                else:
-                                    self.get_logger().warning(f'⚠️ [DetectionTimer] 사용자 분실 음성 명령 발행 실패')
-                            
-                            # 30초일 때 Stage 3으로 강제 이동
-                            elif counter_value >= 30:
-                                self.get_logger().warn(f'🚨 [DetectionTimer] Escort Stage 2에서 30초 초과! 자동 Stage 3 전환 시작')
-                                
-                                # 1. CancelNavigation 발행
-                                self.get_logger().info(f'⏹️ [DetectionTimer] CancelNavigation 요청 전송...')
-                                if self.cancel_navigation():
-                                    self.get_logger().info(f'✅ [DetectionTimer] CancelNavigation 요청 전송 완료')
-                                else:
-                                    self.get_logger().error(f'❌ [DetectionTimer] CancelNavigation 요청 전송 실패')
-                                
-                                # 2. DeactivateDetector 발행
-                                self.get_logger().info(f'👁️ [DetectionTimer] DeactivateDetector 요청 전송...')
-                                if self.deactivate_detector(current_task.robot_id):
-                                    self.get_logger().info(f'✅ [DetectionTimer] DeactivateDetector 요청 전송 완료')
-                                else:
-                                    self.get_logger().error(f'❌ [DetectionTimer] DeactivateDetector 요청 전송 실패')
-                                
-                                # 3. Stage 3으로 강제 이동
-                                self.get_logger().warn(f'🔄 [DetectionTimer] Stage 3으로 강제 이동...')
-                                current_task.stage = 3
-                                self.get_logger().info(f'✅ [DetectionTimer] Stage 3으로 이동 완료')
-                                
-                                # 4. Stage 3 좌표 전송 (return 음성은 send_coordinate_for_stage에서 자동 발행)
-                                if self.send_coordinate_for_stage(current_task):
-                                    self.get_logger().info(f'✅ [DetectionTimer] Stage 3 좌표 전송 완료')
-                                else:
-                                    self.get_logger().error(f'❌ [DetectionTimer] Stage 3 좌표 전송 실패')
-                            
-                        else:
-                            # Escort가 아니거나 Stage 2가 아닌 경우 일반 경고만
-                            task_info = f"{current_task.task_type} (Stage {current_task.stage})" if self.tasks else "No active task"
-                            self.get_logger().warn(f'⚠️ [DetectionTimer] 10초 초과했지만 Escort Stage 2가 아님: {task_info}')
+                        # 새로운 통합 시스템으로 timer 이벤트 처리
+                        if counter_value == 10:
+                            self.process_task_stage_logic(current_task, current_task.stage, 'timer_10s')
+                        elif counter_value >= 30:
+                            self.process_task_stage_logic(current_task, current_task.stage, 'timer_30s')
                     
                     else:
                         # 활성 task가 없는 경우
@@ -1048,6 +1283,411 @@ class TaskManager(Node):
         except Exception as e:
             self.get_logger().warn(f'⚠️ [LED] 명령 발행 실패: {emotion} (오류: {e}) - 무시하고 계속 진행')
             return False
+
+    def process_task_stage_logic(self, task, stage, event_type):
+        """task 타입별 stage 로직을 처리하는 통합 메서드"""
+        if task.task_type in self.task_stage_logic:
+            if stage in self.task_stage_logic[task.task_type]:
+                if event_type in self.task_stage_logic[task.task_type][stage]:
+                    self.get_logger().info(f'🔄 [{task.task_type}] Stage {stage} - {event_type} 이벤트 처리 시작')
+                    for action in self.task_stage_logic[task.task_type][stage][event_type]:
+                        self.execute_action(task, action)
+                    self.get_logger().info(f'✅ [{task.task_type}] Stage {stage} - {event_type} 이벤트 처리 완료')
+                else:
+                    self.get_logger().debug(f'📝 [{task.task_type}] Stage {stage}에 {event_type} 이벤트 없음')
+            else:
+                self.get_logger().debug(f'📝 [{task.task_type}] Stage {stage} 로직 정의 없음')
+        else:
+            self.get_logger().debug(f'📝 Task 타입 {task.task_type} 로직 정의 없음')
+
+    def execute_action(self, task, action):
+        """단순한 액션 실행 메서드"""
+        action_type = action.get('action')
+        
+        # 핵심 액션들 (자주 사용되는 것들)
+        if action_type == 'voice':
+            command = action.get('command')
+            self.send_voice_command_by_task_type(task.robot_id, task.task_type, command)
+            
+        elif action_type == 'led':
+            emotion = action.get('emotion')
+            self.send_led_command(emotion)
+            
+        elif action_type == 'navigate':
+            target = action.get('target')
+            if target == 'call_location':
+                x, y = LOCATION_COORDINATES[task.call_location]
+            elif target == 'goal_location':
+                x, y = LOCATION_COORDINATES[task.goal_location]
+            elif target == 'base':
+                x, y = LOCATION_COORDINATES['Base']
+            elif target == 'admin_desk':
+                x, y = LOCATION_COORDINATES['admin_desk']  # admin PC 좌표
+            self.send_goal_to_navigator(x, y)
+            
+        # 특수한 액션들 (자주 사용되지 않는 것들)
+        elif action_type == 'activate_detector':
+            self.activate_detector(task.robot_id)
+            
+        elif action_type == 'deactivate_detector':
+            self.deactivate_detector(task.robot_id)
+            
+        elif action_type == 'activate_qr_scanner':
+            self.activate_qr_scanner(task.robot_id)
+            
+        elif action_type == 'deactivate_qr_scanner':
+            self.deactivate_qr_scanner(task.robot_id)
+            
+        elif action_type == 'activate_tracker':
+            self.activate_tracker(task.robot_id)
+            
+        elif action_type == 'activate_talker':
+            self.activate_talker(task.robot_id)
+            
+        elif action_type == 'deactivate_talker':
+            self.deactivate_talker(task.robot_id)
+            
+        elif action_type == 'deactivate_tracker':
+            self.deactivate_tracker(task.robot_id)
+            
+        elif action_type == 'cancel_navigation':
+            self.cancel_navigation()
+            
+        elif action_type == 'force_stage':
+            target_stage = action.get('target')
+            task.stage = target_stage
+            self.get_logger().warn(f'🔄 [{task.task_type}] 강제 Stage 변경: {target_stage}')
+            # 강제 stage 변경 후 해당 stage의 stage_start 이벤트 처리
+            self.process_task_stage_logic(task, target_stage, 'stage_start')
+            
+        elif action_type == 'advance_stage':
+            # advance_stage 메서드 호출 (기존 로직 재사용)
+            self.advance_stage()
+        else:
+            self.get_logger().warning(f'⚠️ 알 수 없는 액션 타입: {action_type}')
+
+    def activate_qr_scanner_response_callback(self, future):  # ActivateQRScanner 응답 콜백
+        """ActivateQRScanner 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ QR Scanner 활성화 성공: {response.message}')
+                
+                # QR Scanner 활성화 성공을 이벤트로 발행
+                if self.tasks and len(self.tasks) > 0:
+                    current_task = self.tasks[0]
+                    self.process_task_stage_logic(current_task, current_task.stage, 'qr_scanner_activated')
+                
+            else:
+                self.get_logger().warning(f'⚠️  QR Scanner 활성화 실패: {response.message}')
+                
+                # QR Scanner 활성화 실패를 이벤트로 발행
+                if self.tasks and len(self.tasks) > 0:
+                    current_task = self.tasks[0]
+                    self.process_task_stage_logic(current_task, current_task.stage, 'qr_scanner_failed')
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ QR Scanner 활성화 응답 처리 중 오류: {e}')
+
+    def deactivate_qr_scanner_response_callback(self, future):  # DeactivateQRScanner 응답 콜백
+        """DeactivateQRScanner 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ QR Scanner 비활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️  QR Scanner 비활성화 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ QR Scanner 비활성화 응답 처리 중 오류: {e}')
+
+    def end_task_callback(self, request, response):  # EndTask 서비스 콜백
+        """EndTask 서비스 콜백"""
+        self.get_logger().info(f'📥 EndTask 요청 받음!')
+        self.get_logger().info(f'   - 로봇 ID: {request.robot_id}')
+        self.get_logger().info(f'   - Task Type: {request.task_type}')
+        
+        # 해당 로봇의 활성 작업 찾기
+        active_task = None
+        for task in self.tasks:
+            if task.robot_id == request.robot_id and task.task_type == request.task_type:
+                active_task = task
+                break
+        
+        if active_task:
+            # task_stage_logic에서 end_task 이벤트 처리
+            self.process_task_stage_logic(active_task, active_task.stage, 'end_task')
+            response.success = True
+            response.message = f"EndTask 이벤트 처리 완료: {request.robot_id} - {request.task_type}"
+        else:
+            response.success = False
+            response.message = f"로봇 <{request.robot_id}>의 {request.task_type} 작업을 찾을 수 없습니다"
+        
+        return response
+
+    def robot_qr_check_callback(self, request, response):  # RobotQRCheck 서비스 콜백
+        """RobotQRCheck 서비스 콜백"""
+        self.get_logger().info(f'📥 RobotQRCheck 요청 받음!')
+        self.get_logger().info(f'   - 로봇 ID: {request.robot_id}')
+        self.get_logger().info(f'   - 관리자 이름: {request.admin_name}')
+        
+        # 현재 활성 task가 있는지 확인
+        if not self.tasks or len(self.tasks) == 0:
+            response.success = False
+            response.message = f"활성 task가 없어서 QR Check를 처리할 수 없습니다"
+            self.get_logger().warning(f'❌ QR Check 실패: 활성 task 없음')
+            return response
+        
+        current_task = self.tasks[0]
+        
+        # 로봇 ID 일치 여부 확인
+        if current_task.robot_id != request.robot_id:
+            response.success = False
+            response.message = f"로봇 ID 불일치: 현재 task는 {current_task.robot_id}이지만 요청은 {request.robot_id}입니다"
+            self.get_logger().warning(f'❌ QR Check 실패: 로봇 ID 불일치 (현재: {current_task.robot_id}, 요청: {request.robot_id})')
+            return response
+        
+        # 관리자 이름 유효성 확인
+        if request.admin_name not in ADMIN_NAMES:
+            response.success = False
+            response.message = f"유효하지 않은 관리자 이름: {request.admin_name} (등록된 관리자: {', '.join(ADMIN_NAMES)})"
+            self.get_logger().warning(f'❌ QR Check 실패: 유효하지 않은 관리자 이름 ({request.admin_name})')
+            return response
+        
+        # 모든 검증 통과 - QR Check 성공
+        response.success = True
+        response.message = f"Robot QR Check 완료: {request.robot_id} - {request.admin_name}"
+        
+        # QR Check 완료 후 qr_check_completed 이벤트 발생
+        self.get_logger().info(f'✅ QR Check 완료! qr_check_completed 이벤트 발생')
+        self.process_task_stage_logic(current_task, current_task.stage, 'qr_check_completed')
+        
+        return response
+
+    def activate_talker(self, robot_id):  # Talker 활성화 요청
+        """Talker를 활성화하는 메서드"""
+        # ActivateTalker 서비스가 준비될 때까지 대기
+        if not self.activate_talker_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ ActivateTalker 서비스를 찾을 수 없음')
+            return False
+        
+        # ActivateTalker 요청 생성
+        request = ActivateTalker.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'🗣️ Talker 활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.activate_talker_client.call_async(request)
+            future.add_done_callback(self.activate_talker_response_callback)
+            self.get_logger().info(f'📤 Talker 활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ ActivateTalker 통신 중 오류: {e}')
+            return False
+
+    def deactivate_talker(self, robot_id):  # Talker 비활성화 요청
+        """Talker를 비활성화하는 메서드"""
+        # DeactivateTalker 서비스가 준비될 때까지 대기
+        if not self.deactivate_talker_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ DeactivateTalker 서비스를 찾을 수 없음')
+            return False
+        
+        # DeactivateTalker 요청 생성
+        request = DeactivateTalker.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'🗣️ Talker 비활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.deactivate_talker_client.call_async(request)
+            future.add_done_callback(self.deactivate_talker_response_callback)
+            self.get_logger().info(f'📤 Talker 비활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ DeactivateTalker 통신 중 오류: {e}')
+            return False
+
+    def activate_tracker(self, robot_id):  # Tracker 활성화 요청
+        """Tracker를 활성화하는 메서드"""
+        # ActivateTracker 서비스가 준비될 때까지 대기
+        if not self.activate_tracker_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ ActivateTracker 서비스를 찾을 수 없음')
+            return False
+        
+        # ActivateTracker 요청 생성
+        request = ActivateTracker.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'🎯 Tracker 활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.activate_tracker_client.call_async(request)
+            future.add_done_callback(self.activate_tracker_response_callback)
+            self.get_logger().info(f'📤 Tracker 활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ ActivateTracker 통신 중 오류: {e}')
+            return False
+
+    def deactivate_tracker(self, robot_id):  # Tracker 비활성화 요청
+        """Tracker를 비활성화하는 메서드"""
+        # DeactivateTracker 서비스가 준비될 때까지 대기
+        if not self.deactivate_tracker_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ DeactivateTracker 서비스를 찾을 수 없음')
+            return False
+        
+        # DeactivateTracker 요청 생성
+        request = DeactivateTracker.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'🎯 Tracker 비활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.deactivate_tracker_client.call_async(request)
+            future.add_done_callback(self.deactivate_tracker_response_callback)
+            self.get_logger().info(f'📤 Tracker 비활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ DeactivateTracker 통신 중 오류: {e}')
+            return False
+
+    def activate_talker_response_callback(self, future):  # ActivateTalker 응답 콜백
+        """ActivateTalker 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ Talker 활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️ Talker 활성화 실패: {response.message}')
+                
+                # Talker 활성화 실패를 이벤트로 발행
+                if self.tasks and len(self.tasks) > 0:
+                    current_task = self.tasks[0]
+                    self.process_task_stage_logic(current_task, current_task.stage, 'talker_failed')
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ Talker 활성화 응답 처리 중 오류: {e}')
+            
+            # 예외 발생 시에도 실패 이벤트 발행
+            if self.tasks and len(self.tasks) > 0:
+                current_task = self.tasks[0]
+                self.process_task_stage_logic(current_task, current_task.stage, 'talker_failed')
+
+    def deactivate_talker_response_callback(self, future):  # DeactivateTalker 응답 콜백
+        """DeactivateTalker 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ Talker 비활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️ Talker 비활성화 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ Talker 비활성화 응답 처리 중 오류: {e}')
+
+    def activate_tracker_response_callback(self, future):  # ActivateTracker 응답 콜백
+        """ActivateTracker 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ Tracker 활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️ Tracker 활성화 실패: {response.message}')
+                
+                # Tracker 활성화 실패를 이벤트로 발행
+                if self.tasks and len(self.tasks) > 0:
+                    current_task = self.tasks[0]
+                    self.process_task_stage_logic(current_task, current_task.stage, 'tracker_failed')
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ Tracker 활성화 응답 처리 중 오류: {e}')
+            
+            # 예외 발생 시에도 실패 이벤트 발행
+            if self.tasks and len(self.tasks) > 0:
+                current_task = self.tasks[0]
+                self.process_task_stage_logic(current_task, current_task.stage, 'tracker_failed')
+
+    def deactivate_tracker_response_callback(self, future):  # DeactivateTracker 응답 콜백
+        """DeactivateTracker 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ Tracker 비활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️ Tracker 비활성화 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ Tracker 비활성화 응답 처리 중 오류: {e}')
+
+    def add_goal_location_callback(self, request, response):  # AddGoalLocation 서비스 콜백
+        """AddGoalLocation 서비스 요청을 처리하는 콜백"""
+        try:
+            robot_id = request.robot_id  # 요청에서 로봇 ID 가져오기
+            goal_location = request.goal_location  # 요청에서 목표 위치 가져오기
+            
+            self.get_logger().info(f'🎯 목표 위치 추가 요청: 로봇 {robot_id} -> {goal_location}')
+            
+            # 현재 활성 작업이 있는지 확인
+            if not self.tasks:
+                response.success = False
+                response.message = f'활성 작업이 없습니다.'
+                self.get_logger().warning(f'⚠️ 활성 작업 없음: {response.message}')
+                return response
+            
+            current_task = self.tasks[0]  # 첫 번째 작업 가져오기
+            
+            # 로봇 ID가 일치하는지 확인
+            if current_task.robot_id != robot_id:
+                response.success = False
+                response.message = f'로봇 ID 불일치: 요청된 {robot_id}, 현재 작업 {current_task.robot_id}'
+                self.get_logger().warning(f'⚠️ 로봇 ID 불일치: {response.message}')
+                return response
+            
+            # 작업 타입이 delivery인지 확인
+            if current_task.task_type != 'delivery':
+                response.success = False
+                response.message = f'작업 타입이 delivery가 아닙니다: {current_task.task_type}'
+                self.get_logger().warning(f'⚠️ 작업 타입 불일치: {response.message}')
+                return response
+            
+            # stage가 2인지 확인
+            if current_task.stage != 2:
+                response.success = False
+                response.message = f'현재 stage가 2가 아닙니다: {current_task.stage}'
+                self.get_logger().warning(f'⚠️ stage 불일치: {response.message}')
+                return response
+            
+            # goal_location이 유효한 위치인지 확인
+            if goal_location not in LOCATION_COORDINATES:
+                response.success = False
+                response.message = f'유효하지 않은 목표 위치입니다: {goal_location}'
+                self.get_logger().warning(f'⚠️ 유효하지 않은 위치: {response.message}')
+                return response
+            
+            # 모든 조건을 만족하면 goal_location 업데이트
+            current_task.goal_location = goal_location  # 목표 위치 업데이트
+            self.get_logger().info(f'✅ 목표 위치 업데이트: {robot_id} -> {goal_location}')
+            
+            # goal_location_updated 이벤트 발생
+            self.process_task_stage_logic(current_task, current_task.stage, 'goal_location_updated')
+            
+            response.success = True  # 성공 응답
+            response.message = f'목표 위치 {goal_location}이 로봇 {robot_id}의 delivery stage 2 작업에 추가되었습니다.'
+            
+            self.get_logger().info(f'✅ 목표 위치 추가 성공: {response.message}')
+            
+        except Exception as e:
+            self.get_logger().error(f'❌ 목표 위치 추가 처리 중 오류: {e}')
+            response.success = False  # 실패 응답
+            response.message = f'목표 위치 추가 실패: {str(e)}'
+        
+        return response
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)
