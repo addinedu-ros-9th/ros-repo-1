@@ -21,8 +21,9 @@ from pydub import AudioSegment
 from google.cloud import texttospeech
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.service import Service
 from libo_interfaces.msg import VoiceCommand, TalkCommand
-from libo_interfaces.srv import EndTask
+from libo_interfaces.srv import EndTask, ActivateTalker, DeactivateTalker
 
 
 # ================== 네트워크/오디오 기본 설정 ==================
@@ -170,6 +171,11 @@ class CommunicationManager:
         self.buffer_queue = queue.Queue()
         self.stop_event = threading.Event()
         self.tcp_ready = threading.Event()
+        self.is_active = False  # 웨이크워드 및 명령 처리 활성화 상태 변수 - 기본값 False로 변경
+        self.current_robot_id = "unknown"  # 현재 활성화/비활성화 요청한 로봇 ID
+        self.last_status_report_time = 0  # 마지막 상태 출력 시간
+        self.last_status = False  # 마지막 상태 기록
+        print(f"[{get_kr_time()}][CONFIG] 토커매니저 기본 상태: 비활성화됨 (웨이크워드 감지 불가능)")
 
     def start_udp_receiver(self):
         """UDP 수신기 초기화 및 시작"""
@@ -214,14 +220,18 @@ class CommunicationManager:
                     while not self.stop_event.is_set():
                         try:
                             data, _ = self.udp_sock.recvfrom(CHUNK * 2)
-                            self.buffer_queue.put(data)
+                            # 활성화 상태인 경우에만 버퍼에 넣음 - 비활성화 상태에서는 오디오 데이터 처리하지 않음
+                            if self.is_active:
+                                self.buffer_queue.put(data)
                             received_count += 1
                             
                             if received_count % 1000 == 0:
                                 elapsed = time.time() - start_time
                                 rate = received_count / elapsed
                                 data_rate = (rate * CHUNK * 2) / 1024  # KB/s
-                                print(f"[{get_kr_time()}][UDP] 📊 수신 통계: {received_count}개 패킷, {rate:.2f} packets/sec, {data_rate:.1f} KB/s")
+                                active_status = "활성화" if self.is_active else "비활성화"
+                                robot_id = self.current_robot_id
+                                print(f"[{get_kr_time()}][UDP] 📊 수신 통계: {received_count}개 패킷, {rate:.2f} packets/sec, {data_rate:.1f} KB/s, 상태: {active_status}, 로봇: {robot_id}")
                                 print(f"[{get_kr_time()}][UDP] 🔄 활성 연결: {HARDWARE_HANDLER_IP}:{MIC_STREAM_PORT} ← 오디오 스트림 수신 중")
                         except Exception as recv_e:
                             print(f"[{get_kr_time()}][UDP] ⚠️ 데이터 수신 오류: {str(recv_e)}")
@@ -506,9 +516,29 @@ class TalkerNode(Node):
             callback_group=self.callback_group
         )
         
+        # ActivateTalker 서비스 서버
+        self.activate_service = self.create_service(
+            ActivateTalker,
+            '/activate_talker',
+            self.activate_talker_callback,
+            callback_group=self.callback_group
+        )
+        
+        # DeactivateTalker 서비스 서버
+        self.deactivate_service = self.create_service(
+            DeactivateTalker,
+            '/deactivate_talker',
+            self.deactivate_talker_callback,
+            callback_group=self.callback_group
+        )
+        
         # 서비스 가용성 확인 (비차단식)
         if not self.end_task_client.wait_for_service(timeout_sec=0.1):
             self.get_logger().warning('EndTask 서비스가 아직 활성화되지 않았습니다. 필요할 때 다시 시도합니다.')
+        
+        # 서비스 서버 로그
+        print(f"[{get_kr_time()}][SERVICE] ✅ ActivateTalker 서비스 서버 등록됨: /activate_talker")
+        print(f"[{get_kr_time()}][SERVICE] ✅ DeactivateTalker 서비스 서버 등록됨: /deactivate_talker")
         
         self.get_logger().info('TalkerNode 초기화 완료!')
     
@@ -556,6 +586,66 @@ class TalkerNode(Node):
         
         self.get_logger().info(f"TalkCommand 발행: robot_id={robot_id}, action={action}")
         self.talk_cmd_pub.publish(msg)
+        
+    def activate_talker_callback(self, request, response):
+        """
+        토커매니저 활성화 서비스 콜백
+        
+        Args:
+            request: 서비스 요청 (robot_id 포함)
+            response: 서비스 응답
+        
+        Returns:
+            response: 성공 여부와 메시지가 포함된 응답
+        """
+        robot_id = request.robot_id
+        self.get_logger().info(f'ActivateTalker 서비스 호출됨 (robot_id: {robot_id})')
+        print(f"[{get_kr_time()}][SERVICE] 🔊 토커매니저 활성화 요청 수신 (robot_id: {robot_id})")
+        
+        try:
+            # 토커매니저 활성화 및 로봇 ID 설정
+            self.comm_manager.is_active = True
+            self.comm_manager.current_robot_id = robot_id
+            
+            response.success = True
+            response.message = f"토커매니저가 활성화되었습니다. 로봇 {robot_id}의 웨이크워드 감지를 시작합니다."
+            print(f"[{get_kr_time()}][SERVICE] ✅ 토커매니저 활성화 완료 (robot_id: {robot_id})")
+            return response
+        except Exception as e:
+            response.success = False
+            response.message = f"토커매니저 활성화 중 오류 발생: {str(e)}"
+            print(f"[{get_kr_time()}][SERVICE] ❌ 토커매니저 활성화 실패: {str(e)}")
+            return response
+    
+    def deactivate_talker_callback(self, request, response):
+        """
+        토커매니저 비활성화 서비스 콜백
+        
+        Args:
+            request: 서비스 요청 (robot_id 포함)
+            response: 서비스 응답
+        
+        Returns:
+            response: 성공 여부와 메시지가 포함된 응답
+        """
+        robot_id = request.robot_id
+        self.get_logger().info(f'DeactivateTalker 서비스 호출됨 (robot_id: {robot_id})')
+        print(f"[{get_kr_time()}][SERVICE] 🔇 토커매니저 비활성화 요청 수신 (robot_id: {robot_id})")
+        
+        try:
+            # 토커매니저 비활성화
+            self.comm_manager.is_active = False
+            self.comm_manager.current_robot_id = robot_id
+            
+            response.success = True
+            response.message = f"토커매니저가 비활성화되었습니다. 로봇 {robot_id}의 웨이크워드 감지를 중지합니다."
+            print(f"[{get_kr_time()}][SERVICE] ✅ 토커매니저 비활성화 완료 (robot_id: {robot_id})")
+            return response
+        except Exception as e:
+            response.success = False
+            response.message = f"토커매니저 비활성화 중 오류 발생: {str(e)}"
+            print(f"[{get_kr_time()}][SERVICE] ❌ 토커매니저 비활성화 실패: {str(e)}")
+            return response
         
     def voice_command_callback(self, msg):
         """
@@ -607,6 +697,7 @@ def main(args=None):
     print(f"[{get_kr_time()}][NETWORK] 🎤 UDP 서버: {HARDWARE_HANDLER_IP}:{MIC_STREAM_PORT} - 마이크 스트림")
     print(f"[{get_kr_time()}][NETWORK] 🔊 TCP 서버: {HARDWARE_HANDLER_IP}:{SPEAKER_PORT} - 스피커 출력")
     comm_manager = CommunicationManager()
+    print(f"[{get_kr_time()}][STATUS] ⚠️ 토커매니저 초기 상태: 비활성화 (웨이크워드 감지 불가능 - ActivateTalker 서비스 호출 필요)")
     
     # UDP 수신기 및 TCP 서버 시작 (비동기)
     udp_thread = comm_manager.start_udp_receiver()
@@ -641,7 +732,10 @@ def main(args=None):
     )
     mic_frame_length = int(porcupine.frame_length * (NATIVE_RATE / TARGET_RATE))
     print(f"[{get_kr_time()}][CONFIG] 프레임 길이: {mic_frame_length}, 원본 레이트: {NATIVE_RATE}Hz, 타겟 레이트: {TARGET_RATE}Hz")
-    print(f"[{get_kr_time()}][talker_manager] Ready for wakeword detection: '리보야'")
+    if comm_manager.is_active:
+        print(f"[{get_kr_time()}][talker_manager] Ready for wakeword detection: '리보야'")
+    else:
+        print(f"[{get_kr_time()}][talker_manager] Wakeword detection DISABLED. Use ActivateTalker service to enable.")
     buffer = b''
 
     # ========== 4. OpenAI 클라이언트 ==========
@@ -663,72 +757,246 @@ def main(args=None):
                 audio_np = np.array(pcm_native, dtype=np.float32)
                 audio_resampled = resampy.resample(audio_np, NATIVE_RATE, TARGET_RATE)
                 pcm_resampled = audio_resampled.astype(np.int16)
-
+                
+                # 상태가 변경되었을 때만 메시지 출력 (또는 60초마다 한 번)
+                current_time = time.time()
+                if (comm_manager.last_status != comm_manager.is_active) or (current_time - comm_manager.last_status_report_time > 60):
+                    status = "활성화" if comm_manager.is_active else "비활성화"
+                    robot_id = comm_manager.current_robot_id
+                    print(f"[{get_kr_time()}][STATUS] 토커매니저 상태: {status} (웨이크워드 감지: {'켜짐' if comm_manager.is_active else '꺼짐'}, 로봇: {robot_id})")
+                    comm_manager.last_status = comm_manager.is_active
+                    comm_manager.last_status_report_time = current_time
+                
                 # ========== 4. 웨이크워드 검출 ==========
-                keyword_index = porcupine.process(pcm_resampled)
-                if keyword_index >= 0:
-                    print(f"\n[{get_kr_time()}][WAKE] 🟢 Wakeword('리보야') 감지됨!")
-                    print(f"[{get_kr_time()}][AUDIO] 현재 버퍼 크기: {len(buffer)} bytes")
-                    
-                    # 웨이크워드 감지 시 응답 출력
-                    print(f"[{get_kr_time()}][TTS] 웨이크워드 확인 응답 생성 중...")
-                    
-                    # 'called_by_staff' 액션을 사용하여 응답
-                    if comm_manager.play_voice_command("assist", "called_by_staff"):
-                        print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 완료 (MP3)")
-                    else:
-                        # MP3 파일 재생 실패 시 기본 TTS 사용
-                        wake_response = "네? 무엇을 도와드릴까요?"
-                        print(f"[{get_kr_time()}][TTS] TTS로 대체 응답 생성 중...")
+                # 활성화 상태일 때만 웨이크워드 감지 수행
+                if comm_manager.is_active:
+                    keyword_index = porcupine.process(pcm_resampled)
+                    # 웨이크워드가 감지된 경우
+                    if keyword_index >= 0:
+                        print(f"\n[{get_kr_time()}][WAKE] 🟢 Wakeword('리보야') 감지됨!")
+                        
+                        # 웨이크워드 감지 시 응답 출력
+                        print(f"[{get_kr_time()}][TTS] 웨이크워드 확인 응답 생성 중...")
+                        
+                        # 'called_by_staff' 액션을 사용하여 응답
+                        if comm_manager.play_voice_command("assist", "called_by_staff"):
+                            print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 완료 (MP3)")
+                        else:
+                            # MP3 파일 재생 실패 시 기본 TTS 사용
+                                wake_response = "네? 무엇을 도와드릴까요?"
+                                print(f"[{get_kr_time()}][TTS] TTS로 대체 응답 생성 중...")
+                                
+                                try:
+                                    # TTS 직접 생성
+                                    synthesis_input = texttospeech.SynthesisInput(text=wake_response)
+                                    
+                                    voice = texttospeech.VoiceSelectionParams(
+                                        language_code="ko-KR",
+                                        name="ko-KR-Standard-A",
+                                        ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
+                                    )
+                                    
+                                    audio_config = texttospeech.AudioConfig(
+                                        audio_encoding=texttospeech.AudioEncoding.LINEAR16,
+                                        sample_rate_hertz=TTS_RATE,
+                                    )
+                                    
+                                    wake_tts_response = tts_client.synthesize_speech(
+                                        input=synthesis_input,
+                                        voice=voice,
+                                        audio_config=audio_config
+                                    )
+                                    
+                                    # 오디오 데이터를 float32로 변환
+                                    wake_audio_data = np.frombuffer(wake_tts_response.audio_content, dtype=np.int16)
+                                    wake_audio_float32 = wake_audio_data.astype(np.float32) / 32768.0
+                                    
+                                    # TCP를 통해 스피커 노드로 전송
+                                    print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 중...")
+                                    
+                                    if comm_manager.send_audio_data(wake_audio_float32):
+                                        print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 완료 (TTS)")
+                                    else:
+                                        print(f"[{get_kr_time()}][AUDIO] ❌ 웨이크워드 응답 전송 실패")
+                                except Exception as e:
+                                    print(f"[{get_kr_time()}][ERROR] 웨이크워드 TTS 오류: {str(e)}")
+                                    
+                            # 여기서 마이크 스트림 닫거나 모드 전환 필요 없음 (이미 UDP 입력중)
+                        # 이후: 명령어 인식 단계
+                        # ---- 명령어 인식(구글 STT API 활용) ----
+                        print(f"[{get_kr_time()}][STT] 다음 명령을 말씀하세요... (최대 15초)")
+                        
+                        # [1] 음성 수집 및 노이즈 레벨 조정 (원본 샘플링 레이트 사용)
+                        print(f"[{get_kr_time()}][AUDIO] 주변 소음 분석 중... (0.5초)")
+                        print(f"[{get_kr_time()}][CONFIG] 음성 인식을 위해 원본 레이트({NATIVE_RATE}Hz) 사용")
+                        
+                        # WAV 파일로 현재 버퍼의 데이터 저장 (임시)
+                        noise_wav = os.path.join(PROJECT_ROOT, "temp_noise.wav")
+                        collected = b''
+                        
+                        # 노이즈 분석을 위한 데이터 수집 (0.5초)
+                        start = time.time()
+                        while time.time() - start < 0.5:  # 0.5초 동안 데이터 수집
+                            if not comm_manager.buffer_queue.empty():
+                                collected += comm_manager.buffer_queue.get()
+                        
+                        # WAV 파일로 저장 - 원본 샘플링 레이트(NATIVE_RATE) 사용
+                        with wave.open(noise_wav, 'wb') as wf:
+                            wf.setnchannels(CHANNELS)
+                            wf.setsampwidth(2)  # 16-bit
+                            wf.setframerate(NATIVE_RATE)
+                            wf.writeframes(collected)
+                        
+                        # 노이즈 레벨 조정
+                        with sr.AudioFile(noise_wav) as source:
+                            recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                            print(f"[{get_kr_time()}][AUDIO] 노이즈 레벨 조정 완료")
+                        
+                        os.remove(noise_wav)  # 임시 파일 삭제
+                        
+                        # [2] 실제 음성 수집 시작 (침묵 감지 기능 추가)
+                        print(f"[{get_kr_time()}][RECORD] 음성 수집 시작... (최대 15초, 침묵 감지시 자동 종료)")
+                        collected = b''
+                        start = time.time()
+                        MAX_RECORD_TIME = 15.0  # 최대 15초
+                        SILENCE_THRESHOLD = 300  # 침묵 감지 임계값 (RMS)
+                        SILENCE_DURATION = 1.5  # 침묵이 지속되어야 하는 시간(초)
+                        
+                        last_active_time = time.time()  # 마지막으로 소리가 감지된 시간
+                        has_speech_started = False  # 음성이 시작되었는지 여부
                         
                         try:
-                            # TTS 직접 생성
-                            synthesis_input = texttospeech.SynthesisInput(text=wake_response)
-                            
-                            voice = texttospeech.VoiceSelectionParams(
-                                language_code="ko-KR",
-                                name="ko-KR-Standard-A",
-                                ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
-                            )
-                            
-                            audio_config = texttospeech.AudioConfig(
-                                audio_encoding=texttospeech.AudioEncoding.LINEAR16,
-                                sample_rate_hertz=TTS_RATE,
-                            )
-                            
-                            wake_tts_response = tts_client.synthesize_speech(
-                                input=synthesis_input,
-                                voice=voice,
-                                audio_config=audio_config
-                            )
-                            
-                            # 오디오 데이터를 float32로 변환
-                            wake_audio_data = np.frombuffer(wake_tts_response.audio_content, dtype=np.int16)
-                            wake_audio_float32 = wake_audio_data.astype(np.float32) / 32768.0
-                            
-                            # TCP를 통해 스피커 노드로 전송
-                            print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 중...")
-                            
-                            if comm_manager.send_audio_data(wake_audio_float32):
-                                print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 완료 (TTS)")
-                            else:
-                                print(f"[{get_kr_time()}][AUDIO] ❌ 웨이크워드 응답 전송 실패")
-                                
+                            while time.time() - start < MAX_RECORD_TIME:
+                                if not comm_manager.buffer_queue.empty():
+                                    data = comm_manager.buffer_queue.get()
+                                    collected += data
+                                    
+                                    # 현재 청크의 소리 크기 측정 (RMS)
+                                    if len(data) >= CHUNK * 2:  # 최소 1개 청크 이상
+                                        pcm = struct.unpack_from("h" * (len(data) // 2), data)
+                                        rms = np.sqrt(np.mean(np.square(pcm)))
+                                        
+                                        # 소리가 임계값보다 크면 활동으로 간주
+                                        if rms > SILENCE_THRESHOLD:
+                                            last_active_time = time.time()
+                                            if not has_speech_started and len(collected) > CHUNK * 10:  # 처음 몇 청크는 노이즈일 수 있으므로 건너뜀
+                                                has_speech_started = True
+                                                print(f"[{get_kr_time()}][RECORD] 🗣️ 음성 감지됨 (RMS: {rms:.1f})")
+                                    
+                                    # 로그 출력
+                                    if len(collected) % (CHUNK * 10) == 0:
+                                        elapsed = time.time() - start
+                                        print(f"[{get_kr_time()}][RECORD] 수집된 데이터: {len(collected)} bytes (경과 시간: {elapsed:.1f}초)")
+                                    
+                                    # 침묵 감지 로직: 음성이 시작된 후 일정 시간동안 침묵이 계속되면 녹음 종료
+                                    if has_speech_started and time.time() - last_active_time > SILENCE_DURATION:
+                                        print(f"[{get_kr_time()}][RECORD] ⏹️ 침묵 감지: {SILENCE_DURATION}초 동안 소리가 없어 녹음 종료")
+                                        break
+                                        
+                                else:
+                                    time.sleep(0.01)
                         except Exception as e:
-                            print(f"[{get_kr_time()}][ERROR] 웨이크워드 TTS 오류: {str(e)}")
-                    
-                    # 여기서 마이크 스트림 닫거나 모드 전환 필요 없음 (이미 UDP 입력중)
-                    # 이후: 명령어 인식 단계
-                    # ---- 명령어 인식(구글 STT API 활용) ----
-                    print(f"[{get_kr_time()}][STT] 다음 명령을 말씀하세요... (최대 15초)")
+                            print(f"[{get_kr_time()}][ERROR] 음성 수집 중 오류: {str(e)}")
+                        
+                        duration = time.time() - start
+                        print(f"[{get_kr_time()}][RECORD] 음성 수집 완료. 총 {len(collected)} bytes, 소요 시간: {duration:.1f}초")
 
-                    # [1] 음성 수집 및 노이즈 레벨 조정 (원본 샘플링 레이트 사용)
-                    print(f"[{get_kr_time()}][AUDIO] 주변 소음 분석 중... (0.5초)")
-                    print(f"[{get_kr_time()}][CONFIG] 음성 인식을 위해 원본 레이트({NATIVE_RATE}Hz) 사용")
-                    
-                    # WAV 파일로 현재 버퍼의 데이터 저장 (임시)
-                    noise_wav = os.path.join(PROJECT_ROOT, "temp_noise.wav")
-                    collected = b''
+                        # [2] WAV파일로 저장 → SpeechRecognition에서 로드
+                        tmp_wav = os.path.join(PROJECT_ROOT, "temp_cmd.wav")
+                        wf = wave.open(tmp_wav, 'wb')
+                        wf.setnchannels(CHANNELS)
+                        wf.setsampwidth(2)
+                        wf.setframerate(NATIVE_RATE)
+                        wf.writeframes(collected)
+                        wf.close()
+
+                        with sr.AudioFile(tmp_wav) as source:
+                            print(f"[{get_kr_time()}][STT] 음성 파일 로드 완료. 구글 STT API 호출 중...")
+                            audio = recognizer.record(source)
+                            try:
+                                transcript = recognizer.recognize_google(audio, language="ko-KR")
+                                print(f"[{get_kr_time()}][STT] 사용자 발화: {transcript}")
+                            except sr.UnknownValueError:
+                                transcript = None
+                                print(f"[{get_kr_time()}][STT] ❌ 음성 인식 실패 (음성을 감지할 수 없음)")
+                            except Exception as e:
+                                transcript = None
+                                print(f"[{get_kr_time()}][STT] ❌ STT 오류: {e}")
+
+                        os.remove(tmp_wav)
+
+                        # [3] OpenAI로 의도 분석
+                        if transcript:
+                            system_prompt = (
+                                "당신은 로봇의 음성 명령을 분석하는 AI입니다.\n"
+                                "사용자의 발화를 듣고, 아래 4가지 의도 중 하나로 분류하세요.\n\n"
+                                "- pause_follow: '잠깐 멈춰', '멈춰봐' 등 일시정지 명령\n"
+                                "- resume_follow: '다시 따라와', '다시 시작해' 등 팔로윙 재개 명령\n"
+                                "- stop_assist: '어시스트 그만하고 복귀해', '그만' 등 어시스트 종료 명령\n"
+                                "- ignore: '고마워', '아니야' 등 기타 대화나 무시해도 되는 표현\n\n"
+                                "결과는 반드시 다음 JSON 형식으로만 출력해야 합니다:\n"
+                                '{"intent": "..."}'
+                            )
+                            completion = client.chat.completions.create(
+                                model="gpt-3.5-turbo",
+                                messages=[
+                                    {"role": "system", "content": system_prompt},
+                                    {"role": "user", "content": transcript}
+                                ]
+                            )
+                            ai_text = completion.choices[0].message.content
+                            print(f"[{get_kr_time()}][GPT] AI 응답: {ai_text}")
+                            match = re.search(r'{"intent":\s*"(\w+)"}', ai_text)
+                            if match:
+                                intent = match.group(1)
+                                print(f"[{get_kr_time()}][INTENT] 감지된 의도: {intent}")
+                            else:
+                                intent = "ignore"
+                                print(f"[{get_kr_time()}][INTENT] ⚠️ 의도 분석 실패, 기본값 'ignore' 사용")
+
+                            # 명령어에 따라 적절한 액션 실행
+                            robot_id = "libo_a"  # 기본 로봇 ID
+                            
+                            # 의도에 따라 음성 응답 및 명령 발행
+                            if intent == "resume_follow":
+                                # 다시 따라와: TalkCommand 메시지 발행 (robot_id, "follow")
+                                print(f"[{get_kr_time()}][RESPONSE] '다시 따라와' 명령 처리")
+                                success = comm_manager.play_tts_response("네, 다시 따라가겠습니다.")
+                                if success:
+                                    # Talk Command 발행
+                                    talker_node.publish_talk_command(robot_id, "follow")
+                                    
+                            elif intent == "pause_follow" or intent == "ignore":
+                                # 멈춰 또는 무시: TalkCommand 메시지 발행 (robot_id, "stop")
+                                print(f"[{get_kr_time()}][RESPONSE] '{intent}' 명령 처리")
+                                if intent == "pause_follow":
+                                    success = comm_manager.play_tts_response("네, 잠시 멈추겠습니다.")
+                                else:
+                                    success = comm_manager.play_tts_response("등록되지 않은 명령어 입니다.")
+                                if success:
+                                    talker_node.publish_talk_command(robot_id, "stop")
+                                    
+                            elif intent == "stop_assist":
+                                # 어시스트 종료: EndTask 서비스 호출
+                                print(f"[{get_kr_time()}][RESPONSE] '어시스트 종료' 명령 처리")
+                                success = comm_manager.play_tts_response("네, 어시스트를 종료하고 복귀하겠습니다.")
+                                if success:
+                                    # EndTask 서비스 호출 - task_type은 "assist"로 고정
+                                    talker_node.call_end_task(robot_id, task_type="assist")
+                            
+                            # 성공 여부에 따른 로그
+                            if success:
+                                print(f"[{get_kr_time()}][AUDIO] 음성 응답 전송 완료")
+                            else:
+                                print(f"[{get_kr_time()}][AUDIO] ❌ 음성 응답 전송 실패")
+                                
+                            print(f"[{get_kr_time()}][SYSTEM] '리보야' 이후 명령 처리 완료, 다시 웨이크워드 대기 중...")
+                else:
+                    # 비활성화 상태일 때는 웨이크워드 감지를 수행하지 않음
+                    keyword_index = -1
+                    # 30초마다 한 번씩만 디버깅 메시지 출력 (버퍼가 있을 경우)
+                    if int(current_time) % 30 == 0 and len(buffer) > 0:
+                        print(f"[{get_kr_time()}][STATUS] ℹ️ 토커매니저 비활성화 상태 - 웨이크워드 감지 중지됨 (ActivateTalker 서비스 필요)")
                     
                     # 노이즈 분석을 위한 데이터 수집 (0.5초)
                     start = time.time()
@@ -868,7 +1136,7 @@ def main(args=None):
                             if intent == "pause_follow":
                                 success = comm_manager.play_tts_response("네, 잠시 멈추겠습니다.")
                             else:
-                                success = comm_manager.play_tts_response("네, 알겠습니다.")
+                                success = comm_manager.play_tts_response("등록되지 않은 명령어 입니다.")
                             if success:
                                 talker_node.publish_talk_command(robot_id, "stop")
                                 
@@ -886,7 +1154,7 @@ def main(args=None):
                         else:
                             print(f"[{get_kr_time()}][AUDIO] ❌ 음성 응답 전송 실패")
                             
-                    print(f"[{get_kr_time()}][SYSTEM] '리보야' 이후 명령 처리 완료, 다시 웨이크워드 대기 중...")
+                        print(f"[{get_kr_time()}][SYSTEM] '리보야' 이후 명령 처리 완료, 다시 웨이크워드 대기 중...")
 
             time.sleep(0.01)
             
