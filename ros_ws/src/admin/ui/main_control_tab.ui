@@ -183,6 +183,20 @@ QPushButton:hover {
           </widget>
          </item>
          <item>
+          <layout class="QHBoxLayout" name="button_layout">
+           <item>
+            <widget class="QPushButton" name="add_goal_location_button">
+             <property name="text">
+              <string>🎯 Add Goal Location</string>
+             </property>
+             <property name="styleSheet">
+              <string>background-color: #9b59b6; color: white; border: none; padding: 5px 10px; border-radius: 3px; font-weight: bold; font-size: 10px;</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
           <widget class="QTextEdit" name="task_log_text">
            <property name="minimumSize">
             <size>

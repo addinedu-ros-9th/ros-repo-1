@@ -14,7 +14,7 @@ from rclpy.node import Node
 from PyQt5.QtGui import QColor
 
 from libo_interfaces.msg import OverallStatus, TaskStatus, Heartbeat
-from libo_interfaces.srv import TaskRequest, SetGoal, NavigationResult, CancelNavigation
+from libo_interfaces.srv import TaskRequest, SetGoal, NavigationResult, CancelNavigation, AddGoalLocation
 
 class NavigatorServerNode(Node):  # SetGoal 서비스 서버 노드
     def __init__(self, log_callback=None):  # 로그 콜백 함수 추가
@@ -193,6 +193,7 @@ class MainControlTab(QWidget):
         # ROS 클라이언트들
         self.task_request_client = self.ros_node.create_client(TaskRequest, '/task_request')
         self.navigation_result_client = self.ros_node.create_client(NavigationResult, 'navigation_result')
+        self.add_goal_location_client = self.ros_node.create_client(AddGoalLocation, 'add_goal_location')
         
         self.init_ui()
         self.init_ros_connections()
@@ -216,6 +217,7 @@ class MainControlTab(QWidget):
         
         # 시그널 연결
         self.send_task_button.clicked.connect(self.send_task_request)
+        self.add_goal_location_button.clicked.connect(self.send_add_goal_location)
         self.toggle_navigator_button.clicked.connect(self.toggle_navigator_service)
         self.send_success_button.clicked.connect(lambda: self.send_navigation_result("SUCCEEDED"))
         self.send_failed_button.clicked.connect(lambda: self.send_navigation_result("FAILED"))
@@ -291,6 +293,35 @@ class MainControlTab(QWidget):
         future.add_done_callback(self.task_response_callback)
         
         self.log_task_message(f"📤 TaskRequest 전송: {robot_id} | {task_type} | {call_location} → {goal_location}")
+    
+    def send_add_goal_location(self):
+        """AddGoalLocation 서비스 호출"""
+        robot_id = self.robot_id_edit.text()
+        goal_location = self.goal_location_edit.text()
+        
+        if not self.add_goal_location_client.wait_for_service(timeout_sec=1.0):
+            self.log_task_message("❌ AddGoalLocation 서비스를 찾을 수 없음")
+            return
+        
+        request = AddGoalLocation.Request()
+        request.robot_id = robot_id
+        request.goal_location = goal_location
+        
+        future = self.add_goal_location_client.call_async(request)
+        future.add_done_callback(self.add_goal_location_response_callback)
+        
+        self.log_task_message(f"📤 AddGoalLocation 전송: {robot_id} -> {goal_location}")
+    
+    def add_goal_location_response_callback(self, future):
+        """AddGoalLocation 응답 처리"""
+        try:
+            response = future.result()
+            if response.success:
+                self.log_task_message(f"✅ AddGoalLocation 성공: {response.message}")
+            else:
+                self.log_task_message(f"❌ AddGoalLocation 실패: {response.message}")
+        except Exception as e:
+            self.log_task_message(f"❌ AddGoalLocation 오류: {str(e)}")
     
     def task_response_callback(self, future):
         """TaskRequest 응답 처리"""

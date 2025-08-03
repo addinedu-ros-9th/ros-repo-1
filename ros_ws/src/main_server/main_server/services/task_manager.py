@@ -16,6 +16,7 @@ from libo_interfaces.srv import ActivateTalker  # ActivateTalker 서비스 추�
 from libo_interfaces.srv import DeactivateTalker  # DeactivateTalker 서비스 추가
 from libo_interfaces.srv import ActivateTracker  # ActivateTracker 서비스 추가
 from libo_interfaces.srv import DeactivateTracker  # DeactivateTracker 서비스 추가
+from libo_interfaces.srv import AddGoalLocation  # AddGoalLocation 서비스 추가
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
@@ -55,8 +56,11 @@ LOCATION_COORDINATES = {
     'Base': (0.05, -0.34),  # E3 좌표와 동일
     
     # Admin Desk 좌표 (Delivery Task용)
-    'admin_desk': (2.0, 1.0)  # 관리자 데스크 위치
+    'admin_desk': (-5.79, 3.25)  # 관리자 데스크 위치
 }
+
+# 관리자 이름 리스트 (QR Check용)
+ADMIN_NAMES = ['김대인', '김민수', '박태환', '이건우', '이승훈']
 
 # 음성 명령 상수 정의
 VOICE_COMMANDS = {
@@ -238,6 +242,13 @@ class TaskManager(Node):
             self.robot_qr_check_callback
         )
         
+        # AddGoalLocation 서비스 서버 생성
+        self.add_goal_location_service = self.create_service(
+            AddGoalLocation,
+            'add_goal_location',
+            self.add_goal_location_callback
+        )
+        
         # Heartbeat 토픽 구독자 생성
         self.heartbeat_subscription = self.create_subscription(
             Heartbeat,  # 메시지 타입
@@ -345,13 +356,13 @@ class TaskManager(Node):
                         {'action': 'navigate', 'target': 'call_location'}  # 호출지로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'voice', 'command': 'arrived_kiosk'},  # 키오스크 도착 음성
                         {'action': 'advance_stage'}  # Stage 2로 진행
                     ]
                 },
                 2: {  # Stage 2: 사용자 추적 및 목적지로 이동하는 단계
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'activate_detector'},  # 사용자 감지기 활성화
-                        {'action': 'voice', 'command': 'arrived_kiosk'},  # 키오스크 도착 음성
                         {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
                         {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
                     ],
@@ -449,17 +460,22 @@ class TaskManager(Node):
                         {'action': 'navigate', 'target': 'admin_desk'}  # admin PC로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'voice', 'command': 'arrived_admin_desk'},  # admin PC 도착 음성
                         {'action': 'advance_stage'}  # Stage 2로 진행
                     ]
                 },
                 2: {  # Stage 2: 물품 수령 및 목적지로 이동하는 단계
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
-                        {'action': 'voice', 'command': 'arrived_admin_desk'},  # admin PC 도착 음성
-                        {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
+                        # 도착후 대기 한다고 알림
+                        # 관리자가 맵으로 다음 목적지를 선택하기 전까지 대기
+                        {'action': 'led', 'emotion': '슬픔'}  # 슬픔 LED 표시
+                        # AddGoalLocation.srv가 성공적으로 도달할 때까지 대기
+                    ],
+                    'goal_location_updated': [  # AddGoalLocation 성공 시 실행할 액션들
                         {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
-                        {'action': 'advance_stage'}  # Stage 3으로 진행
+                        # 관리자가 별도로 "이제 돌아가" 라고 지시 하지 않는이상 대기
                     ],
                     'end_task': [  # EndTask 요청 시 실행할 액션들
                         {'action': 'advance_stage'}  # Stage 3으로 진행
@@ -1414,21 +1430,36 @@ class TaskManager(Node):
         self.get_logger().info(f'   - 로봇 ID: {request.robot_id}')
         self.get_logger().info(f'   - 관리자 이름: {request.admin_name}')
         
-        # 기본 응답 (나중에 실제 QR 인증 로직 추가 예정)
+        # 현재 활성 task가 있는지 확인
+        if not self.tasks or len(self.tasks) == 0:
+            response.success = False
+            response.message = f"활성 task가 없어서 QR Check를 처리할 수 없습니다"
+            self.get_logger().warning(f'❌ QR Check 실패: 활성 task 없음')
+            return response
+        
+        current_task = self.tasks[0]
+        
+        # 로봇 ID 일치 여부 확인
+        if current_task.robot_id != request.robot_id:
+            response.success = False
+            response.message = f"로봇 ID 불일치: 현재 task는 {current_task.robot_id}이지만 요청은 {request.robot_id}입니다"
+            self.get_logger().warning(f'❌ QR Check 실패: 로봇 ID 불일치 (현재: {current_task.robot_id}, 요청: {request.robot_id})')
+            return response
+        
+        # 관리자 이름 유효성 확인
+        if request.admin_name not in ADMIN_NAMES:
+            response.success = False
+            response.message = f"유효하지 않은 관리자 이름: {request.admin_name} (등록된 관리자: {', '.join(ADMIN_NAMES)})"
+            self.get_logger().warning(f'❌ QR Check 실패: 유효하지 않은 관리자 이름 ({request.admin_name})')
+            return response
+        
+        # 모든 검증 통과 - QR Check 성공
         response.success = True
         response.message = f"Robot QR Check 완료: {request.robot_id} - {request.admin_name}"
         
         # QR Check 완료 후 qr_check_completed 이벤트 발생
-        if self.tasks and len(self.tasks) > 0:
-            current_task = self.tasks[0]
-            # assist task이고 stage 1인 경우에만 qr_check_completed 이벤트 발생
-            if current_task.task_type == 'assist' and current_task.stage == 1:
-                self.get_logger().info(f'✅ QR Check 완료! qr_check_completed 이벤트 발생')
-                self.process_task_stage_logic(current_task, current_task.stage, 'qr_check_completed')
-            else:
-                self.get_logger().debug(f'📝 QR Check 완료했지만 assist task stage 1이 아님 - 이벤트 발생 안함')
-        else:
-            self.get_logger().debug(f'📝 QR Check 완료했지만 활성 task 없음 - 이벤트 발생 안함')
+        self.get_logger().info(f'✅ QR Check 완료! qr_check_completed 이벤트 발생')
+        self.process_task_stage_logic(current_task, current_task.stage, 'qr_check_completed')
         
         return response
 
@@ -1593,6 +1624,63 @@ class TaskManager(Node):
                 self.get_logger().warning(f'⚠️ Tracker 비활성화 실패: {response.message}')
         except Exception as e:
             self.get_logger().error(f'❌ Tracker 비활성화 응답 처리 중 오류: {e}')
+
+    def add_goal_location_callback(self, request, response):  # AddGoalLocation 서비스 콜백
+        """AddGoalLocation 서비스 요청을 처리하는 콜백"""
+        try:
+            robot_id = request.robot_id  # 요청에서 로봇 ID 가져오기
+            goal_location = request.goal_location  # 요청에서 목표 위치 가져오기
+            
+            self.get_logger().info(f'🎯 목표 위치 추가 요청: 로봇 {robot_id} -> {goal_location}')
+            
+            # 현재 활성 작업이 있는지 확인
+            if not self.tasks:
+                response.success = False
+                response.message = f'활성 작업이 없습니다.'
+                self.get_logger().warning(f'⚠️ 활성 작업 없음: {response.message}')
+                return response
+            
+            current_task = self.tasks[0]  # 첫 번째 작업 가져오기
+            
+            # 로봇 ID가 일치하는지 확인
+            if current_task.robot_id != robot_id:
+                response.success = False
+                response.message = f'로봇 ID 불일치: 요청된 {robot_id}, 현재 작업 {current_task.robot_id}'
+                self.get_logger().warning(f'⚠️ 로봇 ID 불일치: {response.message}')
+                return response
+            
+            # 작업 타입이 delivery인지 확인
+            if current_task.task_type != 'delivery':
+                response.success = False
+                response.message = f'작업 타입이 delivery가 아닙니다: {current_task.task_type}'
+                self.get_logger().warning(f'⚠️ 작업 타입 불일치: {response.message}')
+                return response
+            
+            # stage가 2인지 확인
+            if current_task.stage != 2:
+                response.success = False
+                response.message = f'현재 stage가 2가 아닙니다: {current_task.stage}'
+                self.get_logger().warning(f'⚠️ stage 불일치: {response.message}')
+                return response
+            
+            # 모든 조건을 만족하면 goal_location 업데이트
+            current_task.goal_location = goal_location  # 목표 위치 업데이트
+            self.get_logger().info(f'✅ 목표 위치 업데이트: {robot_id} -> {goal_location}')
+            
+            # goal_location_updated 이벤트 발생
+            self.process_task_stage_logic(current_task, current_task.stage, 'goal_location_updated')
+            
+            response.success = True  # 성공 응답
+            response.message = f'목표 위치 {goal_location}이 로봇 {robot_id}의 delivery stage 2 작업에 추가되었습니다.'
+            
+            self.get_logger().info(f'✅ 목표 위치 추가 성공: {response.message}')
+            
+        except Exception as e:
+            self.get_logger().error(f'❌ 목표 위치 추가 처리 중 오류: {e}')
+            response.success = False  # 실패 응답
+            response.message = f'목표 위치 추가 실패: {str(e)}'
+        
+        return response
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)

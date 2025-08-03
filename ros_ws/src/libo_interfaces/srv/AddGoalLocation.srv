@@ -1,0 +1,5 @@
+string robot_id    # 로봇 ID (예: libo_a)
+string goal_location    # 목표 위치 (예: F2)
+---
+bool success    # 서비스 호출 성공 여부
+string message    # 서비스 처리 결과 메시지 
