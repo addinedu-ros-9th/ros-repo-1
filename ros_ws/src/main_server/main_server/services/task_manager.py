@@ -311,6 +311,9 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
                         {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
                         {'action': 'navigate', 'target': 'call_location'}  # 호출지로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Stage 2로 진행
                     ]
                 },
                 2: {  # Stage 2: 사용자 추적 및 목적지로 이동하는 단계
@@ -319,6 +322,9 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'arrived_kiosk'},  # 키오스크 도착 음성
                         {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
                         {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Stage 3으로 진행
                     ],
                     'timer_10s': [  # 10초 타이머 시 실행할 액션들
                         {'action': 'voice', 'command': 'lost_user'}  # 사용자 분실 경고 음성
@@ -334,6 +340,9 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
                         {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
                     ]
                 }
             },
@@ -348,11 +357,17 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
                         {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
                         {'action': 'navigate', 'target': 'call_location'}  # 호출지로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'activate_qr_scanner'},  # QR Scanner 활성화
+                        {'action': 'voice', 'command': 'arrived_kiosk'}  # 키오스크 도착 음성
+                    ],
+                    'qr_scanner_activated': [  # QR Scanner 활성화 성공 시 실행할 액션들
+                        {'action': 'force_stage', 'target': 2}  # Stage 2로 강제 이동
                     ]
                 },
                 2: {  # Stage 2: QR 인증 대기하는 단계 (목적지 이동 없음)
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
-                        {'action': 'voice', 'command': 'arrived_kiosk'},  # 키오스크 도착 음성
                         {'action': 'led', 'emotion': '슬픔'}  # 슬픔 LED 표시 (네비게이션 없음)
                     ]
                 },
@@ -361,6 +376,9 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
                         {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
                     ]
                 }
             },
@@ -375,6 +393,9 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
                         {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
                         {'action': 'navigate', 'target': 'admin_desk'}  # admin PC로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Stage 2로 진행
                     ]
                 },
                 2: {  # Stage 2: 물품 수령 및 목적지로 이동하는 단계
@@ -382,6 +403,9 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'arrived_admin_desk'},  # admin PC 도착 음성
                         {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
                         {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Stage 3으로 진행
                     ]
                 },
                 3: {  # Stage 3: Base로 복귀하는 단계
@@ -389,6 +413,9 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
                         {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
+                    ],
+                    'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
                     ]
                 }
             }
@@ -753,17 +780,33 @@ class TaskManager(Node):
         self.get_logger().info(f'📍 NavigationResult 받음: {request.result}')
         
         try:
-            # 현재는 단순히 로그만 출력 (나중에 task 상태 업데이트 등 추가 예정)
+            # 현재 활성 task가 있는지 확인
+            if not self.tasks or len(self.tasks) == 0:
+                self.get_logger().warning(f'⚠️ NavigationResult를 받았지만 활성 task가 없음')
+                response.success = True
+                response.message = f"NavigationResult 처리 완료: {request.result} (활성 task 없음)"
+                return response
+            
+            current_task = self.tasks[0]
+            
+            # NavigationResult를 이벤트로 변환하여 task_stage_logic에서 처리
             if request.result == "SUCCEEDED":
-                self.get_logger().info(f'✅ 네비게이션 성공!')
-                # SUCCEEDED를 받으면 현재 활성 task의 stage 증가
-                self.advance_task_stage()
+                self.get_logger().info(f'✅ 네비게이션 성공! Task[{current_task.task_id}] Stage {current_task.stage}')
+                # navigation_success 이벤트를 task_stage_logic에서 처리
+                self.process_task_stage_logic(current_task, current_task.stage, 'navigation_success')
+                
             elif request.result == "FAILED":
-                self.get_logger().warning(f'❌ 네비게이션 실패!')
+                self.get_logger().warning(f'❌ 네비게이션 실패! Task[{current_task.task_id}] Stage {current_task.stage}')
+                # navigation_failed 이벤트를 task_stage_logic에서 처리
+                self.process_task_stage_logic(current_task, current_task.stage, 'navigation_failed')
+                
             elif request.result == "CANCELED":
-                self.get_logger().info(f'⏹️  네비게이션 취소됨!')
+                self.get_logger().info(f'⏹️ 네비게이션 취소됨! Task[{current_task.task_id}] Stage {current_task.stage}')
+                # navigation_canceled 이벤트를 task_stage_logic에서 처리
+                self.process_task_stage_logic(current_task, current_task.stage, 'navigation_canceled')
+                
             else:
-                self.get_logger().warning(f'⚠️  알 수 없는 결과: {request.result}')
+                self.get_logger().warning(f'⚠️ 알 수 없는 결과: {request.result}')
             
             # 성공 응답
             response.success = True
@@ -777,7 +820,7 @@ class TaskManager(Node):
             response.message = f"처리 실패: {str(e)}"
             return response
     
-    def advance_task_stage(self):  # 활성 task의 stage 증가
+    def advance_stage(self):  # 활성 task의 stage 증가
         """현재 활성화된 task의 stage를 1단계씩 증가시키는 메서드"""
         if not self.tasks:  # 활성 task가 없으면 리턴
             self.get_logger().warning(f'⚠️  SUCCEEDED를 받았지만 활성 task가 없음')
@@ -1210,6 +1253,12 @@ class TaskManager(Node):
         elif action_type == 'deactivate_detector':
             self.deactivate_detector(task.robot_id)
             
+        elif action_type == 'activate_qr_scanner':
+            self.activate_qr_scanner(task.robot_id)
+            
+        elif action_type == 'deactivate_qr_scanner':
+            self.deactivate_qr_scanner(task.robot_id)
+            
         elif action_type == 'cancel_navigation':
             self.cancel_navigation()
             
@@ -1220,6 +1269,9 @@ class TaskManager(Node):
             # 강제 stage 변경 후 해당 stage의 stage_start 이벤트 처리
             self.process_task_stage_logic(task, target_stage, 'stage_start')
             
+        elif action_type == 'advance_stage':
+            # advance_stage 메서드 호출 (기존 로직 재사용)
+            self.advance_stage()
         else:
             self.get_logger().warning(f'⚠️ 알 수 없는 액션 타입: {action_type}')
 
@@ -1229,8 +1281,20 @@ class TaskManager(Node):
             response = future.result()
             if response.success:
                 self.get_logger().info(f'✅ QR Scanner 활성화 성공: {response.message}')
+                
+                # QR Scanner 활성화 성공을 이벤트로 발행
+                if self.tasks and len(self.tasks) > 0:
+                    current_task = self.tasks[0]
+                    self.process_task_stage_logic(current_task, current_task.stage, 'qr_scanner_activated')
+                
             else:
                 self.get_logger().warning(f'⚠️  QR Scanner 활성화 실패: {response.message}')
+                
+                # QR Scanner 활성화 실패를 이벤트로 발행
+                if self.tasks and len(self.tasks) > 0:
+                    current_task = self.tasks[0]
+                    self.process_task_stage_logic(current_task, current_task.stage, 'qr_scanner_failed')
+                
         except Exception as e:
             self.get_logger().error(f'❌ QR Scanner 활성화 응답 처리 중 오류: {e}')
 
