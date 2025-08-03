@@ -75,7 +75,8 @@ VOICE_COMMANDS = {
         "obstacle_detected": "honk.mp3",  # 장애물이 감지됐습니다. 정지합니다. / 빵!!!!!!!!!!!
         "reroute": "새로운 경로로 안내합니다.",
         "return": "complete.mp3",  # 복귀하겠습니다. / (복귀음 소리 - 삐빅)
-        "arrived_base": "Base에 도착했습니다."
+        "arrived_base": "Base에 도착했습니다.",
+        "navigation_canceled": "네비게이션이 취소되었습니다."
     },
     
     # 안내 관련 음성 명령
@@ -363,6 +364,10 @@ class TaskManager(Node):
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_kiosk'},  # 키오스크 도착 음성
                         {'action': 'advance_stage'}  # Stage 2로 진행
+                    ],
+                    'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
+                        {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
+                        {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
                     ]
                 },
                 2: {  # Stage 2: 사용자 추적 및 목적지로 이동하는 단계
@@ -376,6 +381,10 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'arrived_destination'},  # 목적지 도착 음성 명령
                         {'action': 'deactivate_detector'},  # 감지기 비활성화
                         {'action': 'advance_stage'}  # Stage 3으로 진행
+                    ],
+                    'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
+                        {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
+                        {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
                     ],
                     'timer_10s': [  # 10초 타이머 시 실행할 액션들
                         {'action': 'voice', 'command': 'lost_user'}  # 사용자 분실 경고 음성
@@ -416,6 +425,10 @@ class TaskManager(Node):
                         {'action': 'activate_qr_scanner'},  # QR Scanner 활성화
                         {'action': 'voice', 'command': 'arrived_kiosk'}  # 키오스크 도착 음성
                     ],
+                    'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
+                        {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
+                        {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
+                    ],
                     'qr_scanner_activated': [  # QR Scanner 활성화 성공 시 실행할 액션들
                         # QR Scanner 활성화 완료 - QR Check 메시지 대기 중
                         # TODO: KioskQRCheck.srv / RobotQRCheck 메시지 처리 후 qr_check_completed 이벤트 발생
@@ -440,6 +453,10 @@ class TaskManager(Node):
                     'talker_failed': [  # Talker 활성화 실패 시 실행할 액션들
                         {'action': 'deactivate_tracker'},  # Tracker 비활성화
                         {'action': 'advance_stage'}  # 다음 스테이지로 진행
+                    ],
+                    'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
+                        {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
+                        {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
                     ],
                     'end_task': [  # EndTask 요청 시 실행할 액션들
                         {'action': 'deactivate_tracker'},  # Tracker 비활성화
@@ -473,6 +490,10 @@ class TaskManager(Node):
                         {'action': 'expression', 'robot_id': 'robot_id', 'status': '슬픔'},  # 슬픔 표현
                         {'action': 'navigate', 'target': 'admin_desk'}  # admin PC로 네비게이션
                     ],
+                    'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
+                        {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
+                        {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
+                    ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_admin_desk'},  # admin PC 도착 음성
                         {'action': 'advance_stage'}  # Stage 2로 진행
@@ -493,6 +514,10 @@ class TaskManager(Node):
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_destination'},  # 목적지 도착 알림
                         # 관리자가 별도로 "이제 돌아가" 라고 지시 하지 않는이상 대기
+                    ],
+                    'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
+                        {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
+                        {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
                     ],
                     'end_task': [  # EndTask 요청 시 실행할 액션들
                         {'action': 'advance_stage'}  # Stage 3으로 진행
