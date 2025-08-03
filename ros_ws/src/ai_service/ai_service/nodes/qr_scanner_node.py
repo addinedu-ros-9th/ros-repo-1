@@ -9,7 +9,6 @@ from cv_bridge import CvBridge
 import cv2
 
 # [수정] 명세서에 따라 필요한 서비스 타입만 import
-from libo_interfaces.srv import QRScanResult
 from libo_interfaces.srv import ActivateQRScanner, DeactivateQRScanner # QR 스캐너 제어용
 from libo_interfaces.srv import RobotQRCheck # 이름 유효성 검사용
 
@@ -35,24 +34,19 @@ class QRCodeValidator(Node):
             self.image_callback,
             10)
         
-        # [수정] 서비스 클라이언트: 이 노드가 '요청'하는 서비스들
-        # Libo Service에 QR 인증 결과를 '보고'하기 위한 클라이언트
-        self.qr_result_client = self.create_client(QRScanResult, '/qr_scan_result')
-        # Libo Service에 이름 유효성을 '문의'하기 위한 클라이언트
+        # [수정] 서비스 클라이언트: Libo Service에 이름 유효성을 '문의'하기 위한 클라이언트
         self.robot_check_client = self.create_client(RobotQRCheck, '/robot_qr_check')
 
-        # [신규] 서비스 서버: 이 노드가 '제공'하는 서비스들
-        # 외부(Libo Service)에서 이 노드의 스캔 기능을 '활성화'하기 위한 서버
+        # [신규] 서비스 서버: 외부(Libo Service)에서 이 노드의 스캔 기능을 제어하기 위한 서버
         self.activate_qr_srv = self.create_service(
             ActivateQRScanner, '/activate_qr_scanner', self.handle_activate_qr_scanner)
-        # 외부(Libo Service)에서 이 노드의 스캔 기능을 '비활성화'하기 위한 서버
         self.deactivate_qr_srv = self.create_service(
             DeactivateQRScanner, '/deactivate_qr_scanner', self.handle_deactivate_qr_scanner)
 
         # 디버깅용 결과 퍼블리셔
         self.result_publisher = self.create_publisher(String, '/qr_auth_result', 10)
         
-        self.get_logger().info('✅ QR Code Validator Node started (명세서 기반). 활성화 대기 중...')
+        self.get_logger().info('✅ QR Code Validator Node started (간소화 버전). 활성화 대기 중...')
 
     # --- 2. 서비스 서버 콜백 함수 (외부 제어) ---
     def handle_activate_qr_scanner(self, request, response):
@@ -92,7 +86,7 @@ class QRCodeValidator(Node):
             self.processing_qr = True # 중복 처리를 막기 위해 플래그 설정
             self.validate_name_with_service(data.strip()) # 외부 서비스에 유효성 검사 요청
             
-    # --- 4. 서비스 클라이언트 호출 함수 (외부 통신) ---
+    # --- 4. 서비스 클라이언트 호출 및 응답 처리 ---
     def validate_name_with_service(self, name: str):
         """
         인식된 이름을 'RobotQRCheck.srv'를 통해 Libo Service에 보내 유효성을 검증받습니다.
@@ -112,46 +106,26 @@ class QRCodeValidator(Node):
             lambda fut: self.handle_validation_response(fut, name))
 
     def handle_validation_response(self, future, name: str):
-        """'RobotQRCheck' 서비스의 응답을 처리합니다."""
+        """
+        [수정] 'RobotQRCheck' 서비스의 응답을 처리하고, 모든 인증 절차를 마무리합니다.
+        """
         try:
             response = future.result()
-            self.get_logger().info(f'🤝 유효성 검사 응답 수신: "{name}" is {"VALID" if response.success else "INVALID"}')
-            # 검증 결과를 바탕으로 최종 인증 성공/실패를 Libo Service에 보고
-            self.send_final_qr_result(response.success)
+            if response.success:
+                # 인증 성공 시
+                self.get_logger().info(f'🟢 QR 인증 성공: {name}')
+                self.result_publisher.publish(String(data=f'success:{name}'))
+            else:
+                # 인증 실패 시
+                self.get_logger().warn(f'🔴 인증 실패 - 미등록 이름 또는 서버 거부: "{name}"')
+                self.result_publisher.publish(String(data=f'fail:{name}'))
         except Exception as e:
             self.get_logger().error(f'📤 유효성 검사 요청 중 예외 발생: {e}')
-            # 실패한 경우에도 최종 결과를 보고하여 Libo Service가 타임아웃에 빠지지 않도록 함
-            self.send_final_qr_result(False)
-
-    def send_final_qr_result(self, is_success: bool):
-        """
-        'QRScanResult.srv'를 통해 최종 인증 결과를 Libo Service에 보고하고, 스캐너를 비활성화합니다.
-        """
-        if not self.qr_result_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().error('❌ QRScanResult 서비스 연결 실패')
+        finally:
+            # 성공/실패 여부와 관계없이, 한 번의 인증 절차가 끝나면 스캐너를 비활성화하여 자원 낭비를 막음
+            self.get_logger().info('🔒 한 번의 인증 절차 완료. 스캐너를 자동으로 비활성화합니다.')
+            self.is_active = False
             self.processing_qr = False
-            return
-
-        request = QRScanResult.Request()
-        request.robot_id = self.robot_id
-        request.result = 'success' if is_success else 'fail'
-
-        future = self.qr_result_client.call_async(request)
-
-        def final_callback(fut):
-            """최종 보고 후 스캐너를 비활성화하는 콜백"""
-            try:
-                fut.result() # 응답이 성공적으로 보내졌는지 확인
-                self.get_logger().info(f'📤 최종 인증 결과 보고 완료: {request.result}')
-            except Exception as e:
-                self.get_logger().error(f'📤 최종 결과 보고 중 예외 발생: {e}')
-            finally:
-                # 성공/실패 여부와 관계없이, 한 번의 인증 절차가 끝나면 스캐너를 비활성화하여 자원 낭비를 막음
-                self.get_logger().info('🔒 한 번의 인증 절차 완료. 스캐너를 자동으로 비활성화합니다.')
-                self.is_active = False
-                self.processing_qr = False
-
-        future.add_done_callback(final_callback)
 
 def main(args=None):
     rclpy.init(args=args)

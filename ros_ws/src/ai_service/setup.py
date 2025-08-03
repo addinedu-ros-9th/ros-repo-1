@@ -24,7 +24,13 @@ setup(
             'follower = ai_service.nodes.follower:main',
             'vision_manager = ai_service.nodes.vision_manager:main',
             'talker_manager = ai_service.nodes.talker_manager:main',
-            'test_voice_command_maker = ai_service.nodes.test_voice_command_maker:main'            
+            'test_voice_command_maker = ai_service.nodes.test_voice_command_maker:main', 
+            'qr_scanner_node = ai_service.nodes.qr_scanner_node:main',
+            'human_detector_node = ai_service.nodes.human_detector_node:main',
+            'obstacle_detector_node = ai_service.nodes.obstacle_detector_node:main', 
+            'ros2_bridege_node = ai_service.nodes.ros2_bridege_node:main',
+            'vision_manager_assist = ai_service.nodes.vision_manager_assist:main',   
+
         ],
     },
 )
