@@ -371,6 +371,11 @@ class TaskManager(Node):
                         {'action': 'voice', 'command': 'arrived_kiosk'}  # 키오스크 도착 음성
                     ],
                     'qr_scanner_activated': [  # QR Scanner 활성화 성공 시 실행할 액션들
+                        # QR Scanner 활성화 완료 - QR Check 메시지 대기 중
+                        # TODO: KioskQRCheck.srv / RobotQRCheck 메시지 처리 후 qr_check_completed 이벤트 발생
+                    ],
+                    'qr_check_completed': [  # QR Check 완료 시 실행할 액션들
+                        {'action': 'deactivate_qr_scanner'},  # QR Scanner 비활성화
                         {'action': 'advance_stage'}  # Stage 2로 진행
                     ]
                 },
