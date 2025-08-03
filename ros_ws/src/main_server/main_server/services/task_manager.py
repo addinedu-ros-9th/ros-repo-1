@@ -550,6 +550,14 @@ class TaskManager(Node):
         self.get_logger().info(f'   - Call Location: {request.call_location}')
         self.get_logger().info(f'   - Goal Location: {request.goal_location}')
         
+        # 유효한 task type인지 먼저 확인
+        valid_task_types = ['escort', 'assist', 'delivery']
+        if request.task_type not in valid_task_types:
+            self.get_logger().error(f'❌ 유효하지 않은 Task Type: {request.task_type} - 요청 거절')
+            response.success = False
+            response.message = f"유효하지 않은 Task Type입니다. 지원되는 타입: {', '.join(valid_task_types)}"
+            return response
+        
         # escort task의 경우 로봇 ID를 무시하고 활성화된 로봇 중 하나를 임의로 선택
         selected_robot_id = request.robot_id
         
@@ -569,6 +577,25 @@ class TaskManager(Node):
             import random
             selected_robot_id = random.choice(available_robots)
             self.get_logger().info(f'🎲 로봇 자동 할당: {selected_robot_id} (사용 가능한 로봇: {available_robots})')
+        
+        elif request.task_type == 'delivery':
+            self.get_logger().info(f'📦 Delivery task 감지됨 - 지정된 로봇 확인 중...')
+            
+            # delivery는 지정된 로봇이 존재하는지 확인
+            if request.robot_id not in self.robots:
+                self.get_logger().error(f'❌ 지정된 로봇 <{request.robot_id}>이 존재하지 않음 - Delivery task 거절')
+                response.success = False
+                response.message = f"지정된 로봇 <{request.robot_id}>이 존재하지 않아서 Delivery task를 수행할 수 없습니다."
+                return response
+            
+            # 지정된 로봇이 사용 가능한지 확인
+            if not self.robots[request.robot_id].is_available:
+                self.get_logger().error(f'❌ 지정된 로봇 <{request.robot_id}>이 사용중임 - Delivery task 거절')
+                response.success = False
+                response.message = f"지정된 로봇 <{request.robot_id}>이 현재 사용중이어서 Delivery task를 수행할 수 없습니다."
+                return response
+            
+            self.get_logger().info(f'✅ 지정된 로봇 <{request.robot_id}> 확인됨 - Delivery task 진행')
         
         # 새로운 Task 객체 생성 (선택된 로봇 ID 사용)
         new_task = Task(selected_robot_id, request.task_type, request.call_location, request.goal_location)  # Task 객체 생성
