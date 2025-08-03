@@ -12,6 +12,7 @@ from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 
 from libo_interfaces.srv import ActivateDetector, DeactivateDetector
+from libo_interfaces.srv import ActivateQRScanner, DeactivateQRScanner  # QR Scanner 서비스 추가
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
 from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
 
@@ -38,6 +39,8 @@ class AiServerControlTab(QWidget):
         # ROS 서비스 서버들 (초기에는 None)
         self.activate_detector_service = None
         self.deactivate_detector_service = None
+        self.activate_qr_scanner_service = None  # QR Scanner 활성화 서비스
+        self.deactivate_qr_scanner_service = None  # QR Scanner 비활성화 서비스
         
         self.init_ui()
         
@@ -109,6 +112,20 @@ class AiServerControlTab(QWidget):
                 self.deactivate_detector_service_callback
             )
             
+            # ActivateQRScanner 서비스 서버 생성
+            self.activate_qr_scanner_service = self.ros_node.create_service(
+                ActivateQRScanner,
+                'activate_qr_scanner',
+                self.activate_qr_scanner_service_callback
+            )
+            
+            # DeactivateQRScanner 서비스 서버 생성
+            self.deactivate_qr_scanner_service = self.ros_node.create_service(
+                DeactivateQRScanner,
+                'deactivate_qr_scanner',
+                self.deactivate_qr_scanner_service_callback
+            )
+            
             # DetectionTimer 퍼블리셔 생성
             self.detection_timer_publisher = self.ros_node.create_publisher(
                 DetectionTimer,
@@ -123,6 +140,7 @@ class AiServerControlTab(QWidget):
             self.detection_timer.start(1000)  # 1초마다 발행
             
             self.log_detector_message("✅ ActivateDetector/DeactivateDetector 서비스 서버가 시작되었습니다.")
+            self.log_detector_message("✅ ActivateQRScanner/DeactivateQRScanner 서비스 서버가 시작되었습니다.")
             self.log_detector_message("⏰ DetectionTimer 발행이 시작되었습니다. (1초마다)")
             
         except Exception as e:
@@ -150,6 +168,14 @@ class AiServerControlTab(QWidget):
             if self.deactivate_detector_service:
                 self.ros_node.destroy_service(self.deactivate_detector_service)
                 self.deactivate_detector_service = None
+            
+            if self.activate_qr_scanner_service:
+                self.ros_node.destroy_service(self.activate_qr_scanner_service)
+                self.activate_qr_scanner_service = None
+            
+            if self.deactivate_qr_scanner_service:
+                self.ros_node.destroy_service(self.deactivate_qr_scanner_service)
+                self.deactivate_qr_scanner_service = None
             
             self.server_active = False
             self.log_detector_message("🛑 ActivateDetector/DeactivateDetector 서비스 서버가 중지되었습니다.")
@@ -213,6 +239,66 @@ class AiServerControlTab(QWidget):
             response.message = f"감지기 비활성화 실패: {str(e)}"
             
             self.log_detector_message(f"❌ DeactivateDetector 처리 실패: {str(e)}")
+            self.log_detector_message(f"📤 응답 전송: FAILED - {response.message}")
+        
+        return response
+    
+    def activate_qr_scanner_service_callback(self, request, response):
+        """ActivateQRScanner 서비스 요청 처리 (TaskManager에서 호출)"""
+        if not self.server_active:
+            response.success = False
+            response.message = "서버가 비활성화 상태입니다."
+            return response
+        
+        robot_id = request.robot_id
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        self.log_detector_message(f"📤 ActivateQRScanner 요청 수신: {robot_id} at {current_time}")
+        
+        try:
+            # 여기서 실제 QR 스캐너 활성화 로직 구현
+            # 현재는 시뮬레이션으로 성공 응답
+            response.success = True
+            response.message = f"QR 스캐너 활성화 완료: {robot_id}"
+            
+            self.log_detector_message(f"✅ ActivateQRScanner 처리 완료: {robot_id}")
+            self.log_detector_message(f"📤 응답 전송: SUCCESS - {response.message}")
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"QR 스캐너 활성화 실패: {str(e)}"
+            
+            self.log_detector_message(f"❌ ActivateQRScanner 처리 실패: {str(e)}")
+            self.log_detector_message(f"📤 응답 전송: FAILED - {response.message}")
+        
+        return response
+    
+    def deactivate_qr_scanner_service_callback(self, request, response):
+        """DeactivateQRScanner 서비스 요청 처리 (TaskManager에서 호출)"""
+        if not self.server_active:
+            response.success = False
+            response.message = "서버가 비활성화 상태입니다."
+            return response
+        
+        robot_id = request.robot_id
+        current_time = time.strftime('%H:%M:%S', time.localtime())
+        
+        self.log_detector_message(f"📤 DeactivateQRScanner 요청 수신: {robot_id} at {current_time}")
+        
+        try:
+            # 여기서 실제 QR 스캐너 비활성화 로직 구현
+            # 현재는 시뮬레이션으로 성공 응답
+            response.success = True
+            response.message = f"QR 스캐너 비활성화 완료: {robot_id}"
+            
+            self.log_detector_message(f"✅ DeactivateQRScanner 처리 완료: {robot_id}")
+            self.log_detector_message(f"📤 응답 전송: SUCCESS - {response.message}")
+            
+        except Exception as e:
+            response.success = False
+            response.message = f"QR 스캐너 비활성화 실패: {str(e)}"
+            
+            self.log_detector_message(f"❌ DeactivateQRScanner 처리 실패: {str(e)}")
             self.log_detector_message(f"📤 응답 전송: FAILED - {response.message}")
         
         return response

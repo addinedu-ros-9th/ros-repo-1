@@ -7,6 +7,8 @@ from libo_interfaces.srv import SetGoal  # SetGoal 서비스 추가
 from libo_interfaces.srv import NavigationResult  # NavigationResult 서비스 추가
 from libo_interfaces.srv import ActivateDetector  # ActivateDetector 서비스 추가
 from libo_interfaces.srv import DeactivateDetector  # DeactivateDetector 서비스 추가
+from libo_interfaces.srv import ActivateQRScanner  # ActivateQRScanner 서비스 추가
+from libo_interfaces.srv import DeactivateQRScanner  # DeactivateQRScanner 서비스 추가
 from libo_interfaces.srv import CancelNavigation  # CancelNavigation 서비스 추가
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
@@ -195,6 +197,12 @@ class TaskManager(Node):
         # DeactivateDetector 서비스 클라이언트 생성
         self.deactivate_detector_client = self.create_client(DeactivateDetector, 'deactivate_detector')
         
+        # ActivateQRScanner 서비스 클라이언트 생성
+        self.activate_qr_scanner_client = self.create_client(ActivateQRScanner, 'activate_qr_scanner')
+        
+        # DeactivateQRScanner 서비스 클라이언트 생성
+        self.deactivate_qr_scanner_client = self.create_client(DeactivateQRScanner, 'deactivate_qr_scanner')
+        
         # CancelNavigation 서비스 클라이언트 생성
         self.cancel_navigation_client = self.create_client(CancelNavigation, 'cancel_navigation')
         
@@ -263,34 +271,35 @@ class TaskManager(Node):
         self.robot_state_timer = self.create_timer(1.0, self.manage_robot_states)  # 1초마다 로봇 상태 관리
         
         # Task 타입별 Stage 로직 정의 (통합 관리)
-        # 
-        # 구조 설명:
-        # self.task_stage_logic = {
-        #     'task_type': {                    # 작업 타입 (escort, assist, delivery)
-        #         stage_number: {               # 스테이지 번호 (1, 2, 3)
-        #             'event_type': [           # 이벤트 타입 (stage_start, timer_10s, timer_30s 등)
-        #                 {'action': 'action_type', 'param': 'value'},  # 실행할 액션들
-        #                 ...
-        #             ]
-        #         }
-        #     }
-        # }
-        #
-        # 이벤트 타입 종류:
-        # - 'stage_start': 스테이지가 시작될 때 (Stage 1→2, 2→3, 3→완료 시)
-        # - 'timer_10s': 타이머가 10초일 때 (DetectionTimer에서 발생)
-        # - 'timer_30s': 타이머가 30초일 때 (DetectionTimer에서 발생)
-        #
-        # 액션 타입 종류:
-        # - 'voice': 음성 명령 발행 (command: 음성 명령 종류)
-        # - 'led': LED 제어 (emotion: 감정 상태)
-        # - 'navigate': 네비게이션 (target: 목표 위치)
-        # - 'activate_detector': 감지기 활성화
-        # - 'deactivate_detector': 감지기 비활성화
-        # - 'cancel_navigation': 네비게이션 취소
-        # - 'force_stage': 강제 스테이지 변경 (target: 목표 스테이지)
-        #
         self.task_stage_logic = {
+            
+            # 구조 설명:
+            # self.task_stage_logic = {
+            #     'task_type': {                    # 작업 타입 (escort, assist, delivery)
+            #         stage_number: {               # 스테이지 번호 (1, 2, 3)
+            #             'event_type': [           # 이벤트 타입 (stage_start, timer_10s, timer_30s 등)
+            #                 {'action': 'action_type', 'param': 'value'},  # 실행할 액션들
+            #                 ...
+            #             ]
+            #         }
+            #     }
+            # }
+            #
+            # 이벤트 타입 종류:
+            # - 'stage_start': 스테이지가 시작될 때 (Stage 1→2, 2→3, 3→완료 시)
+            # - 'timer_10s': 타이머가 10초일 때 (DetectionTimer에서 발생)
+            # - 'timer_30s': 타이머가 30초일 때 (DetectionTimer에서 발생)
+            #
+            # 액션 타입 종류:
+            # - 'voice': 음성 명령 발행 (command: 음성 명령 종류)
+            # - 'led': LED 제어 (emotion: 감정 상태)
+            # - 'navigate': 네비게이션 (target: 목표 위치)
+            # - 'activate_detector': 감지기 활성화
+            # - 'deactivate_detector': 감지기 비활성화
+            # - 'cancel_navigation': 네비게이션 취소
+            # - 'force_stage': 강제 스테이지 변경 (target: 목표 스테이지)
+
+
             # Escort Task: 사용자 에스코팅 (사용자 추적 및 안내)
             # - Stage 1: 호출지로 이동
             # - Stage 2: 사용자 추적 (감지기 활성화) + 목적지로 이동
@@ -393,6 +402,8 @@ class TaskManager(Node):
         self.get_logger().info('📍 NavigationResult 서비스 시작됨 - navigation_result 서비스 대기 중...')  # NavigationResult 서버 로그 추가
         self.get_logger().info('👁️ ActivateDetector 클라이언트 준비됨 - activate_detector 서비스 연결...')
         self.get_logger().info('👁️ DeactivateDetector 클라이언트 준비됨 - deactivate_detector 서비스 연결...')
+        self.get_logger().info('👁️ ActivateQRScanner 클라이언트 준비됨 - activate_qr_scanner 서비스 연결...')
+        self.get_logger().info('👁️ DeactivateQRScanner 클라이언트 준비됨 - deactivate_qr_scanner 서비스 연결...')
         self.get_logger().info('⏹️ CancelNavigation 클라이언트 준비됨 - cancel_navigation 서비스 연결...')
         self.get_logger().info('⏰ DetectionTimer 구독 시작됨 - detection_timer 토픽 모니터링 중...')
         self.get_logger().info('🗣️ VoiceCommand 퍼블리셔 준비됨 - voice_command 토픽으로 이벤트 기반 발행...')
@@ -551,7 +562,7 @@ class TaskManager(Node):
         self.get_logger().info(f'   - Goal Location: {request.goal_location}')
         
         # 유효한 task type인지 먼저 확인
-        valid_task_types = ['escort', 'assist', 'delivery']
+        valid_task_types = list(self.task_stage_logic.keys())  # task_stage_logic의 키들을 자동으로 가져옴
         if request.task_type not in valid_task_types:
             self.get_logger().error(f'❌ 유효하지 않은 Task Type: {request.task_type} - 요청 거절')
             response.success = False
@@ -902,6 +913,54 @@ class TaskManager(Node):
         except Exception as e:
             self.get_logger().error(f'❌ 감지기 비활성화 응답 처리 중 오류: {e}')
 
+    def activate_qr_scanner(self, robot_id):  # Vision Manager에게 QR Scanner 활성화 요청
+        """Vision Manager에게 ActivateQRScanner 서비스 요청을 보내는 메서드"""
+        # Vision Manager 서비스가 준비될 때까지 대기
+        if not self.activate_qr_scanner_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ Vision Manager 서비스를 찾을 수 없음 (activate_qr_scanner)')
+            return False
+        
+        # ActivateQRScanner 요청 생성
+        request = ActivateQRScanner.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'👁️ Vision Manager에게 QR Scanner 활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.activate_qr_scanner_client.call_async(request)
+            future.add_done_callback(self.activate_qr_scanner_response_callback)
+            self.get_logger().info(f'📤 QR Scanner 활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ Vision Manager 통신 중 오류: {e}')
+            return False
+
+    def deactivate_qr_scanner(self, robot_id):  # Vision Manager에게 QR Scanner 비활성화 요청
+        """Vision Manager에게 DeactivateQRScanner 서비스 요청을 보내는 메서드"""
+        # Vision Manager 서비스가 준비될 때까지 대기
+        if not self.deactivate_qr_scanner_client.wait_for_service(timeout_sec=3.0):
+            self.get_logger().error('❌ Vision Manager 서비스를 찾을 수 없음 (deactivate_qr_scanner)')
+            return False
+        
+        # DeactivateQRScanner 요청 생성
+        request = DeactivateQRScanner.Request()
+        request.robot_id = robot_id  # 로봇 ID 설정
+        
+        self.get_logger().info(f'👁️ Vision Manager에게 QR Scanner 비활성화 요청: {robot_id}')
+        
+        try:
+            # 비동기 서비스 호출 (응답을 콜백으로 처리)
+            future = self.deactivate_qr_scanner_client.call_async(request)
+            future.add_done_callback(self.deactivate_qr_scanner_response_callback)
+            self.get_logger().info(f'📤 QR Scanner 비활성화 요청 전송 완료 - 응답 대기 중...')
+            return True
+                
+        except Exception as e:
+            self.get_logger().error(f'❌ Vision Manager 통신 중 오류: {e}')
+            return False
+
     def cancel_navigation(self):  # 네비게이션 취소 요청
         """네비게이션을 취소하는 메서드"""
         # CancelNavigation 서비스가 준비될 때까지 대기
@@ -1163,6 +1222,28 @@ class TaskManager(Node):
             
         else:
             self.get_logger().warning(f'⚠️ 알 수 없는 액션 타입: {action_type}')
+
+    def activate_qr_scanner_response_callback(self, future):  # ActivateQRScanner 응답 콜백
+        """ActivateQRScanner 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ QR Scanner 활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️  QR Scanner 활성화 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ QR Scanner 활성화 응답 처리 중 오류: {e}')
+
+    def deactivate_qr_scanner_response_callback(self, future):  # DeactivateQRScanner 응답 콜백
+        """DeactivateQRScanner 서비스 응답을 처리하는 콜백"""
+        try:
+            response = future.result()
+            if response.success:
+                self.get_logger().info(f'✅ QR Scanner 비활성화 성공: {response.message}')
+            else:
+                self.get_logger().warning(f'⚠️  QR Scanner 비활성화 실패: {response.message}')
+        except Exception as e:
+            self.get_logger().error(f'❌ QR Scanner 비활성화 응답 처리 중 오류: {e}')
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)
