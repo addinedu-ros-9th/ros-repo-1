@@ -1663,6 +1663,13 @@ class TaskManager(Node):
                 self.get_logger().warning(f'⚠️ stage 불일치: {response.message}')
                 return response
             
+            # goal_location이 유효한 위치인지 확인
+            if goal_location not in LOCATION_COORDINATES:
+                response.success = False
+                response.message = f'유효하지 않은 목표 위치입니다: {goal_location}'
+                self.get_logger().warning(f'⚠️ 유효하지 않은 위치: {response.message}')
+                return response
+            
             # 모든 조건을 만족하면 goal_location 업데이트
             current_task.goal_location = goal_location  # 목표 위치 업데이트
             self.get_logger().info(f'✅ 목표 위치 업데이트: {robot_id} -> {goal_location}')
