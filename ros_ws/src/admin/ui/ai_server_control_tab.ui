@@ -31,7 +31,7 @@
     border-radius: 8px;
     background-color: #ffffff;
     margin: 10px;
-    padding: 15px;
+    padding: 5px;
 }
 QLabel {
     color: #2c3e50;
@@ -95,6 +95,63 @@ QTextEdit {
        </widget>
       </item>
       <item>
+       <layout class="QHBoxLayout" name="robot_qr_check_input_layout">
+        <item>
+         <widget class="QLabel" name="qr_robot_id_label">
+          <property name="text">
+           <string>Robot ID:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="qr_robot_id_edit">
+          <property name="maximumSize">
+           <size>
+            <width>80</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>libo_a</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="qr_admin_name_label">
+          <property name="text">
+           <string>Admin Name:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="qr_admin_name_edit">
+          <property name="maximumSize">
+           <size>
+            <width>80</width>
+            <height>25</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>김민수</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="horizontalSpacer7">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+      <item>
        <layout class="QHBoxLayout" name="server_control_layout">
         <item>
          <widget class="QPushButton" name="toggle_server_button">
@@ -110,6 +167,16 @@ QTextEdit {
          <widget class="QPushButton" name="clear_log_button">
           <property name="text">
            <string>🧹 Clear Log</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="send_robot_qr_check_button">
+          <property name="styleSheet">
+           <string>background-color: #f39c12; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; font-size: 12px; min-height: 30px;</string>
+          </property>
+          <property name="text">
+           <string>🔍 Send QR Check</string>
           </property>
          </widget>
         </item>
@@ -168,7 +235,7 @@ QTextEdit {
     border-radius: 8px;
     background-color: #ffffff;
     margin: 10px;
-    padding: 15px;
+    padding: 5px;
 }
 QLabel {
     color: #2c3e50;
@@ -376,7 +443,7 @@ QLineEdit {
     border-radius: 8px;
     background-color: #ffffff;
     margin: 10px;
-    padding: 15px;
+    padding: 5px;
 }
 QLabel {
     color: #2c3e50;

@@ -40,6 +40,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/EndTask.srv"
   "srv/Navigate.srv"
   "srv/NavigationResult.srv"    # 네비게이션 결과 서비스
+  "srv/KioskQRCheck.srv"        # 키오스크 QR 체크 서비스
   "srv/RobotQRCheck.srv"
   "srv/SetGoal.srv"
   "srv/TaskRequest.srv"

@@ -11,6 +11,7 @@ from libo_interfaces.srv import ActivateQRScanner  # ActivateQRScanner 서비스
 from libo_interfaces.srv import DeactivateQRScanner  # DeactivateQRScanner 서비스 추가
 from libo_interfaces.srv import CancelNavigation  # CancelNavigation 서비스 추가
 from libo_interfaces.srv import EndTask  # EndTask 서비스 추가
+from libo_interfaces.srv import RobotQRCheck  # RobotQRCheck 서비스 추가
 from libo_interfaces.msg import Heartbeat  # Heartbeat 메시지 추가
 from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
@@ -212,6 +213,13 @@ class TaskManager(Node):
             EndTask,
             'end_task',
             self.end_task_callback
+        )
+        
+        # RobotQRCheck 서비스 서버 생성
+        self.robot_qr_check_service = self.create_service(
+            RobotQRCheck,
+            'robot_qr_check',
+            self.robot_qr_check_callback
         )
         
         # Heartbeat 토픽 구독자 생성
@@ -452,6 +460,7 @@ class TaskManager(Node):
         self.get_logger().info('👁️ DeactivateQRScanner 클라이언트 준비됨 - deactivate_qr_scanner 서비스 연결...')
         self.get_logger().info('⏹️ CancelNavigation 클라이언트 준비됨 - cancel_navigation 서비스 연결...')
         self.get_logger().info('🏁 EndTask 서비스 시작됨 - end_task 서비스 대기 중...')
+        self.get_logger().info('🔍 RobotQRCheck 서비스 시작됨 - robot_qr_check 서비스 대기 중...')
         self.get_logger().info('⏰ DetectionTimer 구독 시작됨 - detection_timer 토픽 모니터링 중...')
         self.get_logger().info('🗣️ VoiceCommand 퍼블리셔 준비됨 - voice_command 토픽으로 이벤트 기반 발행...')
         self.get_logger().info('⚖️ 무게 데이터 구독 시작됨 - weight_data 토픽 모니터링 중...')
@@ -1350,6 +1359,30 @@ class TaskManager(Node):
         else:
             response.success = False
             response.message = f"로봇 <{request.robot_id}>의 {request.task_type} 작업을 찾을 수 없습니다"
+        
+        return response
+
+    def robot_qr_check_callback(self, request, response):  # RobotQRCheck 서비스 콜백
+        """RobotQRCheck 서비스 콜백"""
+        self.get_logger().info(f'📥 RobotQRCheck 요청 받음!')
+        self.get_logger().info(f'   - 로봇 ID: {request.robot_id}')
+        self.get_logger().info(f'   - 관리자 이름: {request.admin_name}')
+        
+        # 기본 응답 (나중에 실제 QR 인증 로직 추가 예정)
+        response.success = True
+        response.message = f"Robot QR Check 완료: {request.robot_id} - {request.admin_name}"
+        
+        # QR Check 완료 후 qr_check_completed 이벤트 발생
+        if self.tasks and len(self.tasks) > 0:
+            current_task = self.tasks[0]
+            # assist task이고 stage 1인 경우에만 qr_check_completed 이벤트 발생
+            if current_task.task_type == 'assist' and current_task.stage == 1:
+                self.get_logger().info(f'✅ QR Check 완료! qr_check_completed 이벤트 발생')
+                self.process_task_stage_logic(current_task, current_task.stage, 'qr_check_completed')
+            else:
+                self.get_logger().debug(f'📝 QR Check 완료했지만 assist task stage 1이 아님 - 이벤트 발생 안함')
+        else:
+            self.get_logger().debug(f'📝 QR Check 완료했지만 활성 task 없음 - 이벤트 발생 안함')
         
         return response
 

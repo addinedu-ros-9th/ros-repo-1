@@ -14,6 +14,7 @@ from rclpy.node import Node
 from libo_interfaces.srv import ActivateDetector, DeactivateDetector
 from libo_interfaces.srv import ActivateQRScanner, DeactivateQRScanner  # QR Scanner 서비스 추가
 from libo_interfaces.srv import EndTask  # EndTask 서비스 추가
+from libo_interfaces.srv import RobotQRCheck  # RobotQRCheck 서비스 추가
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
 from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
 
@@ -48,10 +49,18 @@ class AiServerControlTab(QWidget):
         self.end_task_robot_id = "libo_a"  # 기본 로봇 ID
         self.end_task_type = "assist"  # 기본 작업 타입
         
+        # RobotQRCheck 서비스 클라이언트
+        self.robot_qr_check_client = None
+        self.robot_qr_check_robot_id = "libo_a"  # 기본 로봇 ID
+        self.robot_qr_check_admin_name = "김민수"  # 기본 관리자 이름
+        
         self.init_ui()
         
         # EndTask 클라이언트 초기화 (서버 활성화와 독립적)
         self.end_task_client = self.ros_node.create_client(EndTask, 'end_task')
+        
+        # RobotQRCheck 클라이언트 초기화 (서버 활성화와 독립적)
+        self.robot_qr_check_client = self.ros_node.create_client(RobotQRCheck, 'robot_qr_check')
         
         # 초기 로그 메시지
         self.log_detector_message("👁️ Vision Manager Control 탭이 시작되었습니다.")
@@ -61,6 +70,7 @@ class AiServerControlTab(QWidget):
         self.log_voice_command_message("🗣️ Talker Manager Control이 시작되었습니다.")
         self.log_voice_command_message("🔴 VoiceCommand 구독이 비활성화 상태입니다.")
         self.log_voice_command_message("🏁 EndTask 기능이 준비되었습니다. (Vision Manager와 독립적)")
+        self.log_detector_message("🔍 RobotQRCheck 기능이 준비되었습니다. (Vision Manager와 독립적)")
     
     def init_ui(self):
         """UI 초기화 - ai_server_control_tab.ui 파일 로드"""
@@ -70,6 +80,7 @@ class AiServerControlTab(QWidget):
         # 시그널 연결
         self.toggle_server_button.clicked.connect(self.toggle_server)
         self.clear_log_button.clicked.connect(self.clear_log)
+        self.send_robot_qr_check_button.clicked.connect(self.send_robot_qr_check)
         
         # DetectionTimer 관련 시그널 연결
         self.toggle_detection_timer_button.clicked.connect(self.toggle_detection_timer)
@@ -435,6 +446,51 @@ class AiServerControlTab(QWidget):
         self.detector_log = []
         self.detector_log_text.clear()
         self.log_detector_message("🧹 로그가 지워졌습니다.")
+    
+    def send_robot_qr_check(self):
+        """RobotQRCheck 서비스 요청 발행"""
+        if not self.robot_qr_check_client:
+            self.log_detector_message("❌ RobotQRCheck 클라이언트가 초기화되지 않았습니다.")
+            return
+        
+        try:
+            # UI에서 입력된 값 읽기
+            robot_id = self.qr_robot_id_edit.text().strip()
+            admin_name = self.qr_admin_name_edit.text().strip()
+            
+            # 입력값 검증
+            if not robot_id:
+                self.log_detector_message("❌ Robot ID를 입력해주세요.")
+                return
+            
+            if not admin_name:
+                self.log_detector_message("❌ Admin Name을 입력해주세요.")
+                return
+            
+            # RobotQRCheck 서비스 요청 생성
+            request = RobotQRCheck.Request()
+            request.robot_id = robot_id
+            request.admin_name = admin_name
+            
+            self.log_detector_message(f"📤 RobotQRCheck 요청 발행: robot_id={request.robot_id}, admin_name={request.admin_name}")
+            
+            # 비동기 서비스 호출
+            future = self.robot_qr_check_client.call_async(request)
+            future.add_done_callback(self.robot_qr_check_response_callback)
+            
+        except Exception as e:
+            self.log_detector_message(f"❌ RobotQRCheck 요청 발행 실패: {str(e)}")
+    
+    def robot_qr_check_response_callback(self, future):
+        """RobotQRCheck 서비스 응답 처리"""
+        try:
+            response = future.result()
+            if response.success:
+                self.log_detector_message(f"✅ RobotQRCheck 성공: {response.message}")
+            else:
+                self.log_detector_message(f"❌ RobotQRCheck 실패: {response.message}")
+        except Exception as e:
+            self.log_detector_message(f"❌ RobotQRCheck 응답 처리 중 오류: {str(e)}")
     
     def get_log_count(self):
         """현재 로그 개수 반환"""
