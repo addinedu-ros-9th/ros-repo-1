@@ -22,6 +22,7 @@ from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
 from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
+from libo_interfaces.msg import Expression  # Expression 메시지 추가
 from std_msgs.msg import Float32  # 무게 데이터 메시지 추가
 from std_msgs.msg import String  # LED 제어용 메시지
 import time  # 시간 관련 기능
@@ -285,6 +286,9 @@ class TaskManager(Node):
         # LED 제어용 퍼블리셔 생성
         self.led_publisher = self.create_publisher(String, 'led_status', 10)
         
+        # Expression 퍼블리셔 생성
+        self.expression_publisher = self.create_publisher(Expression, 'expression', 10)
+        
         # 작업 목록을 저장할 리스트
         self.tasks = []  # 생성된 작업들을 저장할 리스트
         
@@ -352,7 +356,8 @@ class TaskManager(Node):
                 1: {  # Stage 1: 호출지로 이동하는 단계
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
-                        {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
+                        {'action': 'led', 'emotion': '슬픔'},  # 출근길 슬픔 LED 표시
+                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '슬픔'},  # 출근길 슬픔 표현
                         {'action': 'navigate', 'target': 'call_location'}  # 호출지로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
@@ -363,7 +368,8 @@ class TaskManager(Node):
                 2: {  # Stage 2: 사용자 추적 및 목적지로 이동하는 단계
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'activate_detector'},  # 사용자 감지기 활성화
-                        {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
+                        {'action': 'led', 'emotion': '화남'},  # 업무 중 화남 LED 표시
+                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '화남'},  # 업무 중 화남 표현
                         {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
@@ -382,7 +388,8 @@ class TaskManager(Node):
                 3: {  # Stage 3: Base로 복귀하는 단계
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
-                        {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
+                        {'action': 'led', 'emotion': '기쁨'},  # 퇴근길 기쁨 LED 표시
+                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '기쁨'},  # 퇴근길 기쁨 표현
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
@@ -399,7 +406,8 @@ class TaskManager(Node):
                 1: {  # Stage 1: 호출지로 이동하는 단계
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
-                        {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
+                        {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
+                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '슬픔'},  # 슬픔 표현
                         {'action': 'navigate', 'target': 'call_location'}  # 호출지로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
@@ -418,7 +426,8 @@ class TaskManager(Node):
                 },
                 2: {  # Stage 2: QR 인증 대기하는 단계 (목적지 이동 없음)
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
-                        {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시 (네비게이션 없음)
+                        {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시 (네비게이션 없음)
+                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '화남'},  # 화남 표현
                         {'action': 'activate_tracker'},  # Tracker 활성화
                         {'action': 'activate_talker'}  # Talker 활성화
                     ],
@@ -439,7 +448,8 @@ class TaskManager(Node):
                 3: {  # Stage 3: Base로 복귀하는 단계
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
-                        {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
+                        {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
+                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '기쁨'},  # 기쁨 표현
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
@@ -456,7 +466,8 @@ class TaskManager(Node):
                 1: {  # Stage 1: admin PC로 이동하는 단계
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
-                        {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
+                        {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
+                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '슬픔'},  # 슬픔 표현
                         {'action': 'navigate', 'target': 'admin_desk'}  # admin PC로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
@@ -468,7 +479,8 @@ class TaskManager(Node):
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         # 도착후 대기 한다고 알림
                         # 관리자가 맵으로 다음 목적지를 선택하기 전까지 대기
-                        {'action': 'led', 'emotion': '슬픔'}  # 슬픔 LED 표시
+                        {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
+                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '화남'},  # 화남 표현
                         # AddGoalLocation.srv가 성공적으로 도달할 때까지 대기
                     ],
                     'goal_location_updated': [  # AddGoalLocation 성공 시 실행할 액션들
@@ -1284,6 +1296,19 @@ class TaskManager(Node):
             self.get_logger().warn(f'⚠️ [LED] 명령 발행 실패: {emotion} (오류: {e}) - 무시하고 계속 진행')
             return False
 
+    def send_expression_command(self, robot_id, robot_status):
+        """로봇 ID와 상태에 따라 Expression 메시지 발행"""
+        try:
+            msg = Expression()
+            msg.robot_id = robot_id  # "libo_a", "libo_b"
+            msg.robot_status = robot_status  # "escort", "assist", "delivery", "기쁨", "슬픔", "화남"
+            self.expression_publisher.publish(msg)
+            self.get_logger().info(f'😊 [Expression] 명령 발행 성공: {robot_id} - {robot_status}')
+            return True
+        except Exception as e:
+            self.get_logger().warn(f'⚠️ [Expression] 명령 발행 실패: {robot_id} - {robot_status} (오류: {e}) - 무시하고 계속 진행')
+            return False
+
     def process_task_stage_logic(self, task, stage, event_type):
         """task 타입별 stage 로직을 처리하는 통합 메서드"""
         if task.task_type in self.task_stage_logic:
@@ -1312,6 +1337,14 @@ class TaskManager(Node):
         elif action_type == 'led':
             emotion = action.get('emotion')
             self.send_led_command(emotion)
+            
+        elif action_type == 'expression':
+            robot_id = action.get('robot_id')
+            status = action.get('status')
+            # robot_id가 'robot_id' 문자열이면 실제 task의 robot_id 사용
+            if robot_id == 'robot_id':
+                robot_id = task.robot_id
+            self.send_expression_command(robot_id, status)
             
         elif action_type == 'navigate':
             target = action.get('target')
