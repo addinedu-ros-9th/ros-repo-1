@@ -373,6 +373,7 @@ class TaskManager(Node):
                         {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'voice', 'command': 'arrived_destination'},  # 목적지 도착 음성 명령
                         {'action': 'deactivate_detector'},  # 감지기 비활성화
                         {'action': 'advance_stage'}  # Stage 3으로 진행
                     ],
@@ -393,6 +394,7 @@ class TaskManager(Node):
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'voice', 'command': 'arrived_base'},  # Base 도착 음성 명령
                         {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
                     ]
                 }
@@ -453,6 +455,7 @@ class TaskManager(Node):
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'voice', 'command': 'arrived_base'},  # Base 도착 음성 명령
                         {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
                     ]
                 }
@@ -484,9 +487,11 @@ class TaskManager(Node):
                         # AddGoalLocation.srv가 성공적으로 도달할 때까지 대기
                     ],
                     'goal_location_updated': [  # AddGoalLocation 성공 시 실행할 액션들
+                        {'action': 'voice', 'command': 'receive_next_goal'},  # 다음 목적지 수령 알림
                         {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'voice', 'command': 'arrived_destination'},  # 목적지 도착 알림
                         # 관리자가 별도로 "이제 돌아가" 라고 지시 하지 않는이상 대기
                     ],
                     'end_task': [  # EndTask 요청 시 실행할 액션들
@@ -496,10 +501,11 @@ class TaskManager(Node):
                 3: {  # Stage 3: Base로 복귀하는 단계
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
-                        {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
+                        {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
+                        {'action': 'voice', 'command': 'arrived_base'},  # Base 도착 음성 명령
                         {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
                     ]
                 }
