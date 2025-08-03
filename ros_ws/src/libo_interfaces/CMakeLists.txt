@@ -26,6 +26,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/VoiceCommand.msg"        # 음성 명령 메시지
   "msg/Waypoint.msg"            # 새로 만든 웨이포인트 메시지 추가
   "msg/Expression.msg"          # 새로 만든 표정 메시지 추가
+  "msg/HumanInfo.msg"           # 휴먼감지용
+  "msg/DetectionStatus.msg"     # 장애물감지용
 
   # === srv ===
   "srv/ActivateDetector.srv"
