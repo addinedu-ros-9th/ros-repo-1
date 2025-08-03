@@ -44,7 +44,10 @@ LOCATION_COORDINATES = {
     'E6': (4.53, -0.53), 'E7': (5.74, -0.12), 'E8': (7.67, -0.10), 'E9': (8.98, -0.16),
     
     # Base 좌표 (스테이지 3 완료 후 돌아갈 위치) - E3로 고정
-    'Base': (0.05, -0.34)  # E3 좌표와 동일
+    'Base': (0.05, -0.34),  # E3 좌표와 동일
+    
+    # Admin Desk 좌표 (Delivery Task용)
+    'admin_desk': (2.0, 1.0)  # 관리자 데스크 위치
 }
 
 # 음성 명령 상수 정의
@@ -259,6 +262,129 @@ class TaskManager(Node):
         # 로봇 상태 관리 타이머 (1초마다 실행)
         self.robot_state_timer = self.create_timer(1.0, self.manage_robot_states)  # 1초마다 로봇 상태 관리
         
+        # Task 타입별 Stage 로직 정의 (통합 관리)
+        # 
+        # 구조 설명:
+        # self.task_stage_logic = {
+        #     'task_type': {                    # 작업 타입 (escort, assist, delivery)
+        #         stage_number: {               # 스테이지 번호 (1, 2, 3)
+        #             'event_type': [           # 이벤트 타입 (stage_start, timer_10s, timer_30s 등)
+        #                 {'action': 'action_type', 'param': 'value'},  # 실행할 액션들
+        #                 ...
+        #             ]
+        #         }
+        #     }
+        # }
+        #
+        # 이벤트 타입 종류:
+        # - 'stage_start': 스테이지가 시작될 때 (Stage 1→2, 2→3, 3→완료 시)
+        # - 'timer_10s': 타이머가 10초일 때 (DetectionTimer에서 발생)
+        # - 'timer_30s': 타이머가 30초일 때 (DetectionTimer에서 발생)
+        #
+        # 액션 타입 종류:
+        # - 'voice': 음성 명령 발행 (command: 음성 명령 종류)
+        # - 'led': LED 제어 (emotion: 감정 상태)
+        # - 'navigate': 네비게이션 (target: 목표 위치)
+        # - 'activate_detector': 감지기 활성화
+        # - 'deactivate_detector': 감지기 비활성화
+        # - 'cancel_navigation': 네비게이션 취소
+        # - 'force_stage': 강제 스테이지 변경 (target: 목표 스테이지)
+        #
+        self.task_stage_logic = {
+            # Escort Task: 사용자 에스코팅 (사용자 추적 및 안내)
+            # - Stage 1: 호출지로 이동
+            # - Stage 2: 사용자 추적 (감지기 활성화) + 목적지로 이동
+            # - Stage 3: Base로 복귀
+            # - 특별 기능: timer_10s(사용자 분실 경고), timer_30s(강제 복귀)
+            'escort': {  # 에스코트 작업 타입 정의
+                1: {  # Stage 1: 호출지로 이동하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
+                        {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
+                        {'action': 'navigate', 'target': 'call_location'}  # 호출지로 네비게이션
+                    ]
+                },
+                2: {  # Stage 2: 사용자 추적 및 목적지로 이동하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'activate_detector'},  # 사용자 감지기 활성화
+                        {'action': 'voice', 'command': 'arrived_kiosk'},  # 키오스크 도착 음성
+                        {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
+                        {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
+                    ],
+                    'timer_10s': [  # 10초 타이머 시 실행할 액션들
+                        {'action': 'voice', 'command': 'lost_user'}  # 사용자 분실 경고 음성
+                    ],
+                    'timer_30s': [  # 30초 타이머 시 실행할 액션들
+                        {'action': 'cancel_navigation'},  # 네비게이션 취소
+                        {'action': 'deactivate_detector'},  # 감지기 비활성화
+                        {'action': 'force_stage', 'target': 3}  # 강제로 Stage 3으로 이동
+                    ]
+                },
+                3: {  # Stage 3: Base로 복귀하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
+                        {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
+                        {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
+                    ]
+                }
+            },
+            
+            # Assist Task: 사용자 어시스트 (QR 인증 및 도움)
+            # - Stage 1: 호출지로 이동
+            # - Stage 2: QR 인증 대기 (목적지 없음)
+            # - Stage 3: Base로 복귀
+            'assist': {  # 어시스트 작업 타입 정의
+                1: {  # Stage 1: 호출지로 이동하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
+                        {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
+                        {'action': 'navigate', 'target': 'call_location'}  # 호출지로 네비게이션
+                    ]
+                },
+                2: {  # Stage 2: QR 인증 대기하는 단계 (목적지 이동 없음)
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'arrived_kiosk'},  # 키오스크 도착 음성
+                        {'action': 'led', 'emotion': '슬픔'}  # 슬픔 LED 표시 (네비게이션 없음)
+                    ]
+                },
+                3: {  # Stage 3: Base로 복귀하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
+                        {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
+                        {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
+                    ]
+                }
+            },
+            
+            # Delivery Task: 물품 배송
+            # - Stage 1: admin PC로 이동
+            # - Stage 2: 물품 수령 + 목적지로 이동
+            # - Stage 3: Base로 복귀
+            'delivery': {  # 배송 작업 타입 정의
+                1: {  # Stage 1: admin PC로 이동하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
+                        {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
+                        {'action': 'navigate', 'target': 'admin_desk'}  # admin PC로 네비게이션
+                    ]
+                },
+                2: {  # Stage 2: 물품 수령 및 목적지로 이동하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'arrived_admin_desk'},  # admin PC 도착 음성
+                        {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
+                        {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
+                    ]
+                },
+                3: {  # Stage 3: Base로 복귀하는 단계
+                    'stage_start': [  # 스테이지 시작 시 실행할 액션들
+                        {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
+                        {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
+                        {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
+                    ]
+                }
+            }
+        }
+        
         self.get_logger().info('🎯 Task Manager 시작됨 - task_request 서비스 대기 중...')
         self.get_logger().info('💓 Heartbeat 구독 시작됨 - heartbeat 토픽 모니터링 중...')
         self.get_logger().info('📡 OverallStatus 발행 시작됨 - robot_status 토픽으로 1초마다 발행...')
@@ -271,6 +397,7 @@ class TaskManager(Node):
         self.get_logger().info('⏰ DetectionTimer 구독 시작됨 - detection_timer 토픽 모니터링 중...')
         self.get_logger().info('🗣️ VoiceCommand 퍼블리셔 준비됨 - voice_command 토픽으로 이벤트 기반 발행...')
         self.get_logger().info('⚖️ 무게 데이터 구독 시작됨 - weight_data 토픽 모니터링 중...')
+        self.get_logger().info('🔄 통합 Task Stage 로직 시스템 활성화됨')
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -473,25 +600,9 @@ class TaskManager(Node):
         else:
             self.get_logger().warning(f'⚠️  로봇 <{selected_robot_id}> 찾을 수 없음 - state 변경 불가')
         
-        # 새로운 Task의 첫 번째 스테이지 좌표 전송
-        self.get_logger().info(f'🚀 새로운 Task의 Stage 1 좌표 전송 시작...')
-        
-        # Task 시작 시 출발 음성 명령 발행
-        self.get_logger().info(f'🗣️ Task 시작 음성 명령 발행: {request.task_type}.depart_base')
-        if self.send_voice_command_by_task_type(selected_robot_id, request.task_type, 'depart_base'):
-            self.get_logger().info(f'✅ 출발 음성 명령 발행 완료')
-        else:
-            self.get_logger().warning(f'⚠️ 출발 음성 명령 발행 실패')
-        
-        # Stage 1 시작 시 "기쁨" LED 명령 발행
-        self.get_logger().info(f'🎨 Stage 1 시작 - "기쁨" LED 명령 발행')
-        if not self.send_led_command("기쁨"):
-            self.get_logger().warn(f'⚠️ Stage 1 LED 명령 실패했지만 계속 진행')
-        
-        if self.send_coordinate_for_stage(new_task):
-            self.get_logger().info(f'✅ Stage 1 좌표 전송 완료')
-        else:
-            self.get_logger().error(f'❌ Stage 1 좌표 전송 실패')
+        # 새로운 Task의 Stage 1 시작 로직을 통합 시스템으로 처리
+        self.get_logger().info(f'🚀 새로운 Task의 Stage 1 시작...')
+        self.process_task_stage_logic(new_task, 1, 'stage_start')
         
         # 응답 설정
         response.success = True
@@ -575,13 +686,6 @@ class TaskManager(Node):
         elif current_stage == 3:  # 스테이지 3: Base로 이동
             target_location = 'Base'
             self.get_logger().info(f'🎯 Stage 3: Base <{target_location}> 으로 이동')
-            
-            # Stage 3 시작 시 복귀 음성 명령 발행
-            self.get_logger().info(f'🗣️ Stage 3 시작 - 복귀 음성 명령 발행: {task.task_type}.return')
-            if self.send_voice_command_by_task_type(task.robot_id, task.task_type, 'return'):
-                self.get_logger().info(f'✅ 복귀 음성 명령 발행 완료')
-            else:
-                self.get_logger().warning(f'⚠️ 복귀 음성 명령 발행 실패')
         else:
             self.get_logger().warning(f'⚠️  알 수 없는 스테이지: {current_stage}')
             return False
@@ -685,47 +789,11 @@ class TaskManager(Node):
             stage_desc = {1: "시작", 2: "진행중", 3: "완료직전"}.get(current_task.stage, f"Stage {current_task.stage}")
             self.get_logger().info(f'📍 현재 상태: {stage_icons.get(current_task.stage, "⚪")} Stage {current_task.stage} ({stage_desc})')
             
-            # Escort task의 Stage 2 시작 시점에 감지기 활성화
-            if current_task.task_type == 'escort' and current_task.stage == 2:
-                self.get_logger().info(f'🚶 Escort task Stage 2 시작 - 감지기 활성화 요청...')
-                if self.activate_detector(current_task.robot_id):
-                    self.get_logger().info(f'✅ 감지기 활성화 요청 전송 완료')
-                else:
-                    self.get_logger().error(f'❌ 감지기 활성화 요청 전송 실패')
+            # 새로운 통합 시스템으로 stage_start 이벤트 처리
+            self.process_task_stage_logic(current_task, current_task.stage, 'stage_start')
             
-            # 스테이지가 바뀌었으므로 해당하는 좌표를 Navigator에게 전송
-            self.get_logger().info(f'🚀 새로운 스테이지에 맞는 좌표 전송 시작...')
-            
-            # Stage 1 → Stage 2로 넘어갈 때 키오스크 도착 음성 명령 발행
-            if current_task.stage == 2:
-                self.get_logger().info(f'🗣️ Stage 2 시작 - 키오스크 도착 음성 명령 발행: {current_task.task_type}.arrived_kiosk')
-                if self.send_voice_command_by_task_type(current_task.robot_id, current_task.task_type, 'arrived_kiosk'):
-                    self.get_logger().info(f'✅ 키오스크 도착 음성 명령 발행 완료')
-                else:
-                    self.get_logger().warning(f'⚠️ 키오스크 도착 음성 명령 발행 실패')
-                
-                # Stage 2 시작 시 "슬픔" LED 명령 발행
-                self.get_logger().info(f'🎨 Stage 2 시작 - "슬픔" LED 명령 발행')
-                if not self.send_led_command("슬픔"):
-                    self.get_logger().warn(f'⚠️ Stage 2 LED 명령 실패했지만 계속 진행')
-            
-            # Stage 2 → Stage 3으로 넘어갈 때 목적지 도착 음성 명령 발행
-            if current_task.stage == 3:
-                self.get_logger().info(f'🗣️ Stage 3 시작 - 목적지 도착 음성 명령 발행: {current_task.task_type}.arrived_destination')
-                if self.send_voice_command_by_task_type(current_task.robot_id, current_task.task_type, 'arrived_destination'):
-                    self.get_logger().info(f'✅ 목적지 도착 음성 명령 발행 완료')
-                else:
-                    self.get_logger().warning(f'⚠️ 목적지 도착 음성 명령 발행 실패')
-                
-                # Stage 3 시작 시 "화남" LED 명령 발행
-                self.get_logger().info(f'🎨 Stage 3 시작 - "화남" LED 명령 발행')
-                if not self.send_led_command("화남"):
-                    self.get_logger().warn(f'⚠️ Stage 3 LED 명령 실패했지만 계속 진행')
-            
-            if self.send_coordinate_for_stage(current_task):
-                self.get_logger().info(f'✅ 스테이지 {current_task.stage} 좌표 전송 완료')
-            else:
-                self.get_logger().error(f'❌ 스테이지 {current_task.stage} 좌표 전송 실패')
+            # 기존 좌표 전송 로직은 navigate 액션에서 처리되므로 제거
+            # (process_task_stage_logic에서 자동으로 처리됨)
 
     def test_navigator_communication(self):  # Navigator 통신 테스트
         """더미 좌표로 Navigator 통신을 테스트하는 메서드"""
@@ -860,52 +928,11 @@ class TaskManager(Node):
                     if self.tasks and len(self.tasks) > 0:
                         current_task = self.tasks[0]  # 첫 번째 활성 task
                         
-                        # Escort task이고 Stage 2인 경우에만 특별 처리
-                        if current_task.task_type == 'escort' and current_task.stage == 2:
-                            # 10초일 때는 lost_user 음성만 발행
-                            if counter_value == 10:
-                                self.get_logger().warn(f'🚨 [DetectionTimer] Escort Stage 2에서 10초 경과! 사용자 분실 경고')
-                                
-                                # 사용자 분실 음성 명령 발행
-                                self.get_logger().info(f'🗣️ [DetectionTimer] 사용자 분실 음성 명령 발행: escort.lost_user')
-                                if self.send_voice_command_by_task_type(current_task.robot_id, 'escort', 'lost_user'):
-                                    self.get_logger().info(f'✅ [DetectionTimer] 사용자 분실 음성 명령 발행 완료')
-                                else:
-                                    self.get_logger().warning(f'⚠️ [DetectionTimer] 사용자 분실 음성 명령 발행 실패')
-                            
-                            # 30초일 때 Stage 3으로 강제 이동
-                            elif counter_value >= 30:
-                                self.get_logger().warn(f'🚨 [DetectionTimer] Escort Stage 2에서 30초 초과! 자동 Stage 3 전환 시작')
-                                
-                                # 1. CancelNavigation 발행
-                                self.get_logger().info(f'⏹️ [DetectionTimer] CancelNavigation 요청 전송...')
-                                if self.cancel_navigation():
-                                    self.get_logger().info(f'✅ [DetectionTimer] CancelNavigation 요청 전송 완료')
-                                else:
-                                    self.get_logger().error(f'❌ [DetectionTimer] CancelNavigation 요청 전송 실패')
-                                
-                                # 2. DeactivateDetector 발행
-                                self.get_logger().info(f'👁️ [DetectionTimer] DeactivateDetector 요청 전송...')
-                                if self.deactivate_detector(current_task.robot_id):
-                                    self.get_logger().info(f'✅ [DetectionTimer] DeactivateDetector 요청 전송 완료')
-                                else:
-                                    self.get_logger().error(f'❌ [DetectionTimer] DeactivateDetector 요청 전송 실패')
-                                
-                                # 3. Stage 3으로 강제 이동
-                                self.get_logger().warn(f'🔄 [DetectionTimer] Stage 3으로 강제 이동...')
-                                current_task.stage = 3
-                                self.get_logger().info(f'✅ [DetectionTimer] Stage 3으로 이동 완료')
-                                
-                                # 4. Stage 3 좌표 전송 (return 음성은 send_coordinate_for_stage에서 자동 발행)
-                                if self.send_coordinate_for_stage(current_task):
-                                    self.get_logger().info(f'✅ [DetectionTimer] Stage 3 좌표 전송 완료')
-                                else:
-                                    self.get_logger().error(f'❌ [DetectionTimer] Stage 3 좌표 전송 실패')
-                            
-                        else:
-                            # Escort가 아니거나 Stage 2가 아닌 경우 일반 경고만
-                            task_info = f"{current_task.task_type} (Stage {current_task.stage})" if self.tasks else "No active task"
-                            self.get_logger().warn(f'⚠️ [DetectionTimer] 10초 초과했지만 Escort Stage 2가 아님: {task_info}')
+                        # 새로운 통합 시스템으로 timer 이벤트 처리
+                        if counter_value == 10:
+                            self.process_task_stage_logic(current_task, current_task.stage, 'timer_10s')
+                        elif counter_value >= 30:
+                            self.process_task_stage_logic(current_task, current_task.stage, 'timer_30s')
                     
                     else:
                         # 활성 task가 없는 경우
@@ -1048,6 +1075,67 @@ class TaskManager(Node):
         except Exception as e:
             self.get_logger().warn(f'⚠️ [LED] 명령 발행 실패: {emotion} (오류: {e}) - 무시하고 계속 진행')
             return False
+
+    def process_task_stage_logic(self, task, stage, event_type):
+        """task 타입별 stage 로직을 처리하는 통합 메서드"""
+        if task.task_type in self.task_stage_logic:
+            if stage in self.task_stage_logic[task.task_type]:
+                if event_type in self.task_stage_logic[task.task_type][stage]:
+                    self.get_logger().info(f'🔄 [{task.task_type}] Stage {stage} - {event_type} 이벤트 처리 시작')
+                    for action in self.task_stage_logic[task.task_type][stage][event_type]:
+                        self.execute_action(task, action)
+                    self.get_logger().info(f'✅ [{task.task_type}] Stage {stage} - {event_type} 이벤트 처리 완료')
+                else:
+                    self.get_logger().debug(f'📝 [{task.task_type}] Stage {stage}에 {event_type} 이벤트 없음')
+            else:
+                self.get_logger().debug(f'📝 [{task.task_type}] Stage {stage} 로직 정의 없음')
+        else:
+            self.get_logger().debug(f'📝 Task 타입 {task.task_type} 로직 정의 없음')
+
+    def execute_action(self, task, action):
+        """단순한 액션 실행 메서드"""
+        action_type = action.get('action')
+        
+        # 핵심 액션들 (자주 사용되는 것들)
+        if action_type == 'voice':
+            command = action.get('command')
+            self.send_voice_command_by_task_type(task.robot_id, task.task_type, command)
+            
+        elif action_type == 'led':
+            emotion = action.get('emotion')
+            self.send_led_command(emotion)
+            
+        elif action_type == 'navigate':
+            target = action.get('target')
+            if target == 'call_location':
+                x, y = LOCATION_COORDINATES[task.call_location]
+            elif target == 'goal_location':
+                x, y = LOCATION_COORDINATES[task.goal_location]
+            elif target == 'base':
+                x, y = LOCATION_COORDINATES['Base']
+            elif target == 'admin_desk':
+                x, y = LOCATION_COORDINATES['admin_desk']  # admin PC 좌표
+            self.send_goal_to_navigator(x, y)
+            
+        # 특수한 액션들 (자주 사용되지 않는 것들)
+        elif action_type == 'activate_detector':
+            self.activate_detector(task.robot_id)
+            
+        elif action_type == 'deactivate_detector':
+            self.deactivate_detector(task.robot_id)
+            
+        elif action_type == 'cancel_navigation':
+            self.cancel_navigation()
+            
+        elif action_type == 'force_stage':
+            target_stage = action.get('target')
+            task.stage = target_stage
+            self.get_logger().warn(f'🔄 [{task.task_type}] 강제 Stage 변경: {target_stage}')
+            # 강제 stage 변경 후 해당 stage의 stage_start 이벤트 처리
+            self.process_task_stage_logic(task, target_stage, 'stage_start')
+            
+        else:
+            self.get_logger().warning(f'⚠️ 알 수 없는 액션 타입: {action_type}')
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)
