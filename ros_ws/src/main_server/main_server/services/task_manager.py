@@ -502,6 +502,7 @@ class TaskManager(Node):
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
                         {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
+                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '기쁨'},  # 기쁨 표현
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
@@ -714,23 +715,35 @@ class TaskManager(Node):
             self.get_logger().info(f'🎲 로봇 자동 할당: {selected_robot_id} (사용 가능한 로봇: {available_robots})')
         
         elif request.task_type == 'delivery':
-            self.get_logger().info(f'📦 Delivery task 감지됨 - 지정된 로봇 확인 중...')
+            self.get_logger().info(f'📦 Delivery task 감지됨 - 로봇 확인 중...')
             
-            # delivery는 지정된 로봇이 존재하는지 확인
-            if request.robot_id not in self.robots:
-                self.get_logger().error(f'❌ 지정된 로봇 <{request.robot_id}>이 존재하지 않음 - Delivery task 거절')
-                response.success = False
-                response.message = f"지정된 로봇 <{request.robot_id}>이 존재하지 않아서 Delivery task를 수행할 수 없습니다."
-                return response
-            
-            # 지정된 로봇이 사용 가능한지 확인
-            if not self.robots[request.robot_id].is_available:
-                self.get_logger().error(f'❌ 지정된 로봇 <{request.robot_id}>이 사용중임 - Delivery task 거절')
-                response.success = False
-                response.message = f"지정된 로봇 <{request.robot_id}>이 현재 사용중이어서 Delivery task를 수행할 수 없습니다."
-                return response
-            
-            self.get_logger().info(f'✅ 지정된 로봇 <{request.robot_id}> 확인됨 - Delivery task 진행')
+            # robot_id가 비어있거나 존재하지 않는 경우 자동 할당 시도
+            if not request.robot_id or request.robot_id not in self.robots:
+                self.get_logger().info(f' Delivery task - 로봇 자동 할당 시작... (요청된 로봇: {request.robot_id})')
+                
+                # 사용 가능한 로봇들 찾기
+                available_robots = self.get_available_robots()
+                
+                if not available_robots:
+                    self.get_logger().error(f'❌ 사용 가능한 로봇이 없음 - Delivery task 거절')
+                    response.success = False
+                    response.message = "사용 가능한 로봇이 없어서 Delivery task를 수행할 수 없습니다."
+                    return response
+                
+                # 사용 가능한 로봇 중 하나를 임의로 선택
+                import random
+                selected_robot_id = random.choice(available_robots)
+                self.get_logger().info(f'🎲 로봇 자동 할당: {selected_robot_id} (사용 가능한 로봇: {available_robots})')
+            else:
+                # 지정된 로봇이 존재하는 경우, 사용 가능한지 확인
+                if not self.robots[request.robot_id].is_available:
+                    self.get_logger().error(f'❌ 지정된 로봇 <{request.robot_id}>이 사용중임 - Delivery task 거절')
+                    response.success = False
+                    response.message = f"지정된 로봇 <{request.robot_id}>이 현재 사용중이어서 Delivery task를 수행할 수 없습니다."
+                    return response
+                
+                selected_robot_id = request.robot_id
+                self.get_logger().info(f'✅ 지정된 로봇 <{request.robot_id}> 확인됨 - Delivery task 진행')
         
         # 새로운 Task 객체 생성 (선택된 로봇 ID 사용)
         new_task = Task(selected_robot_id, request.task_type, request.call_location, request.goal_location)  # Task 객체 생성
