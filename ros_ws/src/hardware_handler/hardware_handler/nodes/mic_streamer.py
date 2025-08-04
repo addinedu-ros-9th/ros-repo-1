@@ -5,7 +5,7 @@ import pytz
 import time
 
 # ======================== 상수 정의 =========================
-AI_SERVICE = "192.168.0.141"                # 추후 AI 서비스 서버 IP
+AI_SERVICE = "192.168.1.7"                # 추후 AI 서비스 서버 IP
 MIC_STREAM_PORT = 7010           
 
 MIC_INDEX = None                        # 자동 선택

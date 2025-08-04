@@ -13,7 +13,8 @@ def main(args=None):
     UDP_PORT_MONITORING = 7001
 
     # AI 서비스(수신자 2)의 IP 주소입니다.
-    UDP_IP_FOLLOWING = "127.0.0.1"
+    # UDP_IP_FOLLOWING = "127.0.0.1"
+    UDP_IP_FOLLOWING = "192.168.0.141"
     # AI 서비스가 수신 대기하고 있는 포트 번호입니다.
     UDP_PORT_FOLLOWING = 7003
 

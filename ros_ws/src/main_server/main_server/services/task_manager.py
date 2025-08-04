@@ -510,6 +510,7 @@ class TaskManager(Node):
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_destination'},  # 목적지 도착 알림
+                        {'action': 'activate_talker'}  # Talker 활성화
                         # 관리자가 별도로 "이제 돌아가" 라고 지시 하지 않는이상 대기
                     ],
                     'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
@@ -517,6 +518,7 @@ class TaskManager(Node):
                         {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
                     ],
                     'end_task': [  # EndTask 요청 시 실행할 액션들
+                        {'action': 'deactivate_talker'},  # Talker 비활성화
                         {'action': 'advance_stage'}  # Stage 3으로 진행
                     ]
                 },
@@ -1144,13 +1146,13 @@ class TaskManager(Node):
             return False
         
         # CancelNavigation 요청 생성 (요청은 비어있음)
-        request = CancelNavigation.Request()
+        request = CancelNavigation.Request()  # CancelNavigation.srv 요청
         
         self.get_logger().info(f'⏹️ 네비게이션 취소 요청 전송...')
         
         try:
             # 비동기 서비스 호출 (응답을 콜백으로 처리)
-            future = self.cancel_navigation_client.call_async(request)
+            future = self.cancel_navigation_client.call_async(request)  # cancel_navigation 서비스로 전송
             future.add_done_callback(self.cancel_navigation_response_callback)
             self.get_logger().info(f'📤 네비게이션 취소 요청 전송 완료 - 응답 대기 중...')
             return True
@@ -1190,10 +1192,10 @@ class TaskManager(Node):
                         current_task = self.tasks[0]  # 첫 번째 활성 task
                         
                         # 새로운 통합 시스템으로 timer 이벤트 처리
-                        if counter_value == 10:
+                        if counter_value == 5:
+                            self.process_task_stage_logic(current_task, current_task.stage, 'timer_5s')
+                        elif counter_value >= 10:
                             self.process_task_stage_logic(current_task, current_task.stage, 'timer_10s')
-                        elif counter_value >= 30:
-                            self.process_task_stage_logic(current_task, current_task.stage, 'timer_30s')
                     
                     else:
                         # 활성 task가 없는 경우

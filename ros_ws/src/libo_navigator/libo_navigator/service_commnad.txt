@@ -1,0 +1,5 @@
+# (x: 4.3, y: -13.5) 좌표로 이동 명령
+ros2 service call /set_navigation_goal libo_interfaces/srv/SetGoal "{x: 4.5, y: 3.17}"
+
+# 주행 중에 취소 명령
+ros2 service call /cancel_navigation libo_interfaces/srv/CancelNavigation "{}"

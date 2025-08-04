@@ -8,7 +8,7 @@ import queue
 import time
 
 # ======================== 상수 정의 =========================
-AI_SERVICE_IP = "192.168.0.141"            # AI Service IP (TCP 서버)
+AI_SERVICE_IP = "192.168.1.7"            # AI Service IP (TCP 서버)
 SPEAKER_PORT = 7002                     # 스피커 출력용 포트 (TCP)
 
 CHANNELS = 1                           # 모노 채널
