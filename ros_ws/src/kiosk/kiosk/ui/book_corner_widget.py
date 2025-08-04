@@ -95,7 +95,7 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
             button.setGeometry(x, y, button_width, button_height)
             button.setStyleSheet("""
                 QPushButton {
-                    background-color: #3498db;
+                    background-color: #71866a;
                     color: white;
                     border: none;
                     border-radius: 10px;

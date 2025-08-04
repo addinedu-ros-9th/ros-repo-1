@@ -59,12 +59,13 @@ class TaskRequestClient(QThread):
             print(f"❌ TaskRequestClient ROS2 초기화 실패: {e}")
             return False
     
-    def request_escort_task(self, robot_id, call_location, goal_location):
+    def send_task_request(self, robot_id, task_type, call_location, goal_location):
         """
-        에스코팅 작업 요청
+        일반적인 작업 요청 (팔로우, 에스코팅 등)
         
         Args:
             robot_id (str): 로봇 ID (예: "libo_a")
+            task_type (str): 작업 타입 (예: "follow", "escort")
             call_location (str): 호출지 위치 (예: "E9" - 키오스크)
             goal_location (str): 목적지 위치 (예: "D5" - 책 위치)
         
@@ -75,21 +76,35 @@ class TaskRequestClient(QThread):
             # 요청 데이터 저장
             self.request_data = {
                 'robot_id': robot_id,
-                'task_type': 'escort',  # 에스코팅 고정
+                'task_type': task_type,
                 'call_location': call_location,
                 'goal_location': goal_location
             }
             
-            print(f"🚀 에스코팅 요청 준비: {self.request_data}")
+            print(f"🚀 작업 요청 준비: {self.request_data}")
             
             # QThread로 비동기 요청 시작
             self.start()
             return True
             
         except Exception as e:
-            print(f"❌ 에스코팅 작업 요청 준비 중 오류: {e}")
+            print(f"❌ 작업 요청 준비 중 오류: {e}")
             self.task_request_completed.emit(False, f"요청 준비 중 오류: {str(e)}")
             return False
+    
+    def request_escort_task(self, robot_id, call_location, goal_location):
+        """
+        에스코팅 작업 요청 (기존 호환성 유지)
+        
+        Args:
+            robot_id (str): 로봇 ID (예: "libo_a")
+            call_location (str): 호출지 위치 (예: "E9" - 키오스크)
+            goal_location (str): 목적지 위치 (예: "D5" - 책 위치)
+        
+        Returns:
+            bool: 요청 시작 성공 여부
+        """
+        return self.send_task_request(robot_id, 'escort', call_location, goal_location)
     
     def run(self):
         """QThread 실행 (백그라운드에서 ROS2 서비스 호출)"""

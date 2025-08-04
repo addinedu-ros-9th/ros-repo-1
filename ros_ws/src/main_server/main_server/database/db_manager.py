@@ -180,6 +180,57 @@ class DatabaseManager:
             print(f"❌ 도서 등록 실패: {e}")
             return False
     
+    def verify_admin_qr(self, admin_name: str) -> bool:  # 관리자 QR 인증 함수
+        """
+        관리자 QR 인증
+        
+        Args:
+            admin_name: 관리자 이름
+            
+        Returns:
+            인증 성공 여부
+        """
+        # 연결 재시도 로직
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다. 재연결 시도...")
+            self._connect()
+            if not self.connection:
+                print("❌ 데이터베이스 재연결 실패")
+                return False
+        
+        try:
+            # admin 테이블에서 해당 이름의 관리자 조회
+            query_sql = """
+            SELECT id, name, type
+            FROM admin
+            WHERE name = %s AND type = 'qr'
+            """
+            
+            # 연결 상태 확인 및 재연결
+            try:
+                self.connection.ping(reconnect=True)
+            except Exception as ping_error:
+                print(f"⚠️ 데이터베이스 연결 확인 중 오류: {ping_error}")
+                self._connect()
+                if not self.connection:
+                    print("❌ 데이터베이스 재연결 실패")
+                    return False
+            
+            with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                cursor.execute(query_sql, (admin_name,))
+                result = cursor.fetchone()
+                
+                if result:
+                    print(f"✅ QR 인증 성공: {admin_name} (ID: {result['id']})")
+                    return True
+                else:
+                    print(f"❌ QR 인증 실패: {admin_name} - DB에 등록되지 않은 관리자")
+                    return False
+                    
+        except Exception as e:
+            print(f"❌ QR 인증 오류: {e}")
+            return False
+
     def get_book_by_isbn(self, isbn: str) -> Optional[Dict]:  # ISBN 번호로 도서 찾는 함수
         """
         ISBN으로 도서 조회

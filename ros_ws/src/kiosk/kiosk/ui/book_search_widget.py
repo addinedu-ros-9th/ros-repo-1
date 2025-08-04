@@ -186,7 +186,32 @@ class BookSearchWidget(QWidget):
             self.display_search_results(books)
         else:
             print(f"❌ 검색 실패: {message}")
-            QMessageBox.warning(self, "검색 실패", message)
+            
+            # 오류 메시지 개선
+            error_title = "검색 실패"
+            error_message = message
+            
+            # 특정 오류에 대한 사용자 친화적 메시지
+            if "wait set index too big" in message:
+                error_message = "서비스 연결 오류가 발생했습니다.\n\n" \
+                              "다음 사항을 확인해주세요:\n" \
+                              "1. main_server가 실행 중인지 확인\n" \
+                              "2. 데이터베이스 연결 상태 확인\n" \
+                              "3. 잠시 후 다시 시도해주세요"
+            elif "타임아웃" in message:
+                error_message = "검색 시간이 초과되었습니다.\n\n" \
+                              "다음 사항을 확인해주세요:\n" \
+                              "1. 네트워크 연결 상태 확인\n" \
+                              "2. 서버 응답 시간 확인\n" \
+                              "3. 잠시 후 다시 시도해주세요"
+            elif "ROS2" in message:
+                error_message = "ROS2 연결 오류가 발생했습니다.\n\n" \
+                              "다음 사항을 확인해주세요:\n" \
+                              "1. ROS2 환경이 올바르게 설정되었는지 확인\n" \
+                              "2. main_server 노드가 실행 중인지 확인\n" \
+                              "3. 잠시 후 다시 시도해주세요"
+            
+            QMessageBox.warning(self, error_title, error_message)
 
     def display_search_results(self, books):
         """검색 결과를 UI에 표시"""
