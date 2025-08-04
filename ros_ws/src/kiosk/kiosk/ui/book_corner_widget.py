@@ -13,6 +13,9 @@ from rclpy.node import Node
 from libo_interfaces.msg import Waypoint
 from std_msgs.msg import String
 
+# TaskRequest 클라이언트 import 추가
+from kiosk.ros_communication.task_request_client import TaskRequestClient
+
 class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
     # 홈 버튼 클릭 시그널 정의
     home_requested = pyqtSignal()
@@ -21,6 +24,10 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
         # QWidget과 Node의 초기화 함수를 각각 명시적으로 호출
         QWidget.__init__(self)
         Node.__init__(self, 'book_corner_widget')
+        
+        # TaskRequest 클라이언트 초기화
+        self.task_request_client = TaskRequestClient()
+        self.task_request_client.task_request_completed.connect(self.on_task_request_response)
         
         self.init_ui()
         self.setup_connections()
@@ -69,16 +76,16 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
         # 지도 라벨을 부모로 하는 버튼들 생성
         # 각 코너의 상대적 위치 (지도 내에서의 위치)
         corner_positions = {
-            "컴퓨터": (230, 330),
-            "언어": (480, 330),
-            "소설": (740, 330)
+            "컴퓨터": (250, 330),
+            "언어": (500, 330),
+            "소설": (750, 330)
         }
         
         # 각 코너별 버튼 크기 설정
         corner_sizes = {
-            "컴퓨터": (100, 200),    # 가로 짧고 세로 긴
-            "언어": (100, 200),      # 가로 짧고 세로 긴
-            "소설": (200, 100)       # 가로 길고 세로 짧음
+            "컴퓨터": (140, 180),    # 가로 짧고 세로 긴
+            "언어": (140, 180),      # 가로 짧고 세로 긴
+            "소설": (180, 140)       # 가로 길고 세로 짧음
         }
         
         # 각 코너에 버튼 생성
@@ -165,49 +172,6 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
         self.status_publisher.publish(msg)
         print(f"📢 상태 메시지 발행: {message}")
     
-    def start_escorting_scenario(self, corner_name):
-        """에스코팅 시나리오 시작"""
-        print(f"🚀 {corner_name} 코너 에스코팅 시나리오 시작")
-        
-        # 1단계: 로봇이 키오스크로 이동
-        self.publish_status_message(f"로봇이 키오스크 위치로 와서 {corner_name} 코너로 에스코팅 하겠습니다.")
-        self.publish_waypoint("E9")  # 키오스크로 이동
-        
-        # 2단계: 키오스크 도착 후 선택한 코너로 이동
-        corner_waypoint = self.corner_waypoints.get(corner_name)
-        if corner_waypoint:
-            # 10초 후에 코너로 이동 (실제 로봇 이동 시간 고려)
-            print(f"⏰ 10초 후 {corner_name} 코너로 이동 예정...")
-            QTimer.singleShot(60000, lambda: self.move_to_corner(corner_name, corner_waypoint))
-        else:
-            print(f"❌ 알 수 없는 코너: {corner_name}")
-    
-    def move_to_corner(self, corner_name, waypoint_id):
-        """선택한 코너로 이동"""
-        print(f"🎯 {corner_name} 코너로 이동 시작")
-        self.publish_waypoint(waypoint_id)
-        
-        # 3단계: 코너 도착 후 완료 메시지
-        # 15초 후에 완료 메시지 (실제 로봇 이동 시간 고려)
-        print(f"⏰ 15초 후 {corner_name} 코너 도착 예정...")
-        QTimer.singleShot(60000, lambda: self.complete_escorting(corner_name))
-    
-    def complete_escorting(self, corner_name):
-        """에스코팅 완료 처리"""
-        print(f"✅ {corner_name} 코너 에스코팅 완료")
-        self.publish_status_message(f"{corner_name} 코너 에스코팅이 완료되었습니다.")
-        
-        # 4단계: 베이스(충전소)로 복귀
-        print("⏰ 5초 후 베이스로 복귀 예정...")
-        QTimer.singleShot(60000, lambda: self.return_to_base())
-    
-    def return_to_base(self):
-        """베이스(충전소)로 복귀"""
-        print("🏠 베이스(충전소)로 복귀")
-        self.publish_waypoint("E3")  # 베이스로 이동
-        self.publish_status_message("베이스(충전소)로 복귀합니다.")
-
-    
     def on_corner_button_clicked(self, corner_name):
         """코너 버튼 클릭 처리"""
         print(f"🎯 {corner_name} 코너 버튼 클릭됨")
@@ -228,28 +192,228 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
         
         if reply == QMessageBox.Yes:
             print(f"✅ {corner_name} 코너 에스코팅 요청 승인")
-            # 에스코팅 시나리오 시작
-            self.start_escorting_scenario(corner_name)
-            
-            QMessageBox.information(
-                self, 
-                "에스코팅 요청", 
-                f"{corner_name} 코너로 에스코팅을 요청했습니다.\n로봇이 곧 도착할 예정입니다."
-            )
+            # TaskRequest를 통한 에스코팅 요청
+            self.request_escort_to_corner(corner_name)
         else:
             print("에스코팅 요청 취소")
+    
+    def request_escort_to_corner(self, corner_name):
+        """코너로 에스코팅 요청 - TaskRequest 서비스 사용"""
+        try:
+            print(f"🚀 {corner_name} 코너 에스코팅 요청 시작")
+            
+            # 코너별 waypoint 매핑
+            corner_waypoints = {
+                "컴퓨터": "D5",
+                "언어": "D7", 
+                "소설": "C8"
+            }
+            
+            # TaskRequest.srv 파라미터 준비
+            robot_id = ""  # task_manager에서 자동 선택
+            call_location = "E9"  # 키오스크 위치
+            goal_location = corner_waypoints.get(corner_name, "D5")  # 코너 위치
+            
+            print(f"📍 TaskRequest 파라미터:")
+            print(f"   robot_id: '{robot_id}' (task_manager에서 자동 선택)")
+            print(f"   task_type: escort")
+            print(f"   call_location: {call_location} (키오스크)")
+            print(f"   goal_location: {goal_location} ({corner_name} 코너)")
+            
+            # TaskRequest 서비스 호출
+            success = self.task_request_client.request_escort_task(
+                robot_id=robot_id,
+                call_location=call_location, 
+                goal_location=goal_location
+            )
+            
+            if not success:
+                QMessageBox.warning(self, "서비스 오류", 
+                                  "TaskRequest 서비스를 호출할 수 없습니다.\n"
+                                  "main_server가 실행 중인지 확인해주세요.")
+            
+        except Exception as e:
+            print(f"❌ 에스코팅 요청 처리 중 오류: {e}")
+            QMessageBox.warning(self, "요청 오류", 
+                              f"에스코팅 요청 중 오류가 발생했습니다:\n{str(e)}")
+    
+    def on_task_request_response(self, success, message):
+        """TaskRequest 서비스 응답 처리"""
+        try:
+            if success:
+                print(f"✅ TaskRequest 성공: {message}")
+                
+                # 성공 메시지 팝업창 표시 (카운트다운 포함)
+                self.show_success_popup_with_countdown(message)
+                
+            else:
+                QMessageBox.warning(
+                    self,
+                    "❌ 에스코팅 요청 실패",
+                    f"에스코팅 요청이 실패했습니다.\n\n"
+                    f"🔍 실패 원인: {message}\n\n"
+                    f"💡 해결방법:\n"
+                    f"• main_server가 실행 중인지 확인\n"
+                    f"• 로봇이 사용 가능한지 확인\n"
+                    f"• 네트워크 연결 상태 확인\n\n"
+                    f"다시 시도해보세요."
+                )
+                print(f"❌ TaskRequest 실패: {message}")
+                
+                # 실패 시 위젯 리프레시
+                self.refresh_widget()
+                
+        except Exception as e:
+            print(f"❌ TaskRequest 응답 처리 중 오류: {e}")
+    
+    def show_success_popup_with_countdown(self, message):
+        """성공 메시지 팝업창 표시 (카운트다운 포함)"""
+        try:
+            # 성공 메시지 팝업창 생성
+            success_dialog = QDialog(self)
+            success_dialog.setWindowTitle("🤖 에스코팅 요청 완료")
+            success_dialog.setModal(True)
+            success_dialog.setFixedSize(500, 300)
+            
+            # 레이아웃 설정
+            layout = QVBoxLayout(success_dialog)
+            
+            # 성공 메시지 라벨
+            message_label = QLabel(
+                f"리보 에스코팅 요청이 성공적으로 접수되었습니다!\n\n"
+                f"리보가 키오스크로 이동 후 \n"
+                f"선택하신 코너로 안내할 예정입니다."
+            )
+            message_label.setAlignment(Qt.AlignCenter)
+            message_label.setStyleSheet("""
+                QLabel {
+                    font-size: 14px;
+                    padding: 20px;
+                    line-height: 1.5;
+                }
+            """)
+            layout.addWidget(message_label)
+            
+            # 카운트다운 라벨
+            countdown_label = QLabel("5초 후 메인화면으로 돌아갑니다.")
+            countdown_label.setAlignment(Qt.AlignCenter)
+            countdown_label.setStyleSheet("""
+                QLabel {
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: #27ae60;
+                    padding: 10px;
+                }
+            """)
+            layout.addWidget(countdown_label)
+            
+            # 확인 버튼
+            ok_button = QPushButton("확인")
+            ok_button.setStyleSheet("""
+                QPushButton {
+                    font-size: 14px;
+                    padding: 10px 20px;
+                    background-color: #3498db;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+            """)
+            ok_button.clicked.connect(success_dialog.accept)
+            layout.addWidget(ok_button, alignment=Qt.AlignCenter)
+            
+            # 카운트다운 타이머 설정
+            countdown_seconds = 5
+            countdown_timer = QTimer()
+            
+            def update_countdown():
+                nonlocal countdown_seconds
+                countdown_seconds -= 1
+                if countdown_seconds > 0:
+                    countdown_label.setText(f"{countdown_seconds}초 후 메인화면으로 돌아갑니다.")
+                else:
+                    countdown_timer.stop()
+                    # 모든 팝업창 닫기
+                    self.close_all_popups()
+                    # 카운트다운 완료 시 바로 메인화면으로 이동
+                    self.on_home_clicked()
+            
+            countdown_timer.timeout.connect(update_countdown)
+            countdown_timer.start(1000)  # 1초마다 업데이트
+            
+            # 팝업창 표시
+            success_dialog.exec_()
+            
+        except Exception as e:
+            print(f"❌ 성공 팝업창 표시 중 오류: {e}")
+            # 오류 시 기본 방식으로 처리
+            QMessageBox.information(
+                self,
+                "🤖 에스코팅 요청 완료",
+                f"리보 에스코팅 요청이 성공적으로 접수되었습니다!\n\n"
+                f"선택하신 코너로 안내할 예정입니다.\n\n"
+                f"5초 후 메인화면으로 돌아갑니다."
+            )
+            # 5초 후 메인화면으로 이동
+            QTimer.singleShot(5000, self.on_home_clicked)
+    
+    def close_all_popups(self):
+        """모든 팝업창 닫기"""
+        try:
+            # 모든 활성 팝업창 찾아서 닫기
+            for widget in QApplication.topLevelWidgets():
+                if isinstance(widget, QDialog) and widget.isVisible():
+                    widget.close()
+                    print(f"✅ 팝업창 닫기: {widget.windowTitle()}")
+        except Exception as e:
+            print(f"❌ 팝업창 닫기 중 오류: {e}")
+    
+    def refresh_widget(self):
+        """위젯 리프레시"""
+        try:
+            print("🔄 Book Corner 위젯 리프레시")
+            
+            # 지도 이미지 다시 로드
+            self.setup_map_image()
+            
+            # 코너 버튼들 다시 생성
+            self.create_corner_buttons()
+            
+            print("✅ 위젯 리프레시 완료")
+            
+        except Exception as e:
+            print(f"❌ 위젯 리프레시 중 오류: {e}")
     
     def on_home_clicked(self):
         """홈 버튼 클릭"""
         print("🏠 홈으로 돌아가기")
+        
+        # TaskRequest 클라이언트 정리
+        self.cleanup_task_request_client()
+        
         self.hide()  # 현재 위젯 숨기기
         self.home_requested.emit()
+    
+    def cleanup_task_request_client(self):
+        """TaskRequest 클라이언트 안전 정리"""
+        try:
+            if hasattr(self, 'task_request_client') and self.task_request_client:
+                if self.task_request_client.isRunning():
+                    self.task_request_client.quit()
+                    self.task_request_client.wait(1000)
+                self.task_request_client.cleanup()
+                print("✅ task_request_client 정리 완료")
+        except Exception as e:
+            print(f"⚠️ task_request_client 정리 중 오류: {e}")
     
     def reset_widget(self):
         """위젯 초기화"""
         print("🔄 Book Corner 위젯 초기화")
         # 필요한 초기화 작업 수행
-        self.load_map_image()
+        self.setup_map_image()
     
     def showEvent(self, event):
         """위젯이 표시될 때"""
@@ -271,6 +435,11 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
         self.move(center_x, center_y)
         print(f"✅ Book Corner 윈도우 중앙 정렬: ({center_x}, {center_y})")
         print(f"화면 크기: {screen.width()}x{screen.height()}, 창 크기: {window_width}x{window_height}")
+    
+    def closeEvent(self, event):
+        """윈도우 종료 시 리소스 정리"""
+        self.cleanup_task_request_client()
+        event.accept()
 
 def main(args=None):
     rclpy.init(args=args)

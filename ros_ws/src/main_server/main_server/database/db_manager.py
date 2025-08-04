@@ -41,9 +41,13 @@ class DatabaseManager:
         Returns:
             검색된 도서 정보 리스트
         """
+        # 연결 재시도 로직
         if not self.connection:
-            print("❌ 데이터베이스 연결이 없습니다.")
-            return []
+            print("❌ 데이터베이스 연결이 없습니다. 재연결 시도...")
+            self._connect()
+            if not self.connection:
+                print("❌ 데이터베이스 재연결 실패")
+                return []
         
         try:
             # 검색 타입에 따른 쿼리 작성
@@ -70,6 +74,16 @@ class DatabaseManager:
             
             search_param = f"%{query}%"
             
+            # 연결 상태 확인 및 재연결
+            try:
+                self.connection.ping(reconnect=True)
+            except Exception as ping_error:
+                print(f"⚠️ 데이터베이스 연결 확인 중 오류: {ping_error}")
+                self._connect()
+                if not self.connection:
+                    print("❌ 데이터베이스 재연결 실패")
+                    return []
+            
             with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 cursor.execute(query_sql, (search_param,))
                 results = cursor.fetchall()
@@ -84,6 +98,10 @@ class DatabaseManager:
             
         except Exception as e:
             print(f"❌ 검색 오류: {e}")
+            # 연결 오류인 경우 재연결 시도
+            if "MySQL server has gone away" in str(e) or "Lost connection" in str(e):
+                print("🔄 데이터베이스 연결 오류로 재연결 시도...")
+                self._connect()
             return []
     
     def test_connection(self) -> bool:  # DB 연결이 잘 되는지 테스트하는 함수

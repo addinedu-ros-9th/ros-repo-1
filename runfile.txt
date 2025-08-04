@@ -28,8 +28,10 @@ ros2 launch vicpinky_navigation nav2_view.launch.xml use_sim_time:=true
 
 
 
+ros2 run main_server task_manager
+
+ros2 run admin admin_gui 
 
 
 
-
-
+ros2 run hardware_handler heartbeat_sender

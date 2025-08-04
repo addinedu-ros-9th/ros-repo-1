@@ -23,19 +23,18 @@ class BookSearchWidget(QWidget):
     def __init__(self):
         super().__init__()
         
-        # ROS2 클라이언트 초기화
-        self.search_client = BookSearchClient()
-        self.search_client.search_completed.connect(self.on_search_results)
-        
-        # 에스코팅 요청 클라이언트 초기화
-        self.task_request_client = TaskRequestClient()
-        self.task_request_client.task_request_completed.connect(self.on_task_request_response)
+        # ROS2 클라이언트 초기화 (지연 초기화)
+        self.search_client = None
+        self.task_request_client = None
         
         self.init_ui()
         self.setup_connections()
         
         # 초기화 시 빈 화면으로 시작
         self.show_empty_state()
+        
+        # 초기 버튼 텍스트 설정
+        self.update_search_button_text()
         
         print("✅ BookSearchWidget 초기화 완료")
     
@@ -69,6 +68,9 @@ class BookSearchWidget(QWidget):
         # 엔터키로도 검색 가능
         self.searchLineEdit.returnPressed.connect(self.on_search_clicked)
         
+        # 검색어 변경 시 버튼 텍스트 업데이트
+        self.searchLineEdit.textChanged.connect(self.update_search_button_text)
+        
         # 검색 라인 에디터에서 엔터키 이벤트 차단
         self.searchLineEdit.installEventFilter(self)
         
@@ -84,7 +86,7 @@ class BookSearchWidget(QWidget):
         self.clear_book_list_widget()
         
         # 빈 상태 메시지 표시
-        empty_label = QLabel("🔍 검색어를 입력하고 검색 버튼을 눌러주세요.\n또는 '전체 조회' 버튼을 눌러 모든 도서를 확인하세요.")
+        empty_label = QLabel("🔍 검색어를 입력하고 검색 버튼을 눌러주세요.")
         empty_label.setAlignment(Qt.AlignCenter)
         empty_label.setStyleSheet("""
             color: #7f8c8d; 
@@ -103,10 +105,10 @@ class BookSearchWidget(QWidget):
         """검색 버튼 클릭"""
         search_text = self.searchLineEdit.text().strip()
         
-        # 검색어가 없으면 모든 책 조회
+        # 검색어가 없으면 검색어 입력 요청 팝업창 표시
         if not search_text:
-            print("🔍 전체 도서 목록 조회")
-            self.search_all_books()
+            print("🔍 검색어 없음 - 입력 요청 팝업창 표시")
+            self.show_search_input_request_popup()
             return
         
         print(f"🔍 검색어: {search_text}")
@@ -134,6 +136,11 @@ class BookSearchWidget(QWidget):
         
         # ROS2 서비스 호출
         try:
+            # 클라이언트 지연 초기화
+            if self.search_client is None:
+                self.search_client = BookSearchClient()
+                self.search_client.search_completed.connect(self.on_search_results)
+            
             print(f"🚀 검색 요청 전송: {search_text} ({search_type})")
             self.search_client.search_books(search_text, search_type)
         except Exception as e:
@@ -142,25 +149,6 @@ class BookSearchWidget(QWidget):
             self.searchButton.setEnabled(True)
             QMessageBox.warning(self, "검색 오류", f"검색 요청 중 오류가 발생했습니다: {str(e)}")
     
-    def search_all_books(self):
-        """전체 도서 목록 조회"""
-        # 검색 시작 시 스크롤을 맨 위로 이동
-        self.scroll_to_top()
-        
-        # 검색 중 상태 표시
-        self.searchButton.setText("조회중...")
-        self.searchButton.setEnabled(False)
-        
-        # 빈 검색어로 모든 책 조회
-        try:
-            print("🚀 전체 도서 조회 요청 전송")
-            self.search_client.search_books("", "title")
-        except Exception as e:
-            print(f"❌ 전체 도서 조회 중 오류: {e}")
-            self.searchButton.setText("전체 조회")
-            self.searchButton.setEnabled(True)
-            QMessageBox.warning(self, "조회 오류", f"전체 도서 조회 중 오류가 발생했습니다: {str(e)}")
-    
     def reset_widget(self):
         """위젯 초기화"""
         try:
@@ -168,7 +156,7 @@ class BookSearchWidget(QWidget):
             self.searchLineEdit.clear()
             
             # 검색 버튼 초기화
-            self.searchButton.setText("전체 조회")
+            self.searchButton.setText("검색")
             self.searchButton.setEnabled(True)
             
             # 검색 결과 리스트 초기화
@@ -189,15 +177,8 @@ class BookSearchWidget(QWidget):
         """검색 결과 처리"""
         print(f"📥 검색 결과 수신: success={success}, message={message}, books_count={len(books) if books else 0}")
         
-        # 검색어 확인하여 버튼 텍스트 결정
-        search_text = self.searchLineEdit.text().strip()
-        if not search_text:
-            button_text = "전체 조회"
-        else:
-            button_text = "검색"
-        
         # UI 상태 복원
-        self.searchButton.setText(button_text)
+        self.searchButton.setText("검색")
         self.searchButton.setEnabled(True)
         
         if success:
@@ -219,24 +200,17 @@ class BookSearchWidget(QWidget):
         
         # 검색어 확인
         search_text = self.searchLineEdit.text().strip()
-        is_all_books = not search_text
         
         # 검색 결과가 없으면 메시지 표시
         if not books:
-            if is_all_books:
-                no_result_label = QLabel("등록된 도서가 없습니다.\n관리자에게 문의해주세요.")
-            else:
-                no_result_label = QLabel(f"'{search_text}'에 대한 검색 결과가 없습니다.\n다른 검색어를 시도해보세요.")
+            no_result_label = QLabel(f"'{search_text}'에 대한 검색 결과가 없습니다.\n다른 검색어를 시도해보세요.")
             no_result_label.setAlignment(Qt.AlignCenter)
             no_result_label.setStyleSheet("color: #7f8c8d; font-size: 16px; padding: 20px; line-height: 1.5;")
             layout.addWidget(no_result_label)
             return
         
         # 결과 개수 표시
-        if is_all_books:
-            result_count_label = QLabel(f"📚 전체 {len(books)}권의 도서")
-        else:
-            result_count_label = QLabel(f"🔍 '{search_text}' 검색 결과: {len(books)}권")
+        result_count_label = QLabel(f"🔍 '{search_text}' 검색 결과: {len(books)}권")
         
         result_count_label.setAlignment(Qt.AlignCenter)
         result_count_label.setStyleSheet("color: #2c3e50; font-size: 14px; font-weight: bold; padding: 10px; background-color: #ecf0f1; border-radius: 5px; margin: 5px;")
@@ -447,13 +421,7 @@ class BookSearchWidget(QWidget):
         print(f"📖 선택된 책: {book['title']} ({book.get('location', book.get('location_id', 'Unknown'))}구역)")
         
         # 책 상세 정보 팝업창 표시
-        try:
-            popup = BookDetailPopup(book, self)
-            popup.escort_requested.connect(self.on_escort_requested)
-            popup.exec_()
-        except Exception as e:
-            print(f"❌ 팝업창 표시 중 오류: {e}")
-            QMessageBox.warning(self, "오류", f"팝업창을 표시할 수 없습니다: {str(e)}")
+        self.show_book_detail_popup(book)
     
     def on_escort_requested(self, escort_data):
         """에스코팅 요청 처리 - DB 테이블 구조에 맞게 완벽 매핑"""
@@ -481,6 +449,11 @@ class BookSearchWidget(QWidget):
             print(f"   call_location: {call_location} (키오스크)")
             print(f"   goal_location: {goal_location} (책 위치)")
             
+            # 클라이언트 지연 초기화
+            if self.task_request_client is None:
+                self.task_request_client = TaskRequestClient()
+                self.task_request_client.task_request_completed.connect(self.on_task_request_response)
+            
             # Main Server의 task_manager.py로 TaskRequest 서비스 호출
             success = self.task_request_client.request_escort_task(
                 robot_id=robot_id,
@@ -502,16 +475,11 @@ class BookSearchWidget(QWidget):
         """TaskRequest 서비스 응답 처리"""
         try:
             if success:
-                QMessageBox.information(
-                    self,
-                    "🤖 에스코팅 요청 완료",
-                    f"✅ 리보 에스코팅 요청이 성공적으로 접수되었습니다!\n\n"
-                    f"📝 서버 응답: {message}\n\n"
-                    f"🚀 리보가 키오스크(E9)로 이동 후 \n"
-                    f"    선택하신 책 위치로 안내할 예정입니다.\n\n"
-                    f"⏰ 잠시만 기다려주세요."
-                )
                 print(f"✅ TaskRequest 성공: {message}")
+                
+                # 성공 메시지 팝업창 표시 (카운트다운 포함)
+                self.show_success_popup_with_countdown(message)
+                
             else:
                 QMessageBox.warning(
                     self,
@@ -521,12 +489,166 @@ class BookSearchWidget(QWidget):
                     f"💡 해결방법:\n"
                     f"• main_server가 실행 중인지 확인\n"
                     f"• 로봇이 사용 가능한지 확인\n"
-                    f"• 네트워크 연결 상태 확인"
+                    f"• 네트워크 연결 상태 확인\n\n"
+                    f"다시 시도해보세요."
                 )
                 print(f"❌ TaskRequest 실패: {message}")
                 
+                # 실패 시 현재 팝업창의 버튼만 재활성화
+                self.reset_popup_button()
+                
         except Exception as e:
             print(f"❌ TaskRequest 응답 처리 중 오류: {e}")
+    
+    def show_success_popup_with_countdown(self, message):
+        """성공 메시지 팝업창 표시 (카운트다운 포함)"""
+        try:
+            # 성공 메시지 팝업창 생성
+            success_dialog = QDialog(self)
+            success_dialog.setWindowTitle("🤖 에스코팅 요청 완료")
+            success_dialog.setModal(True)
+            success_dialog.setFixedSize(500, 300)
+            
+            # 레이아웃 설정
+            layout = QVBoxLayout(success_dialog)
+            
+            # 성공 메시지 라벨
+            message_label = QLabel(
+                f"리보 에스코팅 요청이 성공적으로 접수되었습니다!\n\n"
+                f"리보가 키오스크로 이동 후 \n"
+                f"선택하신 책 위치로 안내할 예정입니다."
+            )
+            message_label.setAlignment(Qt.AlignCenter)
+            message_label.setStyleSheet("""
+                QLabel {
+                    font-size: 14px;
+                    padding: 20px;
+                    line-height: 1.5;
+                }
+            """)
+            layout.addWidget(message_label)
+            
+            # 카운트다운 라벨
+            countdown_label = QLabel("5초 후 메인화면으로 돌아갑니다.")
+            countdown_label.setAlignment(Qt.AlignCenter)
+            countdown_label.setStyleSheet("""
+                QLabel {
+                    font-size: 16px;
+                    font-weight: bold;
+                    color: #27ae60;
+                    padding: 10px;
+                }
+            """)
+            layout.addWidget(countdown_label)
+            
+            # 확인 버튼
+            ok_button = QPushButton("확인")
+            ok_button.setStyleSheet("""
+                QPushButton {
+                    font-size: 14px;
+                    padding: 10px 20px;
+                    background-color: #3498db;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+            """)
+            ok_button.clicked.connect(success_dialog.accept)
+            layout.addWidget(ok_button, alignment=Qt.AlignCenter)
+            
+            # 카운트다운 타이머 설정
+            countdown_seconds = 5
+            countdown_timer = QTimer()
+            
+            def update_countdown():
+                nonlocal countdown_seconds
+                countdown_seconds -= 1
+                if countdown_seconds > 0:
+                    countdown_label.setText(f"{countdown_seconds}초 후 메인화면으로 돌아갑니다.")
+                else:
+                    countdown_timer.stop()
+                    # 모든 팝업창 닫기
+                    self.close_all_popups()
+                    # 카운트다운 완료 시 바로 메인화면으로 이동
+                    self.on_home_clicked()
+            
+            countdown_timer.timeout.connect(update_countdown)
+            countdown_timer.start(1000)  # 1초마다 업데이트
+            
+            # 팝업창 표시
+            success_dialog.exec_()
+            
+        except Exception as e:
+            print(f"❌ 성공 팝업창 표시 중 오류: {e}")
+            # 오류 시 기본 방식으로 처리
+            QMessageBox.information(
+                self,
+                "🤖 에스코팅 요청 완료",
+                f"리보 에스코팅 요청이 성공적으로 접수되었습니다!\n\n"
+                f"선택하신 책 위치로 안내할 예정입니다.\n\n"
+                f"5초 후 메인화면으로 돌아갑니다."
+            )
+            # 5초 후 메인화면으로 이동
+            QTimer.singleShot(5000, self.on_home_clicked)
+    
+    def reset_popup_button(self):
+        """팝업창의 에스코팅 버튼 초기화"""
+        try:
+            # 현재 활성 팝업창 찾기
+            for widget in QApplication.topLevelWidgets():
+                if isinstance(widget, QDialog) and widget.isVisible():
+                    # BookDetailPopup 인스턴스인지 확인
+                    if hasattr(widget, 'reset_escort_button'):
+                        widget.reset_escort_button()
+                        break
+        except Exception as e:
+            print(f"❌ 팝업창 버튼 초기화 중 오류: {e}")
+    
+    def close_all_popups(self):
+        """모든 팝업창 닫기"""
+        try:
+            # 모든 활성 팝업창 찾아서 닫기
+            for widget in QApplication.topLevelWidgets():
+                if isinstance(widget, QDialog) and widget.isVisible():
+                    widget.close()
+                    print(f"✅ 팝업창 닫기: {widget.windowTitle()}")
+        except Exception as e:
+            print(f"❌ 팝업창 닫기 중 오류: {e}")
+    
+    def show_search_input_request_popup(self):
+        """검색어 입력 요청 팝업창 표시"""
+        try:
+            QMessageBox.information(
+                self,
+                "🔍 검색어 입력",
+                "검색어를 입력한 후 검색 버튼을 눌러주세요."
+            )
+        except Exception as e:
+            print(f"❌ 검색어 입력 요청 팝업창 표시 중 오류: {e}")
+    
+    def update_search_button_text(self):
+        """검색어 변경 시 버튼 텍스트 업데이트"""
+        try:
+            search_text = self.searchLineEdit.text().strip()
+            if not search_text:
+                self.searchButton.setText("검색")
+            else:
+                self.searchButton.setText("검색")
+        except Exception as e:
+            print(f"❌ 검색 버튼 텍스트 업데이트 중 오류: {e}")
+    
+    def show_book_detail_popup(self, book):
+        """책 상세정보 팝업창 표시"""
+        try:
+            popup = BookDetailPopup(book, self)
+            popup.escort_requested.connect(self.on_escort_requested)
+            popup.exec_()
+        except Exception as e:
+            print(f"❌ 팝업창 표시 중 오류: {e}")
+            QMessageBox.warning(self, "오류", f"팝업창을 표시할 수 없습니다: {str(e)}")
     
     def on_home_clicked(self):
         """홈 버튼 클릭 - 리소스 정리 포함"""
@@ -543,21 +665,23 @@ class BookSearchWidget(QWidget):
     def cleanup_ros_clients(self):
         """ROS2 클라이언트 안전 정리"""
         try:
-            if hasattr(self, 'search_client') and self.search_client:
+            if self.search_client:
                 if self.search_client.isRunning():
                     self.search_client.quit()
-                    self.search_client.wait(1000)
+                    self.search_client.wait(3000)  # 3초 대기
                 self.search_client.cleanup()
+                self.search_client = None
                 print("✅ search_client 정리 완료")
         except Exception as e:
             print(f"⚠️ search_client 정리 중 오류: {e}")
         
         try:
-            if hasattr(self, 'task_request_client') and self.task_request_client:
+            if self.task_request_client:
                 if self.task_request_client.isRunning():
                     self.task_request_client.quit()
-                    self.task_request_client.wait(1000)
+                    self.task_request_client.wait(3000)  # 3초 대기
                 self.task_request_client.cleanup()
+                self.task_request_client = None
                 print("✅ task_request_client 정리 완료")
         except Exception as e:
             print(f"⚠️ task_request_client 정리 중 오류: {e}")
