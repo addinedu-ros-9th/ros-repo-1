@@ -15,7 +15,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 # 메시지 및 서비스 파일 추가
 rosidl_generate_interfaces(${PROJECT_NAME}
-   "msg/BookInfo.msg"             # 도서 정보 메시지
+  "msg/BookInfo.msg"             # 도서 정보 메시지
   "msg/DetectionStatus.msg"      # 장애물감지상태
   "msg/DetectionTimer.msg"       # 감지 타이머 메시지 추가
   "msg/Expression.msg"           # 표정 메시지 추가
