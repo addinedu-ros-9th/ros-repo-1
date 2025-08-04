@@ -15,40 +15,38 @@ find_package(rosidl_default_generators REQUIRED)
 
 # 메시지 및 서비스 파일 추가
 rosidl_generate_interfaces(${PROJECT_NAME}
-  # === msg ===
-  "msg/BookInfo.msg"
-  "msg/DetectionTimer.msg"      # DetectionTimer 메시지 추가
-  "msg/GoalPose.msg"            # 이름 충돌을 피하기 위해 GoalPose.msg로 변경
-  "msg/Heartbeat.msg"
-  "msg/OverallStatus.msg"       # OverallStatus 메시지 추가
-  "msg/TaskStatus.msg"
-  "msg/TalkCommand.msg"
-  "msg/VoiceCommand.msg"        # 음성 명령 메시지
-  "msg/Waypoint.msg"            # 새로 만든 웨이포인트 메시지 추가
-  "msg/Expression.msg"          # 새로 만든 표정 메시지 추가
-  "msg/HumanInfo.msg"           # 휴먼감지용
-  "msg/DetectionStatus.msg"     # 장애물감지용
-
-  # === srv ===
-  "srv/ActivateDetector.srv"
-  "srv/ActivateQRScanner.srv"   # QR 스캐너 활성화 서비스
-  "srv/ActivateTalker.srv"
-  "srv/ActivateTracker.srv"
-  "srv/AddGoalLocation.srv"    # 목표 위치 추가 서비스
-  "srv/BookSearch.srv"
-  "srv/CancelNavigation.srv"    # 네비게이션 취소 서비스
-  "srv/DeactivateDetector.srv"
-  "srv/DeactivateQRScanner.srv" # QR 스캐너 비활성화 서비스
-  "srv/DeactivateTalker.srv"
-  "srv/DeactivateTracker.srv"   # Tracker 비활성화 서비스
-  "srv/EscortRequest.srv"
-  "srv/EndTask.srv"
-  "srv/Navigate.srv"
-  "srv/NavigationResult.srv"    # 네비게이션 결과 서비스
-  "srv/KioskQRCheck.srv"        # 키오스크 QR 체크 서비스
-  "srv/RobotQRCheck.srv"
-  "srv/SetGoal.srv"
-  "srv/TaskRequest.srv"
+   "msg/BookInfo.msg"             # 도서 정보 메시지
+  "msg/DetectionStatus.msg"      # 장애물감지상태
+  "msg/DetectionTimer.msg"       # 감지 타이머 메시지 추가
+  "msg/Expression.msg"           # 표정 메시지 추가
+  "msg/GoalPose.msg"             # 이름 중복을 피하기 위해 GoalPose.msg로 변경
+  "msg/Heartbeat.msg"            # 하트비트 메시지
+  "msg/HumanInfo.msg"            # 휴먼타입지정
+  "msg/OverallStatus.msg"        # OverallStatus 메시지 추가
+  "msg/TalkCommand.msg"          # 음성 명령 메시지
+  "msg/TaskStatus.msg"           # 작업 상태 메시지
+  "msg/VoiceCommand.msg"         # 음성 인식 결과 메시지
+  "msg/Waypoint.msg"             # 지도 만든 위치들이 포함된 메시지 추가
+  # === 서비스 파일 ===
+  "srv/ActivateDetector.srv"     # OR 스캐너 활성화 서비스
+  "srv/ActivateQRScanner.srv"    # QR 스캐너 활성화 서비스
+  "srv/ActivateTalker.srv"       # 토커 활성화 서비스
+  "srv/ActivateTracker.srv"      # Tracker 활성화 서비스
+  "srv/AddGoalLocation.srv"      # 목표 위치 추가 서비스
+  "srv/BookSearch.srv"           # 도서 검색 서비스
+  "srv/CancelNavigation.srv"     # 네비게이션 취소 서비스
+  "srv/DeactivateDetector.srv"   # OR 스캐너 비활성화 서비스
+  "srv/DeactivateQRScanner.srv"  # QR 스캐너 비활성화 서비스
+  "srv/DeactivateTalker.srv"     # 토커 비활성화 서비스
+  "srv/DeactivateTracker.srv"    # Tracker 비활성화 서비스
+  "srv/EndTask.srv"              # 작업 종료 서비스
+  "srv/EscortRequest.srv"        # 에스코트 요청 서비스
+  "srv/KioskQRCheck.srv"         # 키오스크 QR 코드 확인 서비스
+  "srv/Navigate.srv"             # 네비게이션 서비스
+  "srv/NavigationResult.srv"     # 네비게이션 결과 반환서비스
+  "srv/RobotQRCheck.srv"         # 로봇 QR 코드 확인 서비스
+  "srv/SetGoal.srv"              # 목표 좌표 설정 서비스
+  "srv/TaskRequest.srv"          # 네비게이션 요청 서비스
 
   DEPENDENCIES builtin_interfaces
 )
