@@ -342,6 +342,122 @@ class MainWindow(QMainWindow):
         
         event.accept()
 
+
+
+    # MainWindow 클래스에 추가할 리프레시 함수들
+
+    def refresh_main_window(self):
+        """메인 윈도우 전체 리프레시"""
+        try:
+            print("🔄 메인 윈도우 리프레시 시작...")
+            
+            # 1. UI 상태 초기화
+            self.reset_ui_state()
+            
+            # 2. 관리자 인증 상태 초기화
+            self.admin_authenticated = False
+            
+            # 3. Call Robot 버튼 숨기기
+            self.hide_call_robot_button()
+            
+            # 4. 기존 위젯들 정리
+            self.cleanup_child_widgets()
+            
+            # 5. 윈도우 중앙 정렬
+            self.force_center_window()
+            
+            print("✅ 메인 윈도우 리프레시 완료")
+            
+        except Exception as e:
+            print(f"❌ 메인 윈도우 리프레시 중 오류: {e}")
+
+    def reset_ui_state(self):
+        """UI 상태 초기화"""
+        try:
+            # 버튼 활성화 상태 복원
+            self.book_search.setEnabled(True)
+            self.book_corner.setEnabled(True)
+            self.payment.setEnabled(True)
+            self.qr_scan_button.setEnabled(True)
+            
+            # 스타일 복원 (필요시)
+            self.book_search.setStyleSheet(self.book_search.styleSheet())
+            self.book_corner.setStyleSheet(self.book_corner.styleSheet())
+            self.payment.setStyleSheet(self.payment.styleSheet())
+            
+            print("✅ UI 상태 초기화 완료")
+            
+        except Exception as e:
+            print(f"❌ UI 상태 초기화 중 오류: {e}")
+
+    def cleanup_child_widgets(self):
+        """자식 위젯들 정리"""
+        try:
+            # Book Search Widget 정리
+            if hasattr(self, 'book_search_widget') and self.book_search_widget:
+                if self.book_search_widget.isVisible():
+                    self.book_search_widget.hide()
+                # 위젯 리셋 (재사용을 위해 삭제하지 않음)
+                if hasattr(self.book_search_widget, 'reset_widget'):
+                    self.book_search_widget.reset_widget()
+            
+            # Book Corner Widget 정리
+            if hasattr(self, 'book_corner_widget') and self.book_corner_widget:
+                if self.book_corner_widget.isVisible():
+                    self.book_corner_widget.hide()
+                # 위젯 리셋
+                if hasattr(self.book_corner_widget, 'reset_widget'):
+                    self.book_corner_widget.reset_widget()
+            
+            # Payment Widget 정리 (있다면)
+            if hasattr(self, 'payment_widget') and self.payment_widget:
+                if self.payment_widget.isVisible():
+                    self.payment_widget.hide()
+            
+            print("✅ 자식 위젯들 정리 완료")
+            
+        except Exception as e:
+            print(f"❌ 자식 위젯 정리 중 오류: {e}")
+
+    def hide_call_robot_button(self):
+        """Call Robot 버튼 숨기기"""
+        try:
+            if hasattr(self, 'call_manager'):
+                self.call_manager.setVisible(False)
+                print("✅ Call Robot 버튼 숨김 처리 완료")
+        except Exception as e:
+            print(f"❌ Call Robot 버튼 숨김 처리 중 오류: {e}")
+
+    # MainWindow의 on_payment_clicked 함수 수정
+    def on_payment_clicked(self):
+        """Payment 버튼 클릭"""
+        print("💳 결제 화면으로 전환")
+        
+        try:
+            # 현재 메인 윈도우 숨기기
+            self.hide()
+            
+            # Payment GUI 실행 (별도 프로세스로)
+            import subprocess
+            import sys
+            
+            # payment_gui.py 파일 경로 (kiosk 패키지 내)
+            payment_script = os.path.join(os.path.dirname(__file__), 'payment_gui.py')
+            
+            if os.path.exists(payment_script):
+                # Python 스크립트로 실행
+                subprocess.Popen([sys.executable, payment_script])
+                print("✅ Payment GUI 실행됨")
+            else:
+                print(f"❌ Payment 스크립트를 찾을 수 없습니다: {payment_script}")
+                QMessageBox.critical(self, "오류", "결제 시스템을 찾을 수 없습니다.")
+                self.show()  # 메인 윈도우 다시 표시
+            
+        except Exception as e:
+            print(f"❌ Payment 화면 전환 중 오류: {e}")
+            QMessageBox.critical(self, "오류", f"결제 화면을 열 수 없습니다.\n{str(e)}")
+            self.show()  # 메인 윈도우 다시 표시
+
 def main(args=None):
     app = QApplication(sys.argv)
     
