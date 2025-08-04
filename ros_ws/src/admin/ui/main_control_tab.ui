@@ -399,7 +399,7 @@ QTextEdit {
               </size>
              </property>
              <property name="text">
-              <string>⏹️ CANCELED</string>
+              <string>🚫 Cancel Nav</string>
              </property>
              <property name="styleSheet">
               <string>background-color: #f39c12; color: white; border: none; padding: 5px 10px; border-radius: 3px; font-weight: bold; font-size: 10px;</string>
@@ -422,29 +422,33 @@ QTextEdit {
           </widget>
          </item>
          <item>
-          <widget class="QLabel" name="cancel_navigation_label">
-           <property name="enabled">
-            <bool>true</bool>
-           </property>
-           <property name="minimumSize">
-            <size>
-             <width>0</width>
-             <height>40</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>16777215</width>
-             <height>20</height>
-            </size>
-           </property>
-           <property name="styleSheet">
-            <string>font-size: 10px; font-weight: bold; color: #e74c3c; margin: 1px;</string>
-           </property>
-           <property name="text">
-            <string>⏹️ Cancel Navigation Log</string>
-           </property>
-          </widget>
+          <layout class="QHBoxLayout" name="cancel_navigation_layout">
+           <item>
+            <widget class="QLabel" name="cancel_navigation_label">
+             <property name="enabled">
+              <bool>true</bool>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>40</height>
+              </size>
+             </property>
+             <property name="maximumSize">
+              <size>
+               <width>16777215</width>
+               <height>20</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string>font-size: 10px; font-weight: bold; color: #e74c3c; margin: 1px;</string>
+             </property>
+             <property name="text">
+              <string>⏹️ Cancel Navigation Log</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
          </item>
          <item>
           <widget class="QTextEdit" name="cancel_navigation_log_text">

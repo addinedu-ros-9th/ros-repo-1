@@ -1144,13 +1144,13 @@ class TaskManager(Node):
             return False
         
         # CancelNavigation 요청 생성 (요청은 비어있음)
-        request = CancelNavigation.Request()
+        request = CancelNavigation.Request()  # CancelNavigation.srv 요청
         
         self.get_logger().info(f'⏹️ 네비게이션 취소 요청 전송...')
         
         try:
             # 비동기 서비스 호출 (응답을 콜백으로 처리)
-            future = self.cancel_navigation_client.call_async(request)
+            future = self.cancel_navigation_client.call_async(request)  # cancel_navigation 서비스로 전송
             future.add_done_callback(self.cancel_navigation_response_callback)
             self.get_logger().info(f'📤 네비게이션 취소 요청 전송 완료 - 응답 대기 중...')
             return True
