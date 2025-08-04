@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+#해당코드 헤딩각 자동변환 사라짐
+#!/usr/bin/env python3 
 import rclpy
 import yaml
 import math
@@ -38,15 +39,6 @@ class LiboNavigator(Node):
         # BasicNavigator 초기화 (중요!)
         self.navigator = BasicNavigator()
 
-        # Nav2 충돌 방지를 위한 네임스페이스 확인
-        self.declare_parameter('use_namespace', False)
-        self.namespace_mode = self.get_parameter('use_namespace').value
-        
-        if self.namespace_mode:
-            self.get_logger().info('네임스페이스 모드로 실행 - 기존 Nav2와 독립 동작')
-        else:
-            self.get_logger().info('기본 모드로 실행 - 기존 Nav2 스택 활용')
-
         # 여러 콜백(서비스, 구독)이 동시에 처리될 수 있도록 ReentrantCallbackGroup을 사용합니다.
         self.callback_group = ReentrantCallbackGroup()
         
@@ -80,10 +72,6 @@ class LiboNavigator(Node):
         self.current_waypoint_poses = []
         self.current_waypoint_index = 0
         
-        # 취소 후 새 목표 처리를 위한 큐 시스템
-        self.pending_goal = None
-        self.is_canceling = False
-        
         # --- 외부와 통신하기 위한 서비스 서버들을 생성합니다 ---
         self.create_service(
             SetGoal, 'set_navigation_goal', self.set_goal_callback, callback_group=self.callback_group
@@ -106,46 +94,24 @@ class LiboNavigator(Node):
 
     def costmap_callback(self, msg):
         """Costmap 정보를 저장하고 장애물을 감지합니다."""
+        # costmap 데이터를 클래스 변수에 저장
         self.current_costmap = msg
 
-        # 디버그: costmap 수신 확인
-        self.get_logger().debug(f'Costmap 수신 - 크기: {msg.metadata.size_x}x{msg.metadata.size_y}, 해상도: {msg.metadata.resolution}')
-
+        # 기본 조건 체크 - 주행 중이 아니면 무시
         if self.current_state != NavigatorState.NAVIGATING:
-            self.get_logger().debug(f'현재 상태: {self.current_state.value} - 장애물 감지 건너뜀')
             return
 
+        # 현재 목표 웨이포인트의 장애물 검사
         if hasattr(self, 'current_waypoint_index') and hasattr(self, 'current_waypoint_poses'):
             if self.current_waypoint_index < len(self.current_waypoint_poses):
                 current_target = self.current_waypoint_poses[self.current_waypoint_index]
                 
-                # 디버그: 현재 목표 웨이포인트 정보
-                self.get_logger().debug(f'현재 목표 웨이포인트 {self.current_waypoint_index}: ({current_target.pose.position.x:.2f}, {current_target.pose.position.y:.2f})')
-                
-                is_blocked = self.is_waypoint_blocked(current_target, msg)
-                self.get_logger().debug(f'웨이포인트 {self.current_waypoint_index} 차단 여부: {is_blocked}')
-                
-                if is_blocked:
-                    # 중요: 콜백에서 바로 처리하지 말고 타이머로 지연 처리
-                    if not self._replanning:
-                        self._replanning = True
-                        self.get_logger().warn(f'🚨 웨이포인트 {self.current_waypoint_index}에서 장애물 감지! 재계획 시작!')
-                        # 0.1초 후에 처리하도록 타이머 설정
-                        self.create_timer(0.1, self.handle_dynamic_obstacle_delayed)
-                    else:
-                        self.get_logger().debug('이미 재계획 중이므로 추가 감지 무시')
-            else:
-                self.get_logger().debug(f'웨이포인트 인덱스 범위 초과: {self.current_waypoint_index} >= {len(self.current_waypoint_poses)}')
-        else:
-            self.get_logger().debug('웨이포인트 정보 없음 - 장애물 감지 건너뜀')
+                if self.is_waypoint_blocked(current_target, msg):
+                    self.get_logger().warn(f'웨이포인트 {self.current_waypoint_index}에서 장애물 감지! 재계획을 시작합니다.')
+                    self.handle_dynamic_obstacle()
 
     def is_waypoint_blocked(self, waypoint_pose, costmap_msg):
-        """특정 웨이포인트가 장애물로 막혔는지 확인합니다.
-        
-        판단 기준:
-        1. 일시적 장애물 (50-80): 회피 가능 - 재계획 안함
-        2. 심각한 장애물 (80+): 웨이포인트 완전 차단 - 재계획 필요
-        """
+        """특정 웨이포인트가 장애물로 막혔는지 확인합니다."""
         try:
             width = costmap_msg.metadata.size_x
             height = costmap_msg.metadata.size_y
@@ -157,67 +123,24 @@ class LiboNavigator(Node):
             wx = int((waypoint_pose.pose.position.x - origin_x) / resolution)
             wy = int((waypoint_pose.pose.position.y - origin_y) / resolution)
 
-            # 디버그: 좌표 변환 정보
-            self.get_logger().debug(f'웨이포인트 좌표: ({waypoint_pose.pose.position.x:.2f}, {waypoint_pose.pose.position.y:.2f})')
-            self.get_logger().debug(f'Costmap 원점: ({origin_x:.2f}, {origin_y:.2f}), 해상도: {resolution:.3f}')
-            self.get_logger().debug(f'Grid 좌표: ({wx}, {wy})')
-
-            # 경계 확인
-            if wx < 0 or wx >= width or wy < 0 or wy >= height:
-                self.get_logger().debug(f'웨이포인트가 costmap 범위를 벗어남: ({wx}, {wy}) vs ({width}, {height})')
-                return False
-
-            # 웨이포인트 중심에서 로봇 크기만큼 검사 (더 정교한 검사)
-            robot_radius_cells = max(3, int(0.35 / resolution))  # 로봇 반지름 35cm
-            
-            # 세 가지 레벨로 장애물 분류
-            critical_blocked_cells = 0  # 99: 확실한 장애물
-            serious_blocked_cells = 0   # 80-98: 심각한 장애물  
-            moderate_blocked_cells = 0  # 50-79: 회피 가능한 장애물
+            # 웨이포인트 주변의 일정 반경 검사
+            check_radius = 3
+            blocked_cells = 0
             total_cells = 0
 
-            for dx in range(-robot_radius_cells, robot_radius_cells + 1):
-                for dy in range(-robot_radius_cells, robot_radius_cells + 1):
-                    # 원형 영역만 검사 (로봇 모양 고려)
-                    if dx*dx + dy*dy > robot_radius_cells*robot_radius_cells:
-                        continue
-                        
+            for dx in range(-check_radius, check_radius + 1):
+                for dy in range(-check_radius, check_radius + 1):
                     x = wx + dx
                     y = wy + dy
                     if 0 <= x < width and 0 <= y < height:
                         index = y * width + x
                         total_cells += 1
-                        if index < len(costmap_msg.data):
-                            cost_value = costmap_msg.data[index]
-                            if cost_value >= 99:
-                                critical_blocked_cells += 1
-                            elif cost_value >= 80:
-                                serious_blocked_cells += 1
-                            elif cost_value >= 50:
-                                moderate_blocked_cells += 1
+                        if index < len(costmap_msg.data) and costmap_msg.data[index] >= 80:  # 장애물 임계값
+                            blocked_cells += 1
 
-            # 비율 계산
-            critical_ratio = critical_blocked_cells / total_cells if total_cells > 0 else 0
-            serious_ratio = serious_blocked_cells / total_cells if total_cells > 0 else 0
-            moderate_ratio = moderate_blocked_cells / total_cells if total_cells > 0 else 0
-            
-            # 디버그: 상세 정보
-            self.get_logger().debug(f'장애물 분석 - 총 셀: {total_cells}')
-            self.get_logger().debug(f'확실한 장애물: {critical_blocked_cells} ({critical_ratio:.2%})')
-            self.get_logger().debug(f'심각한 장애물: {serious_blocked_cells} ({serious_ratio:.2%})')
-            self.get_logger().debug(f'회피 가능: {moderate_blocked_cells} ({moderate_ratio:.2%})')
-            
-            # 웨이포인트 완전 차단 판정 기준 (더 엄격하게)
-            # 1. 확실한 장애물이 30% 이상 OR
-            # 2. 심각한 장애물이 50% 이상
-            is_completely_blocked = (critical_ratio >= 0.3) or (serious_ratio >= 0.5)
-            
-            if is_completely_blocked:
-                self.get_logger().warn(f'웨이포인트 완전 차단! critical: {critical_ratio:.2%}, serious: {serious_ratio:.2%}')
-            elif (moderate_ratio + serious_ratio + critical_ratio) >= 0.3:
-                self.get_logger().info(f'일시적 장애물 감지, Nav2가 회피 처리 예상')
-                
-            return is_completely_blocked
+            # 30% 이상이 막혔으면 장애물로 판단
+            blocked_ratio = blocked_cells / total_cells if total_cells > 0 else 0
+            return blocked_ratio > 0.3
             
         except Exception as e:
             self.get_logger().warn(f'장애물 검사 중 오류: {e}')
@@ -279,8 +202,16 @@ class LiboNavigator(Node):
             self.get_logger().info(f"재계산된 경로: {path_wp_names}")
             self.get_logger().info(f"제외된 웨이포인트: {list(self.blocked_waypoints)}")
             
-            # 헤딩이 계산된 새로운 웨이포인트 리스트 생성
-            waypoint_poses = self.create_waypoint_poses_with_heading(path_wp_names)
+            # 새로운 웨이포인트 리스트 생성
+            waypoint_poses = []
+            for name in path_wp_names:
+                pose = PoseStamped()
+                pose.header.frame_id = 'map'
+                pose.header.stamp = self.get_clock().now().to_msg()
+                pose.pose.position.x = self.waypoints[name]['position']['x']
+                pose.pose.position.y = self.waypoints[name]['position']['y']
+                pose.pose.orientation.w = 1.0
+                waypoint_poses.append(pose)
             
             # 새로운 주행 시작
             self.current_waypoint_names = path_wp_names
@@ -343,14 +274,6 @@ class LiboNavigator(Node):
     # --- 서비스 콜백 함수들 (우리 노드의 새로운 '메인 진입점') ---
     def set_goal_callback(self, request, response):
         """[API] 외부로부터 목표 지점 요청을 받으면 이 함수가 실행됩니다."""
-        # 취소 중인 경우 목표를 대기열에 저장
-        if self.is_canceling:
-            self.get_logger().info(f"취소 진행 중 - 새 목표를 대기열에 저장: ({request.x:.2f}, {request.y:.2f})")
-            self.pending_goal = request
-            response.success = True
-            response.message = "취소 완료 후 처리 예정"
-            return response
-            
         if self.current_state == NavigatorState.NAVIGATING:
             self.get_logger().error("이미 다른 주행 임무가 진행 중입니다. 새 목표를 거부합니다.")
             response.success = False
@@ -363,10 +286,6 @@ class LiboNavigator(Node):
             response.message = "로봇 위치 미파악"
             return response
 
-        return self._process_goal_request(request, response)
-    
-    def _process_goal_request(self, request, response):
-        """목표 요청을 실제로 처리하는 내부 함수"""
         # 요청받은 x, y 좌표로 목표 Pose 생성
         goal_pose = Pose()
         goal_pose.position.x = request.x
@@ -390,9 +309,6 @@ class LiboNavigator(Node):
 
         self.get_logger().warn("외부 요청에 의해 현재 주행을 취소합니다...")
         
-        # 취소 진행 상태로 설정
-        self.is_canceling = True
-        
         # 타이머가 존재하면 먼저 정리
         if hasattr(self, 'status_check_timer') and self.status_check_timer is not None:
             self.destroy_timer(self.status_check_timer)
@@ -407,34 +323,9 @@ class LiboNavigator(Node):
         # 취소 시 막힌 웨이포인트 목록도 초기화
         self.blocked_waypoints.clear()
         
-        # 0.5초 후 취소 완료 처리 (Nav2 취소 처리 시간 확보)
-        self.create_timer(0.5, self.complete_cancellation, once=True)
-        
         response.success = True
         response.message = "주행 취소 요청을 보냈습니다."
         return response
-
-    def complete_cancellation(self):
-        """취소 완료 후 대기 중인 목표가 있으면 처리"""
-        self.is_canceling = False
-        self.get_logger().info("주행 취소 완료!")
-        
-        # 대기 중인 목표가 있으면 처리
-        if self.pending_goal is not None:
-            self.get_logger().info("대기 중인 목표를 처리합니다...")
-            
-            # 더미 response 객체 생성 (실제로는 사용되지 않음)
-            from libo_interfaces.srv import SetGoal
-            response = SetGoal.Response()
-            
-            result = self._process_goal_request(self.pending_goal, response)
-            
-            if result.success:
-                self.get_logger().info("대기 중인 목표 처리 완료!")
-            else:
-                self.get_logger().error(f"대기 중인 목표 처리 실패: {result.message}")
-            
-            self.pending_goal = None
 
     # --- 경로 계획 및 주행 로직 ---
     def plan_and_navigate(self):
@@ -454,8 +345,15 @@ class LiboNavigator(Node):
             
         self.get_logger().info(f"계산된 최적 경로: {path_wp_names}")
         
-        # 헤딩이 계산된 웨이포인트 리스트 생성
-        waypoint_poses = self.create_waypoint_poses_with_heading(path_wp_names)
+        waypoint_poses = []
+        for name in path_wp_names:
+            pose = PoseStamped()
+            pose.header.frame_id = 'map'
+            pose.header.stamp = self.get_clock().now().to_msg()
+            pose.pose.position.x = self.waypoints[name]['position']['x']
+            pose.pose.position.y = self.waypoints[name]['position']['y']
+            pose.pose.orientation.w = 1.0
+            waypoint_poses.append(pose)
         
         # 웨이포인트 이름 저장 (재계획에 필요)
         self.current_waypoint_names = path_wp_names
@@ -503,11 +401,8 @@ class LiboNavigator(Node):
         elif result == TaskResult.CANCELED:
             self.get_logger().info('주행이 외부 요청에 의해 취소되었습니다.')
             self.current_state = NavigatorState.IDLE
-            
-            # 외부 취소가 아닌 Nav2 내부 취소인 경우에만 알림
-            if not self.is_canceling:
-                # 리보서비스에 취소 알림
-                self.notify_navigation_done("CANCELED")
+            # 리보서비스에 취소 알림
+            self.notify_navigation_done("CANCELED")
         else: # FAILED
             self.get_logger().error(f'주행 실패! 최종 상태: {result}')
             self.current_state = NavigatorState.ERROR
@@ -595,69 +490,6 @@ class LiboNavigator(Node):
         qw = math.cos(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
         return [qx, qy, qz, qw]
 
-    def calculate_heading_to_next_waypoint(self, current_wp_name, next_wp_name):
-        """현재 웨이포인트에서 다음 웨이포인트로의 헤딩을 계산합니다."""
-        if not current_wp_name or not next_wp_name:
-            return [0, 0, 0, 1]  # 기본 방향 (0라디안)
-        
-        try:
-            current_pos = self.waypoints[current_wp_name]['position']
-            next_pos = self.waypoints[next_wp_name]['position']
-            
-            # 다음 웨이포인트로의 방향 계산
-            dx = next_pos['x'] - current_pos['x']
-            dy = next_pos['y'] - current_pos['y']
-            
-            # atan2로 헤딩 각도 계산 (라디안)
-            yaw = math.atan2(dy, dx)
-            
-            # 쿼터니언으로 변환
-            qx, qy, qz, qw = self.euler_to_quaternion(0, 0, yaw)
-            
-            self.get_logger().debug(f'헤딩 계산: {current_wp_name} -> {next_wp_name}, yaw: {yaw:.3f}rad ({math.degrees(yaw):.1f}도)')
-            
-            return [qx, qy, qz, qw]
-            
-        except Exception as e:
-            self.get_logger().warn(f'헤딩 계산 중 오류: {e}')
-            return [0, 0, 0, 1]
-
-    def create_waypoint_poses_with_heading(self, path_wp_names):
-        """웨이포인트 경로에서 각 지점의 헤딩을 계산하여 PoseStamped 리스트를 생성합니다."""
-        waypoint_poses = []
-        
-        for i, name in enumerate(path_wp_names):
-            pose = PoseStamped()
-            pose.header.frame_id = 'map'
-            pose.header.stamp = self.get_clock().now().to_msg()
-            pose.pose.position.x = self.waypoints[name]['position']['x']
-            pose.pose.position.y = self.waypoints[name]['position']['y']
-            pose.pose.position.z = 0.0
-            
-            # 헤딩 계산
-            if i < len(path_wp_names) - 1:
-                # 다음 웨이포인트가 있으면 그 방향으로 헤딩 설정
-                next_name = path_wp_names[i + 1]
-                qx, qy, qz, qw = self.calculate_heading_to_next_waypoint(name, next_name)
-            else:
-                # 마지막 웨이포인트는 이전 헤딩 유지 또는 기본값
-                if i > 0:
-                    prev_name = path_wp_names[i - 1]
-                    qx, qy, qz, qw = self.calculate_heading_to_next_waypoint(prev_name, name)
-                else:
-                    qx, qy, qz, qw = [0, 0, 0, 1]  # 기본 방향
-            
-            pose.pose.orientation.x = qx
-            pose.pose.orientation.y = qy
-            pose.pose.orientation.z = qz
-            pose.pose.orientation.w = qw
-            
-            waypoint_poses.append(pose)
-            
-            self.get_logger().debug(f'웨이포인트 {i}: {name} -> 헤딩: ({qx:.3f}, {qy:.3f}, {qz:.3f}, {qw:.3f})')
-        
-        return waypoint_poses
-
     # --- load_waypoints, get_closest_waypoint, find_path_astar 함수는 이전과 동일 ---
     def load_waypoints(self):
         try:
@@ -703,7 +535,6 @@ class LiboNavigator(Node):
             
             current_pos = self.waypoints[current_name]['position']
             for neighbor_name in self.waypoints[current_name].get('neighbors', []):
-                
                 neighbor_pos = self.waypoints[neighbor_name]['position']
                 
                 # Costmap 위험도를 반영한 비용 계산
@@ -721,77 +552,6 @@ class LiboNavigator(Node):
                     if neighbor_name not in [i[1] for i in open_set]:
                         heapq.heappush(open_set, (f_score[neighbor_name], neighbor_name))
         return None
-
-    def handle_dynamic_obstacle_delayed(self):
-        """콜백 블로킹을 피하기 위한 지연된 장애물 처리"""
-        try:
-            self.get_logger().info('동적 장애물로 인한 재계획을 시작합니다...')
-            
-            # 1. 현재 네비게이션 취소
-            self.navigator.cancelTask()
-            
-            # 2. 타이머 정리
-            if self.status_check_timer is not None:
-                self.destroy_timer(self.status_check_timer)
-                self.status_check_timer = None
-            
-            # 3. 상태를 즉시 변경하여 추가 감지 방지
-            self.current_state = NavigatorState.IDLE
-            
-            # 4. 막힌 웨이포인트 기록
-            if hasattr(self, 'current_waypoint_names') and hasattr(self, 'current_waypoint_index'):
-                if self.current_waypoint_index < len(self.current_waypoint_names):
-                    blocked_wp = self.current_waypoint_names[self.current_waypoint_index]
-                    self.blocked_waypoints.add(blocked_wp)
-                    self.get_logger().warn(f'웨이포인트 {blocked_wp}를 막힌 지점으로 등록했습니다.')
-            
-            # 5. 잠시 대기 후 재계획 (Nav2 내부 정리 시간 확보)
-            self.create_timer(1.0, self.execute_replan)
-            
-        except Exception as e:
-            self.get_logger().error(f'동적 장애물 처리 중 오류: {e}')
-            self.current_state = NavigatorState.ERROR
-            self._replanning = False
-
-    def execute_replan(self):
-        """실제 재계획 실행"""
-        try:
-            # 현재 위치에서 목표까지 새로운 경로 계산
-            start_wp = self.get_closest_waypoint(self.robot_current_pose)
-            goal_wp = self.get_closest_waypoint(self.current_goal_pose)
-            
-            if not start_wp or not goal_wp:
-                self.get_logger().error("재계획을 위한 웨이포인트를 찾을 수 없습니다.")
-                self.current_state = NavigatorState.ERROR
-                self._replanning = False
-                return
-            
-            # 막힌 웨이포인트를 제외한 A* 경로 계산
-            path_wp_names = self.find_path_astar_with_blocked(start_wp, goal_wp)
-            
-            if not path_wp_names:
-                self.get_logger().error("막힌 웨이포인트를 제외한 경로를 찾을 수 없습니다!")
-                self.current_state = NavigatorState.ERROR
-                self._replanning = False
-                return
-            
-            self.get_logger().info(f"재계산된 경로: {path_wp_names}")
-            
-            # 헤딩이 계산된 새로운 웨이포인트 리스트 생성
-            waypoint_poses = self.create_waypoint_poses_with_heading(path_wp_names)
-            
-            # 새로운 주행 시작
-            self.current_waypoint_names = path_wp_names
-            self.current_waypoint_poses = waypoint_poses
-            self.current_waypoint_index = 0
-            self.start_navigation(waypoint_poses)
-            
-            self._replanning = False
-            
-        except Exception as e:
-            self.get_logger().error(f'재계획 실행 중 오류: {e}')
-            self.current_state = NavigatorState.ERROR
-            self._replanning = False
 
 def main(args=None):
     rclpy.init(args=args)
