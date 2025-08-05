@@ -22,7 +22,7 @@ from google.cloud import texttospeech
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.service import Service
-from libo_interfaces.msg import VoiceCommand, TalkCommand
+from libo_interfaces.msg import VoiceCommand, TalkCommand, FaceExpression
 from libo_interfaces.srv import EndTask, ActivateTalker, DeactivateTalker
 
 
@@ -179,6 +179,7 @@ class CommunicationManager:
         self.current_robot_id = "unknown"  # 현재 활성화/비활성화 요청한 로봇 ID
         self.last_status_report_time = 0  # 마지막 상태 출력 시간
         self.last_status = False  # 마지막 상태 기록
+        self.talker_node = None  # TalkerNode 참조 (나중에 설정됨)
         print(f"[{get_kr_time()}][CONFIG] 토커매니저 기본 상태: 비활성화됨 (웨이크워드 감지 불가능)")
 
     def start_udp_receiver(self):
@@ -356,6 +357,11 @@ class CommunicationManager:
             if not os.path.exists(file_path):
                 print(f"[{get_kr_time()}][ERROR] MP3 파일을 찾을 수 없습니다: {file_path}")
                 return False
+            
+            # 로봇이 말하기 시작할 때 얼굴 표정을 'speaking'으로 변경
+            if self.talker_node:
+                robot_id = self.current_robot_id if self.current_robot_id != "unknown" else "libo_a"
+                self.talker_node.publish_face_expression(robot_id, "speaking")
                 
             print(f"[{get_kr_time()}][MP3] 파일 로드 중: {file_name}")
             
@@ -409,6 +415,12 @@ class CommunicationManager:
         """텍스트를 TTS로 변환하여 TCP로 전송"""
         try:
             print(f"[{get_kr_time()}][TTS] 음성 응답 생성 중: {text}")
+            
+            # 로봇이 말하기 시작할 때 얼굴 표정을 'speaking'으로 변경
+            if self.talker_node:
+                robot_id = self.current_robot_id if self.current_robot_id != "unknown" else "libo_a"
+                self.talker_node.publish_face_expression(robot_id, "speaking")
+                
             synthesis_input = texttospeech.SynthesisInput(text=text)
             
             voice = texttospeech.VoiceSelectionParams(
@@ -525,6 +537,13 @@ class TalkerNode(Node):
         self.talk_cmd_pub = self.create_publisher(
             TalkCommand,
             '/talk_command',
+            10
+        )
+        
+        # FaceExpression 토픽 발행자
+        self.face_expr_pub = self.create_publisher(
+            FaceExpression,
+            '/face_expression',
             10
         )
         
@@ -687,6 +706,22 @@ class TalkerNode(Node):
             self.get_logger().info(f"음성 명령 '{category}.{action}' 성공적으로 실행됨")
         else:
             self.get_logger().warning(f"음성 명령 '{category}.{action}' 실행 실패")
+    
+    def publish_face_expression(self, robot_id, expression_type):
+        """
+        얼굴 표정 메시지 발행
+        
+        Args:
+            robot_id (str): 로봇 ID (예: "libo_a")
+            expression_type (str): 표정 타입 ("normal", "listening", "speaking" 등)
+        """
+        msg = FaceExpression()
+        msg.robot_id = robot_id
+        msg.expression_type = expression_type
+        
+        self.get_logger().info(f"FaceExpression 발행: robot_id={robot_id}, expression_type={expression_type}")
+        print(f"[{get_kr_time()}][FACE] 😀 얼굴 표정 변경: {robot_id} → {expression_type}")
+        self.face_expr_pub.publish(msg)
 
 
 def init_tcp_server():
@@ -723,6 +758,9 @@ def main(args=None):
     # ========== 2. ROS2 노드 생성 (VoiceCommand 메시지 구독용) ==========
     print(f"[{get_kr_time()}][INIT] ROS2 노드 생성 중...")
     talker_node = TalkerNode(comm_manager)
+    
+    # CommunicationManager에 TalkerNode 참조 설정
+    comm_manager.talker_node = talker_node
     
     # ROS2 노드와 웨이크워드 감지를 병렬로 실행하기 위한 스레드 생성
     def ros_spin_thread():
@@ -790,11 +828,15 @@ def main(args=None):
                     keyword_index = porcupine.process(pcm_resampled)
                     # 웨이크워드가 감지된 경우
                     if keyword_index >= 0:
+                        robot_id = "libo_a"  # 기본 로봇 ID
                         print(f"\n[{get_kr_time()}][WAKE] 🟢 Wakeword('리보야') 감지됨!")
                         
                         # 웨이크워드 감지 시 'stop' 명령 바로 발행
-                        print(f"[{get_kr_time()}][COMMAND] TalkCommand 발행: robot_id=libo_a, action=stop")
-                        talker_node.publish_talk_command("libo_a", "stop")
+                        print(f"[{get_kr_time()}][COMMAND] TalkCommand 발행: robot_id={robot_id}, action=stop")
+                        talker_node.publish_talk_command(robot_id, "stop")
+                        
+                        # 웨이크워드 감지 시 얼굴 표정을 'speaking'으로 변경
+                        talker_node.publish_face_expression(robot_id, "speaking")
                         
                         # 웨이크워드 감지 시 응답 출력
                         print(f"[{get_kr_time()}][TTS] 웨이크워드 확인 응답 생성 중...")
@@ -884,6 +926,11 @@ def main(args=None):
                         
                         # [2] 실제 음성 수집 시작 (침묵 감지 기능 추가)
                         print(f"[{get_kr_time()}][RECORD] 음성 수집 시작... (최대 15초, 침묵 감지시 자동 종료)")
+                        
+                        # 사용자의 말을 듣기 시작할 때 얼굴 표정을 'listening'으로 변경
+                        robot_id = "libo_a"  # 기본 로봇 ID
+                        talker_node.publish_face_expression(robot_id, "listening")
+                        
                         collected = b''
                         start = time.time()
                         MAX_RECORD_TIME = 15.0  # 최대 15초
@@ -1056,6 +1103,11 @@ def main(args=None):
                     
                     # [2] 실제 음성 수집 시작 (침묵 감지 기능 추가)
                     print(f"[{get_kr_time()}][RECORD] 음성 수집 시작... (최대 15초, 침묵 감지시 자동 종료)")
+                    
+                    # 사용자의 말을 듣기 시작할 때 얼굴 표정을 'listening'으로 변경
+                    robot_id = "libo_a"  # 기본 로봇 ID
+                    talker_node.publish_face_expression(robot_id, "listening")
+                    
                     collected = b''
                     start = time.time()
                     MAX_RECORD_TIME = 15.0  # 최대 15초
