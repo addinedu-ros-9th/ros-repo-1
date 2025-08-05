@@ -23,7 +23,7 @@ from libo_interfaces.msg import OverallStatus  # OverallStatus 메시지 추가
 from libo_interfaces.msg import TaskStatus  # TaskStatus 메시지 추가
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
 from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
-from libo_interfaces.msg import Expression  # Expression 메시지 추가
+from libo_interfaces.msg import FaceExpression  # FaceExpression 메시지 추가 (Expression에서 변경)
 from std_msgs.msg import Float32  # 무게 데이터 메시지 추가
 from std_msgs.msg import String  # LED 제어용 메시지
 import time  # 시간 관련 기능
@@ -301,7 +301,7 @@ class TaskManager(Node):
         self.led_publisher = self.create_publisher(String, 'led_status', 10)
         
         # Expression 퍼블리셔 생성
-        self.expression_publisher = self.create_publisher(Expression, 'expression', 10)
+        self.expression_publisher = self.create_publisher(FaceExpression, 'expression', 10)
         
         # 작업 목록을 저장할 리스트
         self.tasks = []  # 생성된 작업들을 저장할 리스트
@@ -1361,9 +1361,9 @@ class TaskManager(Node):
     def send_expression_command(self, robot_id, robot_status):
         """로봇 ID와 상태에 따라 Expression 메시지 발행"""
         try:
-            msg = Expression()
+            msg = FaceExpression()
             msg.robot_id = robot_id  # "libo_a", "libo_b"
-            msg.robot_status = robot_status  # "escort", "assist", "delivery", "기쁨", "슬픔", "화남"
+            msg.expression_type = robot_status  # "escort", "assist", "delivery", "기쁨", "슬픔", "화남"
             self.expression_publisher.publish(msg)
             self.get_logger().info(f'😊 [Expression] 명령 발행 성공: {robot_id} - {robot_status}')
             return True
