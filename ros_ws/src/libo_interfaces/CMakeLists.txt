@@ -15,10 +15,11 @@ find_package(rosidl_default_generators REQUIRED)
 
 # 메시지 및 서비스 파일 추가
 rosidl_generate_interfaces(${PROJECT_NAME}
+  # === 메시지 파일 ===
   "msg/BookInfo.msg"             # 도서 정보 메시지
   "msg/DetectionStatus.msg"      # 장애물감지상태
   "msg/DetectionTimer.msg"       # 감지 타이머 메시지 추가
-  "msg/Expression.msg"           # 표정 메시지 추가
+  "msg/FaceExpression.msg"       # 표정 메시지 추가
   "msg/GoalPose.msg"             # 이름 중복을 피하기 위해 GoalPose.msg로 변경
   "msg/Heartbeat.msg"            # 하트비트 메시지
   "msg/HumanInfo.msg"            # 휴먼타입지정
