@@ -41,9 +41,13 @@ class DatabaseManager:
         Returns:
             검색된 도서 정보 리스트
         """
+        # 연결 재시도 로직
         if not self.connection:
-            print("❌ 데이터베이스 연결이 없습니다.")
-            return []
+            print("❌ 데이터베이스 연결이 없습니다. 재연결 시도...")
+            self._connect()
+            if not self.connection:
+                print("❌ 데이터베이스 재연결 실패")
+                return []
         
         try:
             # 검색 타입에 따른 쿼리 작성
@@ -70,6 +74,16 @@ class DatabaseManager:
             
             search_param = f"%{query}%"
             
+            # 연결 상태 확인 및 재연결
+            try:
+                self.connection.ping(reconnect=True)
+            except Exception as ping_error:
+                print(f"⚠️ 데이터베이스 연결 확인 중 오류: {ping_error}")
+                self._connect()
+                if not self.connection:
+                    print("❌ 데이터베이스 재연결 실패")
+                    return []
+            
             with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
                 cursor.execute(query_sql, (search_param,))
                 results = cursor.fetchall()
@@ -84,6 +98,10 @@ class DatabaseManager:
             
         except Exception as e:
             print(f"❌ 검색 오류: {e}")
+            # 연결 오류인 경우 재연결 시도
+            if "MySQL server has gone away" in str(e) or "Lost connection" in str(e):
+                print("🔄 데이터베이스 연결 오류로 재연결 시도...")
+                self._connect()
             return []
     
     def test_connection(self) -> bool:  # DB 연결이 잘 되는지 테스트하는 함수
@@ -162,6 +180,57 @@ class DatabaseManager:
             print(f"❌ 도서 등록 실패: {e}")
             return False
     
+    def verify_admin_qr(self, admin_name: str) -> bool:  # 관리자 QR 인증 함수
+        """
+        관리자 QR 인증
+        
+        Args:
+            admin_name: 관리자 이름
+            
+        Returns:
+            인증 성공 여부
+        """
+        # 연결 재시도 로직
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다. 재연결 시도...")
+            self._connect()
+            if not self.connection:
+                print("❌ 데이터베이스 재연결 실패")
+                return False
+        
+        try:
+            # admin 테이블에서 해당 이름의 관리자 조회
+            query_sql = """
+            SELECT id, name, type
+            FROM admin
+            WHERE name = %s AND type = 'qr'
+            """
+            
+            # 연결 상태 확인 및 재연결
+            try:
+                self.connection.ping(reconnect=True)
+            except Exception as ping_error:
+                print(f"⚠️ 데이터베이스 연결 확인 중 오류: {ping_error}")
+                self._connect()
+                if not self.connection:
+                    print("❌ 데이터베이스 재연결 실패")
+                    return False
+            
+            with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                cursor.execute(query_sql, (admin_name,))
+                result = cursor.fetchone()
+                
+                if result:
+                    print(f"✅ QR 인증 성공: {admin_name} (ID: {result['id']})")
+                    return True
+                else:
+                    print(f"❌ QR 인증 실패: {admin_name} - DB에 등록되지 않은 관리자")
+                    return False
+                    
+        except Exception as e:
+            print(f"❌ QR 인증 오류: {e}")
+            return False
+
     def get_book_by_isbn(self, isbn: str) -> Optional[Dict]:  # ISBN 번호로 도서 찾는 함수
         """
         ISBN으로 도서 조회
@@ -195,6 +264,179 @@ class DatabaseManager:
         except Exception as e:
             print(f"❌ 도서 조회 실패: {e}")
             return None
+    # DatabaseManager 클래스에 추가할 재고 감소 함수들
+
+    def decrease_book_stock(self, isbn: str, quantity: int) -> bool:
+        """
+        도서 재고 감소
+        
+        Args:
+            isbn: 도서 ISBN
+            quantity: 감소할 수량
+            
+        Returns:
+            재고 감소 성공 여부
+        """
+        # 연결 재시도 로직
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다. 재연결 시도...")
+            self._connect()
+            if not self.connection:
+                print("❌ 데이터베이스 재연결 실패")
+                return False
+        
+        try:
+            # 연결 상태 확인 및 재연결
+            try:
+                self.connection.ping(reconnect=True)
+            except Exception as ping_error:
+                print(f"⚠️ 데이터베이스 연결 확인 중 오류: {ping_error}")
+                self._connect()
+                if not self.connection:
+                    print("❌ 데이터베이스 재연결 실패")
+                    return False
+            
+            with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                # 현재 재고 확인
+                cursor.execute("SELECT id, stock_quantity FROM book WHERE isbn = %s", (isbn,))
+                book = cursor.fetchone()
+                
+                if not book:
+                    print(f"❌ 도서를 찾을 수 없습니다: ISBN {isbn}")
+                    return False
+                
+                current_stock = book['stock_quantity']
+                
+                # 재고 부족 확인
+                if current_stock < quantity:
+                    print(f"❌ 재고 부족: 현재 {current_stock}권, 요청 {quantity}권")
+                    return False
+                
+                # 재고 감소
+                new_stock = current_stock - quantity
+                update_sql = "UPDATE book SET stock_quantity = %s WHERE isbn = %s"
+                cursor.execute(update_sql, (new_stock, isbn))
+                
+                print(f"✅ 재고 감소 성공: ISBN {isbn}")
+                print(f"   기존 재고: {current_stock}권 → 새로운 재고: {new_stock}권")
+                
+                return True
+                
+        except Exception as e:
+            print(f"❌ 재고 감소 실패: {e}")
+            # 연결 오류인 경우 재연결 시도
+            if "MySQL server has gone away" in str(e) or "Lost connection" in str(e):
+                print("🔄 데이터베이스 연결 오류로 재연결 시도...")
+                self._connect()
+            return False
+
+    def get_book_stock(self, isbn: str) -> int:
+        """
+        도서 재고 수량 조회
+        
+        Args:
+            isbn: 도서 ISBN
+            
+        Returns:
+            현재 재고 수량 (실패 시 -1)
+        """
+        # 연결 재시도 로직
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다. 재연결 시도...")
+            self._connect()
+            if not self.connection:
+                print("❌ 데이터베이스 재연결 실패")
+                return -1
+        
+        try:
+            # 연결 상태 확인 및 재연결
+            try:
+                self.connection.ping(reconnect=True)
+            except Exception as ping_error:
+                print(f"⚠️ 데이터베이스 연결 확인 중 오류: {ping_error}")
+                self._connect()
+                if not self.connection:
+                    print("❌ 데이터베이스 재연결 실패")
+                    return -1
+            
+            with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                cursor.execute("SELECT stock_quantity FROM book WHERE isbn = %s", (isbn,))
+                result = cursor.fetchone()
+                
+                if result:
+                    return result['stock_quantity']
+                else:
+                    print(f"❌ 도서를 찾을 수 없습니다: ISBN {isbn}")
+                    return -1
+                    
+        except Exception as e:
+            print(f"❌ 재고 조회 실패: {e}")
+            # 연결 오류인 경우 재연결 시도
+            if "MySQL server has gone away" in str(e) or "Lost connection" in str(e):
+                print("🔄 데이터베이스 연결 오류로 재연결 시도...")
+                self._connect()
+            return -1
+
+    def increase_book_stock(self, isbn: str, quantity: int) -> bool:
+        """
+        도서 재고 증가 (입고용)
+        
+        Args:
+            isbn: 도서 ISBN
+            quantity: 증가할 수량
+            
+        Returns:
+            재고 증가 성공 여부
+        """
+        # 연결 재시도 로직
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다. 재연결 시도...")
+            self._connect()
+            if not self.connection:
+                print("❌ 데이터베이스 재연결 실패")
+                return False
+        
+        try:
+            # 연결 상태 확인 및 재연결
+            try:
+                self.connection.ping(reconnect=True)
+            except Exception as ping_error:
+                print(f"⚠️ 데이터베이스 연결 확인 중 오류: {ping_error}")
+                self._connect()
+                if not self.connection:
+                    print("❌ 데이터베이스 재연결 실패")
+                    return False
+            
+            with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                # 현재 재고 확인
+                cursor.execute("SELECT id, stock_quantity FROM book WHERE isbn = %s", (isbn,))
+                book = cursor.fetchone()
+                
+                if not book:
+                    print(f"❌ 도서를 찾을 수 없습니다: ISBN {isbn}")
+                    return False
+                
+                current_stock = book['stock_quantity']
+                
+                # 재고 증가
+                new_stock = current_stock + quantity
+                update_sql = "UPDATE book SET stock_quantity = %s WHERE isbn = %s"
+                cursor.execute(update_sql, (new_stock, isbn))
+                
+                print(f"✅ 재고 증가 성공: ISBN {isbn}")
+                print(f"   기존 재고: {current_stock}권 → 새로운 재고: {new_stock}권")
+                
+                return True
+                
+        except Exception as e:
+            print(f"❌ 재고 증가 실패: {e}")
+            # 연결 오류인 경우 재연결 시도
+            if "MySQL server has gone away" in str(e) or "Lost connection" in str(e):
+                print("🔄 데이터베이스 연결 오료로 재연결 시도...")
+                self._connect()
+            return False
+
+
     
     def close(self):  # DB 연결 끊는 함수
         """데이터베이스 연결 종료"""

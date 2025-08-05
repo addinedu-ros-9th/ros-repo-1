@@ -25,7 +25,7 @@ class ROS2BridgeNode(Node):
         self.detector_cmd_port = self.get_parameter('detector_cmd_port').get_parameter_value().integer_value
 
         # 퍼블리셔 및 서비스 서버
-        self.pub = self.create_publisher(DetectionTimer, 'detection_timer', 10)
+        self.pub = self.create_publisher(DetectionTimer, 'detection_timer', 1)
         self.activate_service = self.create_service(ActivateDetector, 'activate_detector', self.activate_callback)
         self.deactivate_service = self.create_service(DeactivateDetector, 'deactivate_detector', self.deactivate_callback)
 

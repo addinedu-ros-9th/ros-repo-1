@@ -1,120 +1,31 @@
 
-| **Index** | **Scenario** | **Description**                          | **Sender**    | **Receiver**  | **Type**    | **Name**         | **Type name**         | **Example Message** |
-| --------- | ------------ | ---------------------------------------- | ------------- | ------------- | ----------- | ---------------- | --------------------- | ------------------- |
-|           | 최초 실행        | 프로그램이 최초로 실행된 뒤 연결 상태를 서로에게 신호를 보내며 알림   | Libo Service  | all           | Topic -rate | /main_heartbeat  | Heartbeat.msg         |                     |
-|           |              |                                          | Libo Operator | all           | Topic -rate | /robot_heartbeat | Heartbeat.msg         |                     |
-|           |              |                                          | Admin GUI     | all           | Topic -rate | /admin_heartbeat | Heartbeat.msg         |                     |
-|           | 시스템 상태 공유    | Libo Service가 GUI로 전체 상황에 대한 상태를 전달하는 과정 | Libo Service  | Admin GUI     | Topic -rate | /task_status     | TaskStatus.msg        |                     |
-|           | 로봇 상태 공유     | 로봇에서 GUI 까지 상태 정보를 전달하는 과정               | Libo Operator | all           | Topic -rate | /robot_status    | RobotStatus.msg       |                     |
-|           | 로봇 주행 명령     | 이동 명령 요청                                 | Admin GUI     | Libo Service  | Topic -once | /navigate        | Navigate.msg          |                     |
-|           |              | 목표지 도착 알림                                | Libo Service  | Admin GUI     | Topic -once | /robot_arrival   | NavigateComplete.msg  |                     |
-|           |              | 이동 명령 전달                                 | Libo Service  | Libo Operator | Action      | /navigate        | NavigateToPose.action |                     |
-|           | 도서검색         | 키오스크에서 도서 검색 요청                          | Kiosk UI      | Main Server   | Service     | /book_search     | BookSearch.srv        |                     |
-|           | 에스코팅 요청      | 키오스크에서 로봇 에스코팅 요청                        | Kiosk UI      | Libo Service  | Service     | /escort_request  | EscortRequest.srv     |                     |
-|           | 에스코팅상태       | 에스코팅 진행 상태 전달                            | Libo Service  | all           | Topic -rate | /escort_status   | EscortStatus.msg      |                     |
-|           | 에스코팅 완료      | 에스코팅 완료 알림                               | Libo Service  | all           | Topic -once | /escort_complete | EscortComplete.msg    |                     |
-
-
-# Heartbeat.msg
-
-| **type**                | **name**  | **value**                    |
-| ----------------------- | --------- | ---------------------------- |
-| string                  | sender_id | robot_01, admin_01, kiosk_01 |
-| builtin_interfaces/Time | timestamp | sec: 1721794567              |
-# TaskStatus.msg
-
-| **type**                | **name**    | **value**                    |
-| ----------------------- | ----------- | ---------------------------- |
-| string                  | robot_id    | robot_01, robot_02           |
-| string                  | mode        | admin_mode, idle, navigating |
-| string                  | waypoint_id | A1, A2, A3, B1, B2           |
-| string                  | state       | executing, completed, failed |
-| builtin_interfaces/Time | timestamp   | sec: 1721794567              |
-# RobotStatus.msg
-
-| **type**                | **name**      | **value**                               |
-| ----------------------- | ------------- | --------------------------------------- |
-| string                  | sender_id     | robot_01, robot_02                      |
-| string                  | availability  | available, unavailalbe                  |
-| string                  | mode          | admin_mode, idle, navigating, escorting |
-| float32                 | battery_level | 0.0 ~ 100.0                             |
-| builtin_interfaces/Time | timestamp     | sec: 1721794567                         |
-# TaskStatus.msg
-
-| **type**                | **name**    | **value**                         |
-| ----------------------- | ----------- | --------------------------------- |
-| string                  | robot_id    | robot_01, robot_02                |
-| string                  | mode        | 모드 (admin_mode, idle, navigating) |
-| string                  | waypoint_id | 웨이포인트 ID (A1, A2, A3, B1, B2)     |
-| string                  | state       | 상태 (executing, completed, failed) |
-| builtin_interfaces/Time | timestamp   |                                   |
-# Navigate.srv
-
-| **type** | **name**    | **value**          |
-| -------- | ----------- | ------------------ |
-| string   | robot_id    | robot_01, robot_02 |
-| string   | waypoint_id | A1, A2, A3, B1, B2 |
-# NavigateComplete.msg
-
-| **type**                | **name**    | **value**          |
-| ----------------------- | ----------- | ------------------ |
-| string                  | robot_id    | robot_01, robot_02 |
-| string                  | waypoint_id | 도착한 웨이포인트 ID       |
-| builtin_interfaces/Time | timestamp   | 도착 시간              |
-# **NavigateToPose.action**
-
-| **type**  | **name**    | **value**                                 |
-| --------- | ----------- | ----------------------------------------- |
-| #goal     |             |                                           |
-| string    | robot_id    | 로봇 ID                                     |
-| string    | waypoint_id | 웨이포인트 ID (A1, A2, A3, B1, B2, D3, D5, E3) |
-| float32   | target_x    | 목표 x 좌표                                   |
-| float32   | target_y    | 목표 y 좌표                                   |
-| float32   | target_yaw  | 목표 yaw 각도                                 |
-| ---       |             |                                           |
-| #result   |             |                                           |
-| bool      | success     | 이동 성공 여부                                  |
-| string    | message     | 결과 메시지                                    |
-| float32   | final_x     | 최종 도착 x 좌표                                |
-| float32   | final_y     | 최종 도착 y 좌표                                |
-| float32   | final_yaw   | 최종 도착 yaw 각도                              |
-| ---       |             |                                           |
-| #feedback |             |                                           |
-| float32   | current_x   | 현재 x 좌표                                   |
-| float32   | current_y   | 현재 y 좌표                                   |
-| float32   | current_yaw | 현재 yaw 각도                                 |
-| float32   | progress    | 진행률 (0.0 ~ 1.0)                           |
-| string    | status      | 상태: "moving", "arrived", "failed"         |
-# **EscortRequest.srv** (새로 추가)
-
-| **type**  | **name**      | **value**         |
-| --------- | ------------- | ----------------- |
-| #request  |               |                   |
-| string    | robot_id      | 로봇 ID (robot_01)  |
-| string    | book_title    | 도서 제목             |
-| string    | book_location | 도서 위치 코드 (D3, D5) |
-| ---       |               |                   |
-| #response |               |                   |
-| bool      | success       | 요청 수락 여부          |
-| string    | message       | 응답 메시지            |
-| string    | escort_id     | 에스코팅 세션 ID        |
-# **EscortStatus.msg** (새로 추가)
-
-| **type**                | **name**         | **value**                                                    |
-| ----------------------- | ---------------- | ------------------------------------------------------------ |
-| string                  | escort_id        | 에스코팅 세션 ID                                                   |
-| string                  | robot_id         | 로봇 ID                                                        |
-| string                  | status           | 상태: "moving_to_kiosk", "escorting", "completed", "returning" |
-| string                  | current_location | 현재 위치                                                        |
-| string                  | target_location  | 목표 위치                                                        |
-| float32                 | progress         | 진행률 (0.0 ~ 1.0)                                              |
-| builtin_interfaces/Time | timestamp        |                                                              |
-# **EscortComplete.msg** (새로 추가)
-
-| **type**                | **name**       | **value**  |
-| ----------------------- | -------------- | ---------- |
-| string                  | escort_id      | 에스코팅 세션 ID |
-| string                  | robot_id       | 로봇 ID      |
-| string                  | book_title     | 도서 제목      |
-| string                  | final_location | 최종 도착 위치   |
-| builtin_interfaces/Time | timestamp      |            |
+| 상황           | 설명                                                         | 보낸이                | 받는이              | 주제                                      | **이름**                     | **내용**                                                                                                                                                                                                                                                                                         | 종류      | 응답      |
+| ------------ | ---------------------------------------------------------- | ------------------ | ---------------- | --------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| Escort 1     | Kiosk에서 사용자가 에스코팅을 신청함                                     | Admin GUI          | Libo Service     | 임무 요청                                   | TaskRequest.srv            | # Request<br><br>- string robot_id :<br>    <br>- string task_type : escort<br>    <br>- string call_location : A5<br>    <br>- string goal_location : D3<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                 | srv     | yes     |
+| Escort 1     | 메인 서버에서 경로생성을 하고 로봇에게 경로를 송신                               | Libo Service       | Navigator        | 목적지 주행 요청                               | SetGoal.srv                | # 요청 (Request)<br><br>float64 x<br><br>float64 y<br><br>---<br><br># 응답 (Response)<br><br>bool success<br><br>string message                                                                                                                                                                   | srv     | yes     |
+| Escort 1     | 메인 서버에서 진행중인 네비게이션 취소                                      | Libo Service       | Navigator        | 주행 취소 요청                                | CancelNavigation.srv       | # 요청 (Request) - 비어있어도 됩니다<br><br>---<br><br># 응답 (Response)<br><br>bool success<br><br>string message                                                                                                                                                                                         | srv     | yes     |
+| Escort 1     | 로봇이 키오스크 앞에 도달                                             | Navigator          | Libo Service     | 목적지 주행 결과 전송                            | NavigationResult.srv       | # 요청 (Request)<br><br>string result # 예: "SUCCEEDED", "FAILED", "CANCELED"<br><br>---<br><br># 응답 (Response)<br><br>bool success<br><br>string message                                                                                                                                         | srv     | yes     |
+| Escort 1     | 로봇이 키오스크에 도착하고 안내 음성 전달해야 하는 상황                            | Libo Service       | Talker Manager   | 안내 음성 송출요청                              | VoiceCommand.msg           | - string robot_id : libo_a, libo_b<br>    <br>- string category : “escort”, “delivery”, etc<br>    <br>- string action : “arrived”, “return”<br>    <br><br>**(상세정보는 맨 아래 테이블 참고)**                                                                                                            | msg     | no      |
+| Escort 2     | 책 위치로 이동하기에 앞서 손님 감지가 필요한 상황                               | Libo Service       | Vision Manager   | 손님 인식/감지 기능 활성화 요청                      | ActivateDetector.srv       | # Request<br><br>- string robot_id : libo_a<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                                                                               | srv     | yes     |
+| ~~Escort 2~~ | ~~손님이 10초 이상 감지가 안된 상황~~                                   | ~~Vision Manager~~ | ~~Libo Service~~ | ~~감지 실패 알림 (10초)~~                      | ~~DetectionFailTimer.msg~~ | - ~~string robot_id : libo_a~~<br>    <br>- ~~int16 count : 10~~                                                                                                                                                                                                                               | ~~msg~~ | ~~no~~  |
+| ~~Escort 2~~ | ~~손님이 30초 이상 감지가 안된 상황~~                                   | ~~Vision Manager~~ | ~~Libo Service~~ | ~~감지 실패 알림 (30초)~~                      | ~~DetectionFailTimer.msg~~ | - ~~string robot_id : libo_a~~<br>    <br>- ~~int16 count : 30~~                                                                                                                                                                                                                               | ~~msg~~ | ~~no~~  |
+| Escort 2     | 손님이 30초 이상 감지가 안된 상황                                       | Vision Manager     | Libo Service     | 감지 실패 알림 (30초)                          | DetectionTimer.msg         | - string robot_id : libo_a<br>    <br>- string command : 1~9999                                                                                                                                                                                                                                | msg     | no      |
+| Escort 2     | timeout에 의한 에스코트 중간 취소                                     | Libo Service       | Vision Manager   | 손님 인식/감지 기능 비활성화 요청                     | DeactivateDetector.srv     | # Request<br><br>- string robot_id : libo_a<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                                                                               | srv     | no      |
+| Assist 1     | 로봇이 키오스크에 도착하여 관리자의 QR 을 기다리는 상황                           | Libo Service       | Vision Manager   | QR 스캔 기능 활성화                            | ActivateQRScanner.srv      | # Request<br><br>- string robot_id : libo_a<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                                                                               | srv     | yes     |
+| ~~Assist 1~~ | ~~QR 인증이 성공한 상황~~                                          | ~~Vision Manager~~ | ~~Libo Service~~ | ~~QR 인증 성공 알림~~                         | ~~QRScanResult~~           | ~~# Request~~<br><br>- ~~string robot_id : libo_a~~<br>    <br>- ~~string result : “success”, “fail”~~<br>    <br><br>~~---~~<br><br>~~# Response~~<br><br>- ~~bool success : True~~<br>    <br>- ~~string message : None~~                                                                    | ~~srv~~ | ~~yes~~ |
+| Assist 1     | QR 인증 요청 및 응답                                              | Vision Manager     | Libo Service     | QR 인증 신원 확인 및 결과 확인 (로봇으로 부터 온 이미지속 QR) | RobotQRCheck               | # Request<br><br>- string robot_id : libo_a<br>    <br>- string admin_name : “김민수”<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                                        | srv     | yes     |
+| Assist 1     | QR 인증 요청 및 응답                                              | Kiosk GUI          | Libo Service     | QR 인증 신원 확인 및 결과 확인 (키오스크로부터 온 이미지속 QR) | KioskQRCheck               | # Request<br><br>- string kiosk_id : kiosk_1<br>    <br>- string admin_name : “김민수”<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                                       | srv     | yes     |
+| Assist 1     | ​QR 인증이 완료되어 QR 스캔 기능 비활성화 해야하는 상황                         | Libo Service       | Vision Manager   | QR 스캔 기능 비활성화                           | DeactivateQRScanner.srv    | # Request<br><br>- string robot_id : libo_a<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                                                                               | srv     | yes     |
+| Assist 2     | QR 인증이 성공한 상황                                              | Libo Service       | Talker Manager   | 대화 분석 기능 활성화                            | ActivateTalker.srv         | # Request<br><br>- string robot_id : libo_a<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                                                                               | srv     | yes     |
+| Assist 2     | QR 인증이 성공한 상황                                              | Libo Service       | Vision Manager   | 트랙킹 기능 활성화                              | ActivateTracker.srv        | # Request<br><br>- string robot_id : libo_a<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                                                                               | srv     | yes     |
+| Assist 2     | "리보야 종료해"를 외친 상황                                           | Talker Manager     | Libo Service     | 음성 명령 전달(종료)                            | EndTask.srv                | # Request<br><br>- string robot_id : libo_a<br>    <br>- string task_type : “assist”, “delivery”<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                          | srv     | yes     |
+| Assist 2     | 종료가 된 상황                                                   | Libo Service       | Talker Manager   | 대화 분석 비활성화 요청                           | DeactivateTalker.srv       | # Request<br><br>- string robot_id : libo_a<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                                                                               | srv     | yes     |
+| Assist 2     | 종료가 된 상황 (재고려)                                             | Libo Service       | Vision Manager   | 트래킹 기능 비활성화                             | DeactivateTracker.srv      | # Request<br><br>- string robot_id : libo_a<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                                                                               | srv     | yes     |
+| Delivery 1   | 관리자가 Admin PC 에서 로봇에게 delivery 명령을 내림                      | Admin GUI          | Libo Service     | 임무 요청 (robot_id)                        | TaskRequest.srv            | # Request<br><br>- robot_id : libo_a<br>    <br>- task_type : delivery<br>    <br>- call_location : admin_pc<br>    <br>- goal_location :<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                 | srv     | yes     |
+| Delivery 1   | 로봇이 도착한 후 관리자가 볼 일을 끝냄. 그 뒤 Admin GUI 를 통해서 다음 목적지를 선택한 상황 | Admin GUI          | Libo Service     | 다음 목적지 추가                               | AddGoalLocation.srv        | # Request<br><br>- string robot_id : libo_a<br>    <br>- string goal_location : F2<br>    <br><br>---<br><br># Response<br><br>- bool success : True<br>    <br>- string message : None                                                                                                        | srv     | yes     |
+| 평상시          | 로봇이 가동 될 때 heartbeat 계속해서 전달.                              | Libo Operator      | Libo Service     | 생존신고                                    | HeartBeat.msg              | - string sender_id : libo_a, admin_b<br>    <br>- time timestamp : 173…                                                                                                                                                                                                                        | msg     | no      |
+| 평상시          | 로봇이 현재 적재하고 있는 도서의 무게를 실시간으로 전달                            | Hardware Handler   | Libo Service     | 책 무게                                    | Weight.msg                 | - string robot_id<br>    <br>- float64 weight : 21.3 , 2200.42                                                                                                                                                                                                                                 | msg     | no      |
+| 평상시          | Admin GUI 에 로봇의 현재 상태들을 볼 수 있도록 수시로 상태 공유                  | Libo Service       | Admin GUI        | 모니터링용 로봇 상태 정보들<br><br>(db 저장 - 매 10초)  | OverallStatus.msg          | - string robot_id : libo_a<br>    <br>- bool available : true / false<br>    <br>- int8 battery : 0 ~ 100<br>    <br>- float64 book_weight : 10.4<br>    <br>- float position_x : 3.4<br>    <br>- float position_y : -2.3<br>    <br>- float position_yaw : 140.0                             | msg     | no      |
+| 임무 수행중       | Admin GUI 에서 각 로봇들의 "임무" 진행 상황을 보기 위해 메인서버에서 수시로 공유        | Libo Service       | Admin GUI        | 로봇 임무 상황<br><br>(db 저장 - 매 task 1회)     | TaskStatus.msg             | - string robot_id : libo_a,<br>    <br>- string task_type : “escort” , “delivery”<br>    <br>- int8 task_stage: 1, 2, 3<br>    <br>- string call_location : D2, A4<br>    <br>- string goal_location: G2, E3<br>    <br>- time start_time : 1723981023<br>    <br>- time end_time : 1723921323 | msg     | no      |
+| 평상시          | 임무를 수행할때/ 평상시                                              | Libo Service       | Libo GUI         | 얼굴 애니메이션                                | Expression.msg             | - string robot_id :<br>    <br>- string robot_status : “escort”, “assist”, “delivery”                                                                                                                                                                                                          | msg     | no      |
+| 임무 수행중       | Kiosk 에서 각 로봇들의 위치를 통해 호출이 언제 완료될지 나타내기 위한 정보              | Libo Service       | Kiosk            | 로봇 임무 상황                                | TaskProgress.msg           | - string robot_id: libo_a<br>    <br>- int8 waypoint_total : 5<br>    <br>- int8 waypoint_left : 3<br>    <br>- int8 time_left : 30                                                                                                                                                            | msg     | no      |

@@ -367,6 +367,11 @@ class BookDetailPopup(QDialog):
             print(f"❌ 에스코팅 요청 중 오류: {e}")
             QMessageBox.warning(self, "오류", f"에스코팅 요청 중 오류가 발생했습니다: {str(e)}")
     
+    def reset_escort_button(self):
+        """에스코팅 요청 버튼 초기화"""
+        self.escortRequestButton.setEnabled(True)
+        self.escortRequestButton.setText("에스코팅 요청")
+    
     def resizeEvent(self, event):
         """윈도우 크기 변경 시 지도 다시 그리기 (디바운싱 적용)"""
         super().resizeEvent(event)

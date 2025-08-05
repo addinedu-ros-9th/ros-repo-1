@@ -29,6 +29,14 @@ class BookSearchService(Node):
         self.get_logger().info(f'🔍 검색 요청: "{request.query}" ({request.search_type})')
         
         try:
+            # 데이터베이스 연결 확인
+            if not self.db_manager.connection:
+                self.get_logger().error('❌ 데이터베이스 연결이 없습니다.')
+                response.success = False
+                response.message = '데이터베이스 연결 오류'
+                response.books = []
+                return response
+            
             # 데이터베이스에서 검색
             search_results = self.db_manager.search_books(
                 request.query, 
@@ -38,19 +46,23 @@ class BookSearchService(Node):
             # 검색 결과를 ROS2 메시지로 변환
             book_list = []
             for book_data in search_results:
-                book_info = BookInfo()
-                book_info.id = book_data['id']
-                book_info.title = book_data['title']
-                book_info.author = book_data['author'] or ''
-                book_info.publisher = book_data['publisher'] or ''
-                book_info.category_name = book_data['category_name']
-                book_info.location = book_data['location']
-                book_info.price = float(book_data['price']) if book_data['price'] else 0.0
-                book_info.stock_quantity = book_data['stock_quantity']
-                book_info.isbn = book_data['isbn'] or ''
-                book_info.cover_image_url = book_data['cover_image_url'] or ''
-                
-                book_list.append(book_info)
+                try:
+                    book_info = BookInfo()
+                    book_info.id = book_data['id']
+                    book_info.title = book_data['title']
+                    book_info.author = book_data['author'] or ''
+                    book_info.publisher = book_data['publisher'] or ''
+                    book_info.category_name = book_data['category_name']
+                    book_info.location = book_data['location']
+                    book_info.price = float(book_data['price']) if book_data['price'] else 0.0
+                    book_info.stock_quantity = book_data['stock_quantity']
+                    book_info.isbn = book_data['isbn'] or ''
+                    book_info.cover_image_url = book_data['cover_image_url'] or ''
+                    
+                    book_list.append(book_info)
+                except Exception as book_error:
+                    self.get_logger().warning(f'⚠️ 책 데이터 변환 오류: {book_error}')
+                    continue
             
             # 응답 설정
             response.success = True
@@ -63,7 +75,7 @@ class BookSearchService(Node):
             # 오류 처리
             self.get_logger().error(f'❌ 검색 오류: {str(e)}')
             response.success = False
-            response.message = f'검색 중 오류가 발생했습니다: {str(e)}'
+            response.message = f'오류: {str(e)}'
             response.books = []
         
         return response

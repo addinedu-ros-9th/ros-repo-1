@@ -28,8 +28,16 @@ ros2 launch vicpinky_navigation nav2_view.launch.xml use_sim_time:=true
 
 
 
+ros2 run main_server task_manager
+
+ros2 run admin admin_gui 
 
 
 
+ros2 run hardware_handler heartbeat_sender
 
+빅핑키 ai_service escort
+ros2 run ai_service ros2_bridege_node.py
 
+python310
+python ros-repo-1/ros_ws/src/ai_service/ai_service/nodes/strongsort_client.py

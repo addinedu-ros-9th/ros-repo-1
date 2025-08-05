@@ -12,6 +12,7 @@ from libo_interfaces.srv import DeactivateQRScanner  # DeactivateQRScanner 서�
 from libo_interfaces.srv import CancelNavigation  # CancelNavigation 서비스 추가
 from libo_interfaces.srv import EndTask  # EndTask 서비스 추가
 from libo_interfaces.srv import RobotQRCheck  # RobotQRCheck 서비스 추가
+from libo_interfaces.srv import KioskQRCheck  # KioskQRCheck 서비스 추가
 from libo_interfaces.srv import ActivateTalker  # ActivateTalker 서비스 추가
 from libo_interfaces.srv import DeactivateTalker  # DeactivateTalker 서비스 추가
 from libo_interfaces.srv import ActivateTracker  # ActivateTracker 서비스 추가
@@ -30,6 +31,7 @@ import uuid  # 고유 ID 생성
 import random  # 랜덤 좌표 생성용
 from enum import Enum  # 상태 열거형
 import threading  # 스레드 관리
+from ..database.db_manager import DatabaseManager  # DB 매니저 추가
 
 # 좌표 매핑 딕셔너리 (A1~E9까지 총 45개 좌표)
 LOCATION_COORDINATES = {
@@ -60,8 +62,7 @@ LOCATION_COORDINATES = {
     'admin_desk': (-5.79, 3.25)  # 관리자 데스크 위치
 }
 
-# 관리자 이름 리스트 (QR Check용)
-ADMIN_NAMES = ['김대인', '김민수', '박태환', '이건우', '이승훈']
+# 관리자 QR 인증은 DB에서 처리
 
 # 음성 명령 상수 정의
 VOICE_COMMANDS = {
@@ -249,6 +250,13 @@ class TaskManager(Node):
             self.robot_qr_check_callback
         )
         
+        # KioskQRCheck 서비스 서버 생성
+        self.kiosk_qr_check_service = self.create_service(
+            KioskQRCheck,
+            'kiosk_qr_check',
+            self.kiosk_qr_check_callback
+        )
+        
         # AddGoalLocation 서비스 서버 생성
         self.add_goal_location_service = self.create_service(
             AddGoalLocation,
@@ -322,6 +330,9 @@ class TaskManager(Node):
         
         # 로봇 상태 관리 타이머 (1초마다 실행)
         self.robot_state_timer = self.create_timer(1.0, self.manage_robot_states)  # 1초마다 로봇 상태 관리
+        
+        # DB 매니저 초기화
+        self.db_manager = DatabaseManager()
         
         # Task 타입별 Stage 로직 정의 (통합 관리)
         self.task_stage_logic = {
@@ -510,6 +521,7 @@ class TaskManager(Node):
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_destination'},  # 목적지 도착 알림
+                        {'action': 'activate_talker'}  # Talker 활성화
                         # 관리자가 별도로 "이제 돌아가" 라고 지시 하지 않는이상 대기
                     ],
                     'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
@@ -517,6 +529,7 @@ class TaskManager(Node):
                         {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
                     ],
                     'end_task': [  # EndTask 요청 시 실행할 액션들
+                        {'action': 'deactivate_talker'},  # Talker 비활성화
                         {'action': 'advance_stage'}  # Stage 3으로 진행
                     ]
                 },
@@ -1144,13 +1157,13 @@ class TaskManager(Node):
             return False
         
         # CancelNavigation 요청 생성 (요청은 비어있음)
-        request = CancelNavigation.Request()
+        request = CancelNavigation.Request()  # CancelNavigation.srv 요청
         
         self.get_logger().info(f'⏹️ 네비게이션 취소 요청 전송...')
         
         try:
             # 비동기 서비스 호출 (응답을 콜백으로 처리)
-            future = self.cancel_navigation_client.call_async(request)
+            future = self.cancel_navigation_client.call_async(request)  # cancel_navigation 서비스로 전송
             future.add_done_callback(self.cancel_navigation_response_callback)
             self.get_logger().info(f'📤 네비게이션 취소 요청 전송 완료 - 응답 대기 중...')
             return True
@@ -1190,10 +1203,10 @@ class TaskManager(Node):
                         current_task = self.tasks[0]  # 첫 번째 활성 task
                         
                         # 새로운 통합 시스템으로 timer 이벤트 처리
-                        if counter_value == 10:
+                        if counter_value == 5:
+                            self.process_task_stage_logic(current_task, current_task.stage, 'timer_5s')
+                        elif counter_value >= 10:
                             self.process_task_stage_logic(current_task, current_task.stage, 'timer_10s')
-                        elif counter_value >= 30:
-                            self.process_task_stage_logic(current_task, current_task.stage, 'timer_30s')
                     
                     else:
                         # 활성 task가 없는 경우
@@ -1526,11 +1539,11 @@ class TaskManager(Node):
             self.get_logger().warning(f'❌ QR Check 실패: 로봇 ID 불일치 (현재: {current_task.robot_id}, 요청: {request.robot_id})')
             return response
         
-        # 관리자 이름 유효성 확인
-        if request.admin_name not in ADMIN_NAMES:
+        # DB에서 관리자 QR 인증
+        if not self.db_manager.verify_admin_qr(request.admin_name):
             response.success = False
-            response.message = f"유효하지 않은 관리자 이름: {request.admin_name} (등록된 관리자: {', '.join(ADMIN_NAMES)})"
-            self.get_logger().warning(f'❌ QR Check 실패: 유효하지 않은 관리자 이름 ({request.admin_name})')
+            response.message = f"QR 인증 실패: {request.admin_name} - DB에 등록되지 않은 관리자입니다"
+            self.get_logger().warning(f'❌ QR Check 실패: DB QR 인증 실패 ({request.admin_name})')
             return response
         
         # 모든 검증 통과 - QR Check 성공
@@ -1540,6 +1553,34 @@ class TaskManager(Node):
         # QR Check 완료 후 qr_check_completed 이벤트 발생
         self.get_logger().info(f'✅ QR Check 완료! qr_check_completed 이벤트 발생')
         self.process_task_stage_logic(current_task, current_task.stage, 'qr_check_completed')
+        
+        return response
+
+    def kiosk_qr_check_callback(self, request, response):  # KioskQRCheck 서비스 콜백
+        """KioskQRCheck 서비스 콜백"""
+        self.get_logger().info(f'📥 KioskQRCheck 요청 받음!')
+        self.get_logger().info(f'   - 키오스크 ID: {request.kiosk_id}')
+        self.get_logger().info(f'   - 관리자 이름: {request.admin_name}')
+        
+        # DB에서 관리자 QR 인증
+        if not self.db_manager.verify_admin_qr(request.admin_name):
+            response.success = False
+            response.message = f"QR 인증 실패: {request.admin_name} - DB에 등록되지 않은 관리자입니다"
+            self.get_logger().warning(f'❌ KioskQRCheck 실패: DB QR 인증 실패 ({request.admin_name})')
+            return response
+        
+        # 키오스크 ID 유효성 확인
+        if request.kiosk_id not in ["kiosk_1", "kiosk_2"]:
+            response.success = False
+            response.message = f"유효하지 않은 키오스크 ID: {request.kiosk_id}"
+            self.get_logger().warning(f'❌ KioskQRCheck 실패: 유효하지 않은 키오스크 ID ({request.kiosk_id})')
+            return response
+        
+        # 모든 검증 통과 - QR Check 성공
+        response.success = True
+        response.message = f"Kiosk QR Check 완료: {request.kiosk_id} - {request.admin_name}"
+        
+        self.get_logger().info(f'✅ KioskQRCheck 완료: {request.kiosk_id} - {request.admin_name}')
         
         return response
 

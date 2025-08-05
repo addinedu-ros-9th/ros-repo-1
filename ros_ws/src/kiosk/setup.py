@@ -15,7 +15,11 @@ setup(
         ('share/' + package_name + '/ui_files', ['kiosk/ui_files/bookSearch.ui']),
         ('share/' + package_name + '/ui_files', ['kiosk/ui_files/book_corner_widget.ui']),
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+        'setuptools',
+        'pyzbar',
+        'opencv-python',
+    ],
     zip_safe=True,
     maintainer='robolee',
     maintainer_email='leesh20806@gmail.com',
