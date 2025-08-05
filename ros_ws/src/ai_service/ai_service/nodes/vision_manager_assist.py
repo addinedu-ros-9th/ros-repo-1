@@ -48,7 +48,7 @@ class AdvancedAssistFollowFSM(Node):
         # [수정] Foxy/Galactic 호환을 위해 'description' 인자 제거
         self.declare_parameter('target_distance', 0.2)
         self.declare_parameter('safe_distance_min', 0.1)
-        self.declare_parameter('max_linear_vel', 0.2)
+        self.declare_parameter('max_linear_vel', 0.1)
         self.declare_parameter('max_angular_vel', 0.1)
         self.declare_parameter('avoidance_linear_vel', 0.1)
         self.declare_parameter('avoidance_angular_vel', 0.2)

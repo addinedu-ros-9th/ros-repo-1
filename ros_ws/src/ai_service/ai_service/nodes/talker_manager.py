@@ -109,6 +109,7 @@ VOICE_COMMANDS = {
         "charging": {"type": "tts", "value": "충전을 시작하겠습니다."},
         "battery_sufficient": {"type": "tts", "value": "배터리가 충분합니다. 대기모드로 전환합니다."},
         "depart_base": {"type": "tts", "value": "출발합니다~ (충전기를 뽑고)"},
+        "high_weigh": {"type": "tts", "value": "바구니가 가득 찼습니다. 정리해주세요."},
         "obstacle_detected": {"type": "mp3", "value": "honk.mp3"},              # (장애물이 감지됐습니다. 잠시합니다. / 빵!!!!!!!!!!)
         "reroute": {"type": "tts", "value": "새로운 경로로 안내합니다."},
         "return": {"type": "mp3", "value": "complete.mp3"},                     # (복귀하겠습니다. / (북귀음 소리 - 빠빕))
