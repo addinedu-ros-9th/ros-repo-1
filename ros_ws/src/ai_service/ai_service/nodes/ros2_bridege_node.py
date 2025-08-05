@@ -95,8 +95,27 @@ class ROS2BridgeNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = ROS2BridgeNode()
-    rclpy.spin(node)
-    rclpy.shutdown()
+    
+    try:
+        # 노드를 실행하고, Ctrl+C 등의 종료 신호를 기다립니다.
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        # 사용자가 Ctrl+C를 눌렀을 때 메시지를 출력합니다. (선택사항)
+        node.get_logger().info('Keyboard interrupt, shutting down.')
+    finally:
+        # 프로그램 종료 직전, 예외 발생 여부와 관계없이 항상 실행됩니다.
+        # 이것이 리소스를 정리하기에 가장 안전한 위치입니다.
+        node.get_logger().info('Closing sockets and shutting down node...')
+        
+        # 생성된 소켓들을 명시적으로 닫습니다.
+        node.listen_sock.close()
+        node.cmd_sock.close()
+        
+        # ROS 2 노드를 명시적으로 파괴합니다.
+        node.destroy_node()
+        
+        # rclpy를 종료합니다.
+        rclpy.shutdown()
 
 if __name__ == '__main__':
     main()

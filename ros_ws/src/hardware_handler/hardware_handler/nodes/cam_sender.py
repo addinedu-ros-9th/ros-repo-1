@@ -3,7 +3,7 @@ import cv2  # OpenCV: 카메라 제어 및 이미지 처리를 위해 사용
 import socket  # 소켓: 네트워크 통신(UDP)을 위해 사용
 import time  # 시간 관련 함수: 전송 간격 조절(딜레이)을 위해 사용
 import json  # JSON: 데이터 구조를 만들기 위해 사용 (헤더 생성)
-from datetime import datetime, timezone # 날짜 및 시간: 타임스탬프 생성을 위해 사용
+from datetime import datetime, timezone  # 날짜 및 시간: 타임스탬프 생성을 위해 사용
 
 def main(args=None):
     # ===== 설정: 전송할 대상 및 카메라 옵션을 정의하는 부분 =====
@@ -23,8 +23,11 @@ def main(args=None):
     # AI 서비스로 영상을 전송할지 여부를 결정하는 플래그
     SEND_TO_FOLLOWING = True
 
-    # 사용할 카메라의 번호. 0은 보통 내장 웹캠을 의미합니다.
-    CAMERA_INDEX = 1
+    # 사용할 카메라의 번호 -> 이제 더 이상 사용하지 않습니다.
+    # CAMERA_INDEX = 0  # <--- 불안정한 숫자 인덱스 대신 아래의 고정 경로를 사용합니다.
+
+    # udev 규칙으로 생성한 고정된 카메라 경로를 사용합니다.
+    WEBCAM_PATH = '/dev/my_webcam'
 
     # ===== 소켓 설정: UDP 통신을 위한 소켓을 생성하는 부분 =====
     # 모니터링 서비스로 데이터를 보내기 위한 UDP 소켓 생성
@@ -33,17 +36,22 @@ def main(args=None):
     sock_following = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
     # ===== 카메라 초기화: OpenCV를 사용하여 카메라를 여는 부분 =====
-    # 지정된 번호(CAMERA_INDEX)의 카메라를 엽니다.
-    cap = cv2.VideoCapture(CAMERA_INDEX)
+    # ★★★ 핵심 수정 부분 ★★★
+    # 지정된 경로의 카메라를 리눅스 표준 드라이버(V4L2)로 명시하여 엽니다.
+    # 이렇게 하면 드라이버 충돌을 피하고 안정성이 크게 향상됩니다.
+    cap = cv2.VideoCapture(WEBCAM_PATH, cv2.CAP_V4L2)
+
     # 카메라가 성공적으로 열렸는지 확인하고, 실패 시 에러를 발생시켜 프로그램을 중단합니다.
     if not cap.isOpened():
-        raise RuntimeError(f"Camera index {CAMERA_INDEX} not found.")
+        # 에러 메시지도 경로를 사용하도록 수정하여 어떤 카메라 문제인지 명확히 합니다.
+        raise RuntimeError(f"Camera path '{WEBCAM_PATH}' not found or could not be opened.")
 
     # 전송하는 각 프레임에 고유 번호를 붙이기 위한 카운터 변수
     frame_id = 0
 
     try:
         # 프로그램이 중단되기 전까지 계속해서 프레임을 캡처하고 전송하는 메인 루프
+        print(f"✅ Starting camera streaming from '{WEBCAM_PATH}'...")
         while True:
             # 카메라에서 현재 프레임을 한 장 읽어옵니다.
             # ret은 성공 여부(True/False), frame은 실제 이미지 데이터(Numpy 배열)입니다.
@@ -106,7 +114,6 @@ def main(args=None):
         # 사용하던 소켓 리소스를 모두 닫습니다.
         sock_monitoring.close()
         sock_following.close()
-
 
 # 스크립트가 직접 실행될 때 main 함수를 호출하도록 하는 부분
 if __name__ == '__main__':
