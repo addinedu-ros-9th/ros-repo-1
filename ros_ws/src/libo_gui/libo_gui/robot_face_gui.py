@@ -525,7 +525,7 @@ class RobotFaceNode(Node):
         if FaceExpression:
             self.face_expression_sub = self.create_subscription(
                 FaceExpression,
-                'libo_face_expression',
+                '/face_expression',  # 이미 변경됨
                 self.face_expression_callback,
                 10
             )
@@ -533,23 +533,23 @@ class RobotFaceNode(Node):
         if VoiceExpression:
             self.voice_expression_sub = self.create_subscription(
                 VoiceExpression,
-                'libo_voice_expression', 
+                '/voice_expression',  # libo_voice_expression에서 변경
                 self.voice_expression_callback,
                 10
             )
         
         # 발행자들 (테스트용 메시지 발행)
         if FaceExpression:
-            self.face_expression_pub = self.create_publisher(FaceExpression, 'libo_face_expression', 10)
+            self.face_expression_pub = self.create_publisher(FaceExpression, '/face_expression', 10)  # 이미 변경됨
         
         if VoiceExpression:
-            self.voice_expression_pub = self.create_publisher(VoiceExpression, 'libo_voice_expression', 10)
+            self.voice_expression_pub = self.create_publisher(VoiceExpression, '/voice_expression', 10)  # libo_voice_expression에서 변경
         
         self.gui = None  # GUI 인스턴스 저장용
         
         self.get_logger().info('🤖 Libo Robot Face GUI Node started - 통합된 상태 시스템!')
-        self.get_logger().info(f'   📥 구독 토픽: libo_face_expression, libo_voice_expression (모두 독립적인 상태)')
-        self.get_logger().info(f'   📤 발행 토픽: libo_face_expression, libo_voice_expression')
+        self.get_logger().info(f'   📥 구독 토픽: /face_expression, /voice_expression (모두 독립적인 상태)')  # 로그 업데이트
+        self.get_logger().info(f'   📤 발행 토픽: /face_expression, /voice_expression')  # 로그 업데이트
         self.get_logger().info(f'   🎯 상태 시스템: FaceExpression과 VoiceExpression 모두 독립적인 상태')
     
     def face_expression_callback(self, msg):
@@ -607,7 +607,7 @@ def main(args=None):
     print("🚀 Libo Robot Face GUI 시작!")
     print("   🎭 지원 표정: normal, focused, charging, heavy, happy, sad")
     print("   🎤 지원 음성: listening, speaking (독립적인 상태)")
-    print("   🔗 ROS2 토픽: libo_face_expression, libo_voice_expression (모두 독립적인 상태)")
+    print("   🔗 ROS2 토픽: /face_expression, /voice_expression (모두 독립적인 상태)")  # 로그 업데이트
     print("   🎯 상태 시스템: FaceExpression과 VoiceExpression 모두 독립적인 상태")
     
     # 애플리케이션 실행
