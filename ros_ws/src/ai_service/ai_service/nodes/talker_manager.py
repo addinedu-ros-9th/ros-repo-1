@@ -180,6 +180,7 @@ class CommunicationManager:
         self.last_status_report_time = 0  # 마지막 상태 출력 시간
         self.last_status = False  # 마지막 상태 기록
         self.talker_node = None  # TalkerNode 참조 (나중에 설정됨)
+        self.task_ended = False  # EndTask 호출 후 플래그 - 음성 수집 중지를 위해 사용
         print(f"[{get_kr_time()}][CONFIG] 토커매니저 기본 상태: 비활성화됨 (웨이크워드 감지 불가능)")
 
     def start_udp_receiver(self):
@@ -604,9 +605,19 @@ class TalkerNode(Node):
         """EndTask 서비스 응답 처리"""
         try:
             response = future.result()
+            robot_id = self.comm_manager.current_robot_id if self.comm_manager.current_robot_id != "unknown" else "libo_a"
+            
             if response.success:
                 self.get_logger().info(f"EndTask 서비스 성공: {response.message if response.message else 'No message'}")
                 print(f"[{get_kr_time()}][SERVICE] ✅ EndTask 서비스 호출 성공")
+                
+                # 태스크 종료 플래그 설정
+                self.comm_manager.task_ended = True
+                print(f"[{get_kr_time()}][SYSTEM] 태스크 종료 플래그 설정됨 - 음성 수집 프로세스 중지")
+                
+                # 얼굴 표정을 normal로 변경
+                self.publish_face_expression(robot_id, "normal")
+                
             else:
                 self.get_logger().warning(f"EndTask 서비스 실패: {response.message if response.message else 'No message'}")
                 print(f"[{get_kr_time()}][SERVICE] ⚠️ EndTask 서비스 호출 실패: {response.message}")
@@ -704,6 +715,11 @@ class TalkerNode(Node):
         
         if success:
             self.get_logger().info(f"음성 명령 '{category}.{action}' 성공적으로 실행됨")
+            
+            # "return" 액션인 경우 EndTask 서비스 호출하여 작업 종료
+            if action == "return":
+                print(f"[{get_kr_time()}][SYSTEM] 'return' 액션 감지됨, EndTask 서비스 호출")
+                self.call_end_task(robot_id)
         else:
             self.get_logger().warning(f"음성 명령 '{category}.{action}' 실행 실패")
     
@@ -925,6 +941,17 @@ def main(args=None):
                         os.remove(noise_wav)  # 임시 파일 삭제
                         
                         # [2] 실제 음성 수집 시작 (침묵 감지 기능 추가)
+                        
+                        # task_ended 플래그 확인 - EndTask가 호출된 경우 음성 수집 건너뜀
+                        if comm_manager.task_ended:
+                            print(f"[{get_kr_time()}][SYSTEM] ⚠️ EndTask가 호출되었습니다. 음성 수집을 건너뜁니다.")
+                            # 웨이크워드 대기 상태로 돌아가기
+                            robot_id = "libo_a"  # 기본 로봇 ID
+                            talker_node.publish_face_expression(robot_id, "normal")
+                            comm_manager.task_ended = False  # 플래그 초기화
+                            print(f"[{get_kr_time()}][SYSTEM] 웨이크워드 대기 상태로 돌아갑니다.")
+                            continue
+                            
                         print(f"[{get_kr_time()}][RECORD] 음성 수집 시작... (최대 15초, 침묵 감지시 자동 종료)")
                         
                         # 사용자의 말을 듣기 시작할 때 얼굴 표정을 'listening'으로 변경
@@ -1102,6 +1129,17 @@ def main(args=None):
                     os.remove(noise_wav)  # 임시 파일 삭제
                     
                     # [2] 실제 음성 수집 시작 (침묵 감지 기능 추가)
+                    
+                    # task_ended 플래그 확인 - EndTask가 호출된 경우 음성 수집 건너뜀
+                    if comm_manager.task_ended:
+                        print(f"[{get_kr_time()}][SYSTEM] ⚠️ EndTask가 호출되었습니다. 음성 수집을 건너뜁니다.")
+                        # 웨이크워드 대기 상태로 돌아가기
+                        robot_id = "libo_a"  # 기본 로봇 ID
+                        talker_node.publish_face_expression(robot_id, "normal")
+                        comm_manager.task_ended = False  # 플래그 초기화
+                        print(f"[{get_kr_time()}][SYSTEM] 웨이크워드 대기 상태로 돌아갑니다.")
+                        continue
+                    
                     print(f"[{get_kr_time()}][RECORD] 음성 수집 시작... (최대 15초, 침묵 감지시 자동 종료)")
                     
                     # 사용자의 말을 듣기 시작할 때 얼굴 표정을 'listening'으로 변경
