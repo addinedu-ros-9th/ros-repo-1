@@ -19,7 +19,7 @@ from libo_interfaces.srv import ActivateTalker, DeactivateTalker  # Talker 서�
 from libo_interfaces.srv import ActivateTracker, DeactivateTracker  # Tracker 서비스 추가
 from libo_interfaces.msg import DetectionTimer  # DetectionTimer 메시지 추가
 from libo_interfaces.msg import VoiceCommand  # VoiceCommand 메시지 추가
-from libo_interfaces.msg import Expression  # Expression 메시지 추가
+from libo_interfaces.msg import FaceExpression  # FaceExpression 메시지 추가 (Expression에서 변경)
 from std_msgs.msg import String  # LED 메시지 추가
 
 class AiServerControlTab(QWidget):
@@ -715,7 +715,7 @@ class AiServerControlTab(QWidget):
         try:
             # Expression 구독자 생성
             self.expression_subscription = self.ros_node.create_subscription(
-                Expression,
+                FaceExpression,
                 'expression',
                 self.expression_callback,
                 10
@@ -780,12 +780,12 @@ class AiServerControlTab(QWidget):
         """Expression 메시지 수신 콜백"""
         try:
             robot_id = msg.robot_id
-            robot_status = msg.robot_status
+            expression_type = msg.expression_type
             current_time = time.strftime('%H:%M:%S', time.localtime())
             
             # 현재 로봇 정보 업데이트
             self.current_robot_id = robot_id
-            self.current_robot_status = robot_status
+            self.current_robot_status = expression_type
             
             # 상태에 따른 이모지 매핑
             expression_emojis = {
@@ -798,10 +798,10 @@ class AiServerControlTab(QWidget):
             }
             
             # 현재 표정 업데이트
-            self.current_robot_expression = expression_emojis.get(robot_status, "😐")
+            self.current_robot_expression = expression_emojis.get(expression_type, "😐")
             
             # 로그 메시지 생성
-            log_message = f"📥 Expression 수신: {robot_id} - {robot_status} {self.current_robot_expression} at {current_time}"
+            log_message = f"📥 Expression 수신: {robot_id} - {expression_type} {self.current_robot_expression} at {current_time}"
             self.log_expression_message(log_message)
             
             # UI 업데이트 (표정 표시 + LED 상태 반영)
