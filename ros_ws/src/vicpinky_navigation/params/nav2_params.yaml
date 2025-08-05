@@ -78,10 +78,13 @@ controller_server:
     controller_plugins: ["FollowPath"]
 
     # Progress checker parameters
+    failure_tolerance: 0.25  # 🔸 0.3에서 0.25로 더 빠른 실패 감지
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 10.0
+      # required_movement_radius: 0.5
+      required_movement_radius: 0.1  # 0.5에서 0.2로 더 민감하게!!!
+      # movement_time_allowance: 2.0
+      movement_time_allowance: 2.0 # 🔸 2.0에서 1.0초로 더 빠르게!!!!!
     # Goal checker parameters
     #precise_goal_checker:
     #  plugin: "nav2_controller::SimpleGoalChecker"
@@ -237,7 +240,7 @@ planner_server:
       plugin: "nav2_navfn_planner::NavfnPlanner"
       tolerance: 0.5
       use_astar: false
-      allow_unknown: true
+      allow_unknown: false  # 🔸 true에서 false로 - unknown 영역 통과 금지 여기가 뭔가 재경로로직이랑 연관되 중요해보임
 
 smoother_server:
   ros__parameters:
@@ -284,7 +287,8 @@ waypoint_follower:
   ros__parameters:
     use_sim_time: False
     loop_rate: 20
-    stop_on_failure: false
+    # stop_on_failure: false # if true, the robot will stop if it cannot reach a waypoint
+    stop_on_failure: True 
     waypoint_task_executor_plugin: "wait_at_waypoint"
     wait_at_waypoint:
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"

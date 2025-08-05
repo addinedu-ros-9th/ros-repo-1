@@ -1004,23 +1004,17 @@ class AiServerControlTab(QWidget):
         try:
             # UI에서 입력된 값 읽기
             robot_id = self.end_task_robot_id_edit.text().strip()
-            task_type = self.end_task_type_edit.text().strip()
             
             # 입력값 검증
             if not robot_id:
                 self.log_voice_command_message("❌ Robot ID를 입력해주세요.")
                 return
             
-            if not task_type:
-                self.log_voice_command_message("❌ Task Type을 입력해주세요.")
-                return
-            
             # EndTask 서비스 요청 생성
             request = EndTask.Request()
             request.robot_id = robot_id
-            request.task_type = task_type
             
-            self.log_voice_command_message(f"📤 EndTask 요청 발행: robot_id={request.robot_id}, task_type={request.task_type}")
+            self.log_voice_command_message(f"📤 EndTask 요청 발행: robot_id={request.robot_id}")
             
             # 비동기 서비스 호출
             future = self.end_task_client.call_async(request)

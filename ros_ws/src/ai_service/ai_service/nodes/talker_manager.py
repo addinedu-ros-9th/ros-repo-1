@@ -28,7 +28,7 @@ from libo_interfaces.srv import EndTask, ActivateTalker, DeactivateTalker
 
 # ================== 네트워크/오디오 기본 설정 ==================
 # 네트워크 설정
-HARDWARE_HANDLER_IP = "127.0.0.1"      # 🖥️ Hardware Handler IP (UDP/TCP 서버 주소)
+HARDWARE_HANDLER_IP = "0.0.0.0"      # 🖥️ Hardware Handler IP (UDP/TCP 서버 주소)
 MIC_STREAM_PORT = 7010                 # 🎤 마이크 스트림 포트 (UDP 수신)
 SPEAKER_PORT = 7002                    # 🔊 스피커 출력 포트 (TCP 서버)
 
@@ -104,15 +104,19 @@ for path in [PORCUPINE_MODEL_PATH, PORCUPINE_KEYWORD_PATH]:
 VOICE_COMMANDS = {
     # 공통 음성 명령
     "common": {
-        "power_on": {"type": "mp3", "value": "power_on.mp3"},  # (전원 켜지는 소리 - 삐빅)
-        "initialized": {"type": "mp3", "value": "robot_initialized.mp3"},  # (초기화 완료 소리 - 따리리리링)
+        "power_on": {"type": "mp3", "value": "power_on.mp3"},                   # (전원 켜지는 소리 - 삐빅)
+        "initialized": {"type": "mp3", "value": "robot_initialized.mp3"},       # (초기화 완료 소리 - 따리리리링)
         "charging": {"type": "tts", "value": "충전을 시작하겠습니다."},
         "battery_sufficient": {"type": "tts", "value": "배터리가 충분합니다. 대기모드로 전환합니다."},
-        "depart_base": {"type": "tts", "value": "출발합니다~ (종잔기를 뽑고)"},
-        "obstacle_detected": {"type": "mp3", "value": "honk.mp3"},  # (장애물이 감지됐습니다. 잠시합니다. / 빵!!!!!!!!!!)
+        "depart_base": {"type": "tts", "value": "출발합니다~ (충전기를 뽑고)"},
+        "high_weigh": {"type": "tts", "value": "바구니가 가득 찼습니다. 정리해주세요."},
+        "obstacle_detected": {"type": "mp3", "value": "honk.mp3"},              # (장애물이 감지됐습니다. 잠시합니다. / 빵!!!!!!!!!!)
         "reroute": {"type": "tts", "value": "새로운 경로로 안내합니다."},
-        "return": {"type": "mp3", "value": "complete.mp3"},  # (복귀하겠습니다. / (북귀음 소리 - 빠빕))
-        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
+        "return": {"type": "mp3", "value": "complete.mp3"},                     # (복귀하겠습니다. / (북귀음 소리 - 빠빕))
+        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."},
+        "navigation_canceled": {"type": "tts", "value": "주행이 취소되었습니다"},
+        "emergency_stop": {"type": "tts", "value": "비상 정지! 안전을 위해 모든 작업을 중단합니다."},
+        "emergency_recovery": {"type": "tts", "value": "비상 상황이 해결되었습니다. 정상 상태로 복구합니다"}
     },
     
     # 안내 관련 음성 명령
@@ -120,9 +124,9 @@ VOICE_COMMANDS = {
         "depart_base": {"type": "tts", "value": "출발합니다~"},
         "arrived_kiosk": {"type": "tts", "value": "잭 위치까지 에스코팅을 시작하겠습니다. 뒤로 따라와주시길 바랍니다."},
         "lost_user": {"type": "tts", "value": "손님이 보이지 않습니다. 20초 후에 자동종료 됩니다."},
-        "user_reconnected": {"type": "mp3", "value": "reconnected.mp3"},  # (다시 연결된 소리, 뿌루루? 빠빅?)
+        "user_reconnected": {"type": "mp3", "value": "reconnected.mp3"},        # (다시 연결된 소리, 뿌루루? 빠빅?)
         "arrived_destination": {"type": "tts", "value": "도착했습니다. 더 필요한 것이 있으면 키오스크에서 불러주세요."},
-        "return": {"type": "mp3", "value": "complete.mp3"},  # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
+        "return": {"type": "mp3", "value": "complete.mp3"},                     # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
         "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
     },
     
@@ -132,8 +136,8 @@ VOICE_COMMANDS = {
         "arrived_admin_desk": {"type": "tts", "value": "딜리버리 준비가 완료되었습니다. 다음 목적지를 선택해주세요."},
         "receive_next_goal": {"type": "tts", "value": "목적지를 수신하였습니다. 출발하겠습니다."},
         "arrived_destination": {"type": "tts", "value": "도착했습니다. 작업이 완료되면 말해주세요."},
-        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},  # 네? / (삐빅)
-        "return": {"type": "mp3", "value": "complete.mp3"},  # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
+        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},        # 네? / (삐빅)
+        "return": {"type": "mp3", "value": "complete.mp3"},                      # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
         "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
     },
     
@@ -144,10 +148,10 @@ VOICE_COMMANDS = {
         "qr_authenticated": {"type": "tts", "value": "QR 인증 완료! 어시스트를 시작하면 카메라 앞에서 대기 해주시길 바랍니다."},
         "no_person_5s": {"type": "tts", "value": "감지 실패!"},
         "person_detected": {"type": "tts", "value": "감지 성공!"},
-        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},  # 네? / (삐빅)
+        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},       # 네? / (삐빅)
         "pause": {"type": "tts", "value": "일시정지합니다."},
         "resume": {"type": "tts", "value": "어시스트를 재개합니다."},
-        "return": {"type": "mp3", "value": "complete.mp3"},  # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
+        "return": {"type": "mp3", "value": "complete.mp3"},                     # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
         "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
     }
 }
@@ -374,8 +378,15 @@ class CommunicationManager:
                 samples = np.array(sound.get_array_of_samples())
                 audio_float32 = samples.astype(np.float32) / 32768.0  # int16 범위에서 float32로 변환
                 
+                # 볼륨 증가 (약 3데시벨 증가 = 약 1.4배 볼륨)
+                volume_factor = 1.4  # 약 3dB 증가
+                audio_float32 = audio_float32 * volume_factor
+                
+                # 클리핑 방지 (값이 1.0을 넘지 않도록)
+                audio_float32 = np.clip(audio_float32, -1.0, 1.0)
+                
                 # float32 형식으로 오디오 데이터 전송
-                print(f"[{get_kr_time()}][AUDIO] MP3 오디오 데이터 전송 중...")
+                print(f"[{get_kr_time()}][AUDIO] MP3 오디오 데이터 전송 중... (볼륨 3dB 증가)")
                 success = self.send_audio_data(audio_float32)
                 
                 if success:
@@ -421,8 +432,16 @@ class CommunicationManager:
             audio_data = np.frombuffer(tts_response.audio_content, dtype=np.int16)
             audio_float32 = audio_data.astype(np.float32) / 32768.0
             
+            # 볼륨 증가 (약 3데시벨 증가 = 약 1.4배 볼륨)
+            # 3dB 증가는 약 1.4배(10^(3/20))의 amplitude 증가에 해당
+            volume_factor = 1.4  # 약 3dB 증가
+            audio_float32 = audio_float32 * volume_factor
+            
+            # 클리핑 방지 (값이 1.0을 넘지 않도록)
+            audio_float32 = np.clip(audio_float32, -1.0, 1.0)
+            
             # TCP를 통해 스피커 노드로 전송
-            print(f"[{get_kr_time()}][AUDIO] TTS 오디오 데이터 전송 중...")
+            print(f"[{get_kr_time()}][AUDIO] TTS 오디오 데이터 전송 중... (볼륨 3dB 증가)")
             success = self.send_audio_data(audio_float32)
             
             if success:
@@ -542,12 +561,11 @@ class TalkerNode(Node):
         
         self.get_logger().info('TalkerNode 초기화 완료!')
     
-    def call_end_task(self, robot_id, task_type):
+    def call_end_task(self, robot_id):
         """작업 종료 서비스 호출
         
         Args:
             robot_id (str): 로봇 ID (예: "libo_a")
-            task_type (str): 작업 유형 ("assist" 또는 "delivery")
         """
         # 서비스 가용성 확인
         if not self.end_task_client.service_is_ready():
@@ -558,9 +576,8 @@ class TalkerNode(Node):
         
         request = EndTask.Request()
         request.robot_id = robot_id
-        request.task_type = task_type
         
-        self.get_logger().info(f"EndTask 서비스 호출 중 (robot_id: {robot_id}, task_type: {task_type})")
+        self.get_logger().info(f"EndTask 서비스 호출 중 (robot_id: {robot_id})")
         future = self.end_task_client.call_async(request)
         future.add_done_callback(self.on_end_task_response)
         
@@ -775,6 +792,10 @@ def main(args=None):
                     if keyword_index >= 0:
                         print(f"\n[{get_kr_time()}][WAKE] 🟢 Wakeword('리보야') 감지됨!")
                         
+                        # 웨이크워드 감지 시 'stop' 명령 바로 발행
+                        print(f"[{get_kr_time()}][COMMAND] TalkCommand 발행: robot_id=libo_a, action=stop")
+                        talker_node.publish_talk_command("libo_a", "stop")
+                        
                         # 웨이크워드 감지 시 응답 출력
                         print(f"[{get_kr_time()}][TTS] 웨이크워드 확인 응답 생성 중...")
                         
@@ -811,8 +832,15 @@ def main(args=None):
                                     wake_audio_data = np.frombuffer(wake_tts_response.audio_content, dtype=np.int16)
                                     wake_audio_float32 = wake_audio_data.astype(np.float32) / 32768.0
                                     
+                                    # 볼륨 증가 (약 3데시벨 증가 = 약 1.4배 볼륨)
+                                    volume_factor = 1.4  # 약 3dB 증가
+                                    wake_audio_float32 = wake_audio_float32 * volume_factor
+                                    
+                                    # 클리핑 방지 (값이 1.0을 넘지 않도록)
+                                    wake_audio_float32 = np.clip(wake_audio_float32, -1.0, 1.0)
+                                    
                                     # TCP를 통해 스피커 노드로 전송
-                                    print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 중...")
+                                    print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 중... (볼륨 3dB 증가)")
                                     
                                     if comm_manager.send_audio_data(wake_audio_float32):
                                         print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 완료 (TTS)")
@@ -919,9 +947,15 @@ def main(args=None):
                             except sr.UnknownValueError:
                                 transcript = None
                                 print(f"[{get_kr_time()}][STT] ❌ 음성 인식 실패 (음성을 감지할 수 없음)")
+                                # 음성이 감지되지 않았을 때 사용자에게 TTS로 알림
+                                comm_manager.play_tts_response("음성이 감지되지 않았습니다. 다시 불러주세요.")
+                                print(f"[{get_kr_time()}][TTS] 음성 감지 실패 안내 메시지 재생")
                             except Exception as e:
                                 transcript = None
                                 print(f"[{get_kr_time()}][STT] ❌ STT 오류: {e}")
+                                # 기타 오류 발생 시에도 안내
+                                comm_manager.play_tts_response("음성 인식 중 오류가 발생했습니다. 다시 시도해주세요.")
+                                print(f"[{get_kr_time()}][TTS] 음성 인식 오류 안내 메시지 재생")
 
                         os.remove(tmp_wav)
 
@@ -932,7 +966,7 @@ def main(args=None):
                                 "사용자의 발화를 듣고, 아래 4가지 의도 중 하나로 분류하세요.\n\n"
                                 "- pause_follow: '잠깐 멈춰', '멈춰봐' 등 일시정지 명령\n"
                                 "- resume_follow: '다시 따라와', '다시 시작해' 등 팔로윙 재개 명령\n"
-                                "- stop_assist: '어시스트 그만하고 복귀해', '그만' 등 어시스트 종료 명령\n"
+                                "- stop_follow: '어시스트 그만하고 복귀해', '그만' 등 어시스트 종료 명령\n"
                                 "- ignore: '고마워', '아니야' 등 기타 대화나 무시해도 되는 표현\n\n"
                                 "결과는 반드시 다음 JSON 형식으로만 출력해야 합니다:\n"
                                 '{"intent": "..."}'
@@ -976,13 +1010,13 @@ def main(args=None):
                                 if success:
                                     talker_node.publish_talk_command(robot_id, "stop")
                                     
-                            elif intent == "stop_assist":
+                            elif intent == "stop_follow":
                                 # 어시스트 종료: EndTask 서비스 호출
                                 print(f"[{get_kr_time()}][RESPONSE] '어시스트 종료' 명령 처리")
                                 success = comm_manager.play_tts_response("네, 어시스트를 종료하고 복귀하겠습니다.")
                                 if success:
-                                    # EndTask 서비스 호출 - task_type은 "assist"로 고정
-                                    talker_node.call_end_task(robot_id, task_type="assist")
+                                    # EndTask 서비스 호출
+                                    talker_node.call_end_task(robot_id)
                             
                             # 성공 여부에 따른 로그
                             if success:
@@ -1083,9 +1117,15 @@ def main(args=None):
                         except sr.UnknownValueError:
                             transcript = None
                             print(f"[{get_kr_time()}][STT] ❌ 음성 인식 실패 (음성을 감지할 수 없음)")
+                            # 음성이 감지되지 않았을 때 사용자에게 TTS로 알림
+                            comm_manager.play_tts_response("음성이 감지되지 않았습니다. 다시 불러주세요.")
+                            print(f"[{get_kr_time()}][TTS] 음성 감지 실패 안내 메시지 재생")
                         except Exception as e:
                             transcript = None
                             print(f"[{get_kr_time()}][STT] ❌ STT 오류: {e}")
+                            # 기타 오류 발생 시에도 안내
+                            comm_manager.play_tts_response("음성 인식 중 오류가 발생했습니다. 다시 시도해주세요.")
+                            print(f"[{get_kr_time()}][TTS] 음성 인식 오류 안내 메시지 재생")
 
                     os.remove(tmp_wav)
 
@@ -1096,7 +1136,7 @@ def main(args=None):
                             "사용자의 발화를 듣고, 아래 4가지 의도 중 하나로 분류하세요.\n\n"
                             "- pause_follow: '잠깐 멈춰', '멈춰봐' 등 일시정지 명령\n"
                             "- resume_follow: '다시 따라와', '다시 시작해' 등 팔로윙 재개 명령\n"
-                            "- stop_assist: '어시스트 그만하고 복귀해', '그만' 등 어시스트 종료 명령\n"
+                            "- stop_follow: '작업 그만하고 복귀해', '작업그만' 등 어시스트 또는 에스코팅 종료 명령\n"
                             "- ignore: '고마워', '아니야' 등 기타 대화나 무시해도 되는 표현\n\n"
                             "결과는 반드시 다음 JSON 형식으로만 출력해야 합니다:\n"
                             '{"intent": "..."}'
@@ -1140,13 +1180,13 @@ def main(args=None):
                             if success:
                                 talker_node.publish_talk_command(robot_id, "stop")
                                 
-                        elif intent == "stop_assist":
+                        elif intent == "stop_follow":
                             # 어시스트 종료: EndTask 서비스 호출
                             print(f"[{get_kr_time()}][RESPONSE] '어시스트 종료' 명령 처리")
                             success = comm_manager.play_tts_response("네, 어시스트를 종료하고 복귀하겠습니다.")
                             if success:
-                                # EndTask 서비스 호출 - task_type은 "assist"로 고정
-                                talker_node.call_end_task(robot_id, task_type="assist")
+                                # EndTask 서비스 호출
+                                talker_node.call_end_task(robot_id)
                         
                         # 성공 여부에 따른 로그
                         if success:

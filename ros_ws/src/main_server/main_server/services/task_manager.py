@@ -394,10 +394,10 @@ class TaskManager(Node):
                         {'action': 'deactivate_detector'},  # 감지기 비활성화
                         {'action': 'advance_stage'}  # Stage 3으로 진행
                     ],
-                    'timer_10s': [  # 10초 타이머 시 실행할 액션들
+                    'timer_5s': [  # 5초 타이머 시 실행할 액션들
                         {'action': 'voice', 'command': 'lost_user'}  # 사용자 분실 경고 음성
                     ],
-                    'timer_30s': [  # 30초 타이머 시 실행할 액션들
+                    'timer_10s': [  # 10초 타이머 시 실행할 액션들
                         {'action': 'cancel_navigation'},  # 네비게이션 취소
                         {'action': 'deactivate_detector'},  # 감지기 비활성화
                         {'action': 'force_stage', 'target': 3}  # 강제로 Stage 3으로 이동
@@ -1194,27 +1194,22 @@ class TaskManager(Node):
                 counter_value = int(msg.command)
                 self.get_logger().info(f'📊 [DetectionTimer] 카운터: {counter_value}초 (robot: {msg.robot_id})')
                 
-                # 10초 초과 시 특별 처리
-                if counter_value >= 10:
-                    self.get_logger().warn(f'🚨 [DetectionTimer] 10초 초과! 특별 처리 시작 (robot: {msg.robot_id})')
+                # 현재 활성 task 확인
+                if self.tasks and len(self.tasks) > 0:
+                    current_task = self.tasks[0]  # 첫 번째 활성 task
                     
-                    # 현재 활성 task 확인
-                    if self.tasks and len(self.tasks) > 0:
-                        current_task = self.tasks[0]  # 첫 번째 활성 task
-                        
-                        # 새로운 통합 시스템으로 timer 이벤트 처리
-                        if counter_value == 5:
-                            self.process_task_stage_logic(current_task, current_task.stage, 'timer_5s')
-                        elif counter_value >= 10:
-                            self.process_task_stage_logic(current_task, current_task.stage, 'timer_10s')
-                    
-                    else:
-                        # 활성 task가 없는 경우
-                        self.get_logger().warn(f'⚠️ [DetectionTimer] 10초 초과했지만 활성 task가 없음')
+                    # 새로운 통합 시스템으로 timer 이벤트 처리
+                    if counter_value == 5:
+                        self.get_logger().warn(f'⚠️ [DetectionTimer] 5초 경과! 주의가 필요합니다. (robot: {msg.robot_id})')
+                        self.process_task_stage_logic(current_task, current_task.stage, 'timer_5s')
+                    elif counter_value >= 10:
+                        self.get_logger().warn(f'🚨 [DetectionTimer] 10초 초과! 특별 처리 시작 (robot: {msg.robot_id})')
+                        self.process_task_stage_logic(current_task, current_task.stage, 'timer_10s')
                 
-                # 5초일 때는 일반 경고만 (기존 로직 유지)
-                elif counter_value == 5:
-                    self.get_logger().warn(f'⚠️ [DetectionTimer] 5초 경과! 주의가 필요합니다. (robot: {msg.robot_id})')
+                else:
+                    # 활성 task가 없는 경우
+                    if counter_value >= 10:
+                        self.get_logger().warn(f'⚠️ [DetectionTimer] 10초 초과했지만 활성 task가 없음')
                 
             except ValueError:
                 # 숫자가 아닌 다른 명령인 경우
@@ -1497,12 +1492,11 @@ class TaskManager(Node):
         """EndTask 서비스 콜백"""
         self.get_logger().info(f'📥 EndTask 요청 받음!')
         self.get_logger().info(f'   - 로봇 ID: {request.robot_id}')
-        self.get_logger().info(f'   - Task Type: {request.task_type}')
         
-        # 해당 로봇의 활성 작업 찾기
+        # 해당 로봇의 활성 작업 찾기 (로봇당 하나의 활성 작업만 있음)
         active_task = None
         for task in self.tasks:
-            if task.robot_id == request.robot_id and task.task_type == request.task_type:
+            if task.robot_id == request.robot_id:  # robot_id만으로 작업 찾기
                 active_task = task
                 break
         
@@ -1510,10 +1504,10 @@ class TaskManager(Node):
             # task_stage_logic에서 end_task 이벤트 처리
             self.process_task_stage_logic(active_task, active_task.stage, 'end_task')
             response.success = True
-            response.message = f"EndTask 이벤트 처리 완료: {request.robot_id} - {request.task_type}"
+            response.message = f"EndTask 이벤트 처리 완료: {request.robot_id} - {active_task.task_type}"  # active_task에서 task_type 가져오기
         else:
             response.success = False
-            response.message = f"로봇 <{request.robot_id}>의 {request.task_type} 작업을 찾을 수 없습니다"
+            response.message = f"로봇 <{request.robot_id}>의 활성 작업을 찾을 수 없습니다"
         
         return response
 

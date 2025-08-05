@@ -571,26 +571,6 @@ QLineEdit {
          </widget>
         </item>
         <item>
-         <widget class="QLabel" name="task_type_label">
-          <property name="text">
-           <string>Task Type:</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QLineEdit" name="end_task_type_edit">
-          <property name="maximumSize">
-           <size>
-            <width>80</width>
-            <height>25</height>
-           </size>
-          </property>
-          <property name="text">
-           <string>assist</string>
-          </property>
-         </widget>
-        </item>
-        <item>
          <spacer name="horizontalSpacer6">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
