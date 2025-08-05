@@ -1,7 +1,12 @@
 #!/home/robolee/venv/jazzy/bin/python3
 
-import sys
+# 🔧 Qt 플러그인 충돌 해결을 위한 환경변수 설정 (OpenCV vs PyQt5)
 import os
+os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)  # OpenCV Qt 경로 제거
+os.environ['QT_QPA_PLATFORM'] = 'xcb'  # 명시적으로 xcb 사용
+os.environ['DISPLAY'] = os.environ.get('DISPLAY', ':0')  # PyQt와 OpenCV 충돌 방지
+
+import sys
 import rclpy
 from rclpy.node import Node
 from PyQt5.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout, 
@@ -84,7 +89,11 @@ class BarcodeScannerThread(QThread):
         self.found_barcodes = set()
     
     def run(self):
+        """스캔 실행 - Qt 충돌 방지"""
         try:
+            # 🔧 Qt 충돌 방지를 위한 환경변수 설정
+            os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)
+            
             self.vs = VideoStream(src=0).start()
             time.sleep(2.0)
             self.running = True
@@ -485,22 +494,48 @@ class StockInThread(QThread):
             self.finished.emit(False, f"입고 중 오류 발생: {str(e)}")
 
 def main(args=None):
-    rclpy.init(args=args)
+    """메인 함수 - Qt 충돌 해결"""
+    print("🚀 Stock GUI 시작... (Qt 플러그인 충돌 해결)")
     
-    stock_gui = StockGUI()
+    # 🔧 Qt 플러그인 충돌 해결을 위한 환경변수 설정
+    os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)  # OpenCV Qt 경로 제거
+    os.environ['QT_QPA_PLATFORM'] = 'xcb'  # 명시적으로 xcb 사용
+    os.environ['DISPLAY'] = os.environ.get('DISPLAY', ':0')  # PyQt와 OpenCV 충돌 방지
+    
+    # 🔧 ROS2 환경 확인
+    ros_distro = os.environ.get('ROS_DISTRO', 'unknown')
+    ros_version = os.environ.get('ROS_VERSION', 'unknown')
+    print(f"🔧 ROS2 환경: {ros_distro} {ros_version}")
+    
+    # 🔧 Python 경로 설정
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    src_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))  # ros_ws/src
+    if src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
     
     try:
+        # ROS2 초기화 (PyQt 앱 생성 전에!)
+        rclpy.init(args=args)
+        print("✅ ROS2 초기화 완료")
+        
+        stock_gui = StockGUI()
+        print("✅ Stock GUI 생성 완료")
+        
         exit_code = stock_gui.run()
         return exit_code
     except KeyboardInterrupt:
+        print("⚠️ 사용자에 의해 중단됨")
         pass
     except Exception as e:
         print(f"❌ GUI 실행 중 오류: {e}")
+        import traceback
+        traceback.print_exc()
     finally:
         if 'stock_gui' in locals():
             stock_gui.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
+        print("🔧 리소스 정리 완료")
 
 if __name__ == '__main__':
     main() 

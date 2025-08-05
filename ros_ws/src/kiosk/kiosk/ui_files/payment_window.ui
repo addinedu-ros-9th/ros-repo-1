@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1000</width>
-    <height>700</height>
+    <width>1800</width>
+    <height>1000</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -86,8 +86,8 @@
    <widget class="QPushButton" name="back_button">
     <property name="geometry">
      <rect>
-      <x>880</x>
-      <y>30</y>
+      <x>1650</x>
+      <y>60</y>
       <width>100</width>
       <height>40</height>
      </rect>
@@ -128,8 +128,8 @@ QPushButton:pressed {
      <rect>
       <x>50</x>
       <y>120</y>
-      <width>450</width>
-      <height>520</height>
+      <width>871</width>
+      <height>820</height>
      </rect>
     </property>
     <property name="font">
@@ -193,7 +193,7 @@ QGroupBox::title {
       <rect>
        <x>20</x>
        <y>75</y>
-       <width>280</width>
+       <width>701</width>
        <height>40</height>
       </rect>
      </property>
@@ -222,10 +222,10 @@ QLineEdit:focus {
     <widget class="QPushButton" name="search_button">
      <property name="geometry">
       <rect>
-       <x>330</x>
-       <y>80</y>
+       <x>750</x>
+       <y>70</y>
        <width>100</width>
-       <height>40</height>
+       <height>41</height>
       </rect>
      </property>
      <property name="font">
@@ -263,8 +263,8 @@ QPushButton:pressed {
       <rect>
        <x>20</x>
        <y>130</y>
-       <width>411</width>
-       <height>250</height>
+       <width>831</width>
+       <height>581</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -296,8 +296,8 @@ QListWidget::item:hover {
     <widget class="QLabel" name="quantity_label">
      <property name="geometry">
       <rect>
-       <x>20</x>
-       <y>395</y>
+       <x>30</x>
+       <y>750</y>
        <width>80</width>
        <height>30</height>
       </rect>
@@ -323,8 +323,8 @@ QListWidget::item:hover {
     <widget class="QSpinBox" name="quantity_spinbox">
      <property name="geometry">
       <rect>
-       <x>110</x>
-       <y>395</y>
+       <x>120</x>
+       <y>750</y>
        <width>80</width>
        <height>35</height>
       </rect>
@@ -358,8 +358,8 @@ QSpinBox:focus {
      </property>
      <property name="geometry">
       <rect>
-       <x>220</x>
-       <y>390</y>
+       <x>700</x>
+       <y>740</y>
        <width>150</width>
        <height>45</height>
       </rect>
@@ -401,8 +401,8 @@ QPushButton:disabled {
     <widget class="QPushButton" name="qr_scan_button">
      <property name="geometry">
       <rect>
-       <x>150</x>
-       <y>450</y>
+       <x>510</x>
+       <y>740</y>
        <width>150</width>
        <height>45</height>
       </rect>
@@ -441,10 +441,10 @@ QPushButton:pressed {
    <widget class="QGroupBox" name="cart_payment_group">
     <property name="geometry">
      <rect>
-      <x>520</x>
+      <x>939</x>
       <y>120</y>
-      <width>430</width>
-      <height>520</height>
+      <width>811</width>
+      <height>820</height>
      </rect>
     </property>
     <property name="font">
@@ -481,8 +481,8 @@ QGroupBox::title {
       <rect>
        <x>20</x>
        <y>40</y>
-       <width>391</width>
-       <height>281</height>
+       <width>771</width>
+       <height>621</height>
       </rect>
      </property>
      <property name="styleSheet">
@@ -539,7 +539,7 @@ QHeaderView::section {
      <property name="geometry">
       <rect>
        <x>20</x>
-       <y>335</y>
+       <y>680</y>
        <width>120</width>
        <height>35</height>
       </rect>
@@ -581,8 +581,8 @@ QPushButton:disabled {
     <widget class="QPushButton" name="clear_cart_button">
      <property name="geometry">
       <rect>
-       <x>155</x>
-       <y>335</y>
+       <x>160</x>
+       <y>680</y>
        <width>120</width>
        <height>35</height>
       </rect>
@@ -620,8 +620,8 @@ QPushButton:pressed {
     <widget class="QLabel" name="total_label">
      <property name="geometry">
       <rect>
-       <x>20</x>
-       <y>390</y>
+       <x>30</x>
+       <y>740</y>
        <width>200</width>
        <height>40</height>
       </rect>
@@ -651,8 +651,8 @@ QPushButton:pressed {
      </property>
      <property name="geometry">
       <rect>
-       <x>240</x>
-       <y>380</y>
+       <x>620</x>
+       <y>720</y>
        <width>160</width>
        <height>60</height>
       </rect>
@@ -699,7 +699,7 @@ QPushButton:disabled {
      <property name="geometry">
       <rect>
        <x>130</x>
-       <y>460</y>
+       <y>760</y>
        <width>160</width>
        <height>40</height>
       </rect>

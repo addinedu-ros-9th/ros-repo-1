@@ -15,20 +15,30 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5 import uic
 
-# 바코드 스캔을 위한 라이브러리
-from pyzbar import pyzbar
-from imutils.video import VideoStream
-import imutils
+# 바코드 스캔을 위한 라이브러리 (시스템 패키지 사용)
+try:
+    from pyzbar import pyzbar
+    print("✅ pyzbar 모듈 로드 성공")
+except ImportError as e:
+    print(f"❌ pyzbar 모듈 로드 실패: {e}")
+    print("💡 sudo apt install python3-pyzbar를 실행하세요")
+    sys.exit(1)
 
 # ROS2 imports 
 import rclpy
 from rclpy.node import Node
 
 # 프로젝트 imports (결제 시스템용)
-from main_server.database.db_manager import DatabaseManager
+try:
+    from main_server.database.db_manager import DatabaseManager
+    print("✅ DatabaseManager 모듈 로드 성공")
+except ImportError as e:
+    print(f"❌ DatabaseManager 모듈 로드 실패: {e}")
+    print("💡 ROS2 워크스페이스가 빌드되었는지 확인하세요")
+    sys.exit(1)
 
 class CameraWindow(QWidget):
-    """카메라 화면을 표시하는 팝업 창 - Stock GUI와 동일한 방식"""
+    """카메라 화면을 표시하는 팝업 창 - imutils 없이 OpenCV만 사용"""
     def __init__(self):
         super().__init__()
         self.setWindowTitle("📱 바코드 스캔 - Payment")
@@ -93,7 +103,7 @@ class CameraWindow(QWidget):
         """)
     
     def update_frame(self, frame):
-        """카메라 프레임 업데이트 - Stock GUI와 동일한 방식"""
+        """카메라 프레임 업데이트 - imutils 없이 OpenCV만 사용"""
         try:
             # OpenCV BGR을 RGB로 변환
             rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -115,7 +125,7 @@ class CameraWindow(QWidget):
         self.status_label.setText(message)
 
 class BarcodeScannerThread(QThread):
-    """바코드 스캔 스레드 - Stock GUI와 동일한 방식으로 수정"""
+    """바코드 스캔 스레드 - imutils 없이 OpenCV만 사용"""
     barcode_detected = pyqtSignal(str)
     frame_ready = pyqtSignal(np.ndarray)
     status_update = pyqtSignal(str)
@@ -123,29 +133,39 @@ class BarcodeScannerThread(QThread):
     def __init__(self):
         super().__init__()
         self.running = False
-        self.vs = None
+        self.cap = None
         self.found_barcodes = set()
         self.last_scan_time = 0
         self.scan_cooldown = 3.0  # 3초 쿨다운
     
     def run(self):
-        """스캔 실행 - VideoStream 사용 (Stock GUI 방식)"""
+        """스캔 실행 - OpenCV VideoCapture 사용 (imutils 제거)"""
         try:
             # 🔧 Qt 충돌 방지를 위한 환경변수 설정
             import os
             os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)
             
-            # VideoStream 초기화 (Stock GUI와 동일)
-            self.vs = VideoStream(src=0).start()
-            time.sleep(2.0)
+            # OpenCV VideoCapture 초기화 (imutils 대신)
+            self.cap = cv2.VideoCapture(0)
+            if not self.cap.isOpened():
+                self.status_update.emit("❌ 카메라를 열 수 없습니다.")
+                return
+            
+            # 카메라 설정
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            self.cap.set(cv2.CAP_PROP_FPS, 30)
+            
+            time.sleep(1.0)  # 카메라 초기화 대기
             self.running = True
             self.status_update.emit("카메라가 준비되었습니다. 📱 바코드를 비춰주세요!")
             
             while self.running:
-                frame = self.vs.read()
-                if frame is None:
+                ret, frame = self.cap.read()
+                if not ret:
                     continue
                     
+                # 프레임 크기 조정
                 frame = cv2.resize(frame, (640, 480))
                 
                 # 바코드 디코딩
@@ -181,7 +201,7 @@ class BarcodeScannerThread(QThread):
                 cv2.putText(frame, "Detected books will be added to cart", (10, 460),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
                 
-                # 프레임을 메인 스레드로 전송 (OpenCV 윈도우 사용 안함!)
+                # 프레임을 메인 스레드로 전송
                 self.frame_ready.emit(frame)
                 
                 # 짧은 지연
@@ -191,14 +211,14 @@ class BarcodeScannerThread(QThread):
             print(f"❌ 바코드 스캔 오류: {e}")
             self.status_update.emit(f"❌ 오류 발생: {str(e)}")
         finally:
-            if self.vs:
-                self.vs.stop()
+            if self.cap:
+                self.cap.release()
     
     def stop(self):
-        """스캔 중지 - Stock GUI와 동일한 방식"""
+        """스캔 중지"""
         self.running = False
-        if self.vs:
-            self.vs.stop()
+        if self.cap:
+            self.cap.release()
 
 class CartItem:
     """장바구니 아이템 클래스"""
@@ -220,27 +240,15 @@ class CartItem:
 class PaymentGUI(QObject):
     """Payment GUI 메인 클래스 - 바코드 스캔 방식 개선"""
     
-    
-    # 싱글톤 패턴으로 중복 실행 방지
-    _instance = None
-    
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-    
     def __init__(self):
-        # 이미 초기화된 경우 중복 초기화 방지
-        if hasattr(self, '_initialized'):
-            return
-        self._initialized = True
+        # 🔧 QObject 초기화
+        super().__init__()
         
         # 🔧 Qt 환경변수 설정 (OpenCV 충돌 방지)
         import os
         os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)
-        
-        # 🔧 QObject 초기화
-        super().__init__()
+        os.environ['QT_QPA_PLATFORM'] = 'xcb'
+        os.environ['DISPLAY'] = os.environ.get('DISPLAY', ':0')
         
         # 🔧 ROS2 노드 별도 생성 (상속 대신 컴포지션 사용)
         self.ros_node = Node('payment_gui')
@@ -326,7 +334,7 @@ class PaymentGUI(QObject):
         """UI 파일이 없을 때 기본 다이얼로그 생성"""
         dialog = QDialog()
         dialog.setWindowTitle("LIBO - Payment System 💳")
-        dialog.setFixedSize(1000, 700)
+        dialog.setFixedSize(1800, 1000)
         
         # 메인 레이아웃
         main_layout = QHBoxLayout(dialog)
@@ -382,10 +390,10 @@ class PaymentGUI(QObject):
         # 장바구니 테이블
         self.cart_table = QTableWidget(0, 4)
         self.cart_table.setHorizontalHeaderLabels(["Book", "Qty", "Price", "Total"])
-        self.cart_table.setColumnWidth(0, 180)
-        self.cart_table.setColumnWidth(1, 50)
-        self.cart_table.setColumnWidth(2, 80)
-        self.cart_table.setColumnWidth(3, 80)
+        self.cart_table.setColumnWidth(0, 380)
+        self.cart_table.setColumnWidth(1, 100)
+        self.cart_table.setColumnWidth(2, 150)
+        self.cart_table.setColumnWidth(3, 150)
         cart_layout.addWidget(self.cart_table)
         
         # 장바구니 버튼들
@@ -1129,8 +1137,8 @@ RFID 카드를 리더기에 터치해주세요
                 else:
                     countdown_timer.stop()
                     success_dialog.close()
-                    # 모든 위젯창 닫고 메인 윈도우로 복귀
-                    self.return_to_main_window()
+                    # 모든 위젯창 닫고 메인 윈도우로 복귀 (지연 실행)
+                    QTimer.singleShot(200, self.return_to_main_window)
             
             countdown_timer.timeout.connect(update_countdown)  
             countdown_timer.start(1000)  # 1초마다 업데이트
@@ -1164,13 +1172,15 @@ RFID 카드를 리더기에 터치해주세요
             # 3. Payment 윈도우 닫기
             self.dialog.close()
             
-            # 4. 메인 윈도우 표시 및 리프레시
-            self.show_and_refresh_main_window()
+            # 4. 메인 윈도우 표시 및 리프레시 (지연 실행)
+            QTimer.singleShot(100, self.show_and_refresh_main_window)
             
             print("✅ 메인 윈도우 복귀 완료")
             
         except Exception as e:
             print(f"❌ 메인 윈도우 복귀 중 오류: {e}")
+            # 오류 시에도 메인 윈도우 찾기 시도
+            QTimer.singleShot(500, self.show_and_refresh_main_window)
     
     def close_all_popups(self):
         """모든 팝업창 닫기"""
@@ -1188,10 +1198,15 @@ RFID 카드를 리더기에 터치해주세요
             # 부모 윈도우 찾기 개선
             parent_window = None
             for widget in QApplication.topLevelWidgets():
-                # 메인 윈도우 클래스명 확인
-                if (hasattr(widget, 'objectName') and 
-                    ('MainWindow' in str(type(widget)) or 'KioskGUI' in str(type(widget)))):
+                # 메인 윈도우 클래스명 확인 (더 구체적으로)
+                widget_type = str(type(widget))
+                if ('MainWindow' in widget_type or 
+                    'KioskGUI' in widget_type or
+                    hasattr(widget, 'book_search') or  # 메인 윈도우의 고유 속성 확인
+                    hasattr(widget, 'payment') or
+                    hasattr(widget, 'book_corner')):
                     parent_window = widget
+                    print(f"✅ 메인 윈도우 발견: {widget_type}")
                     break
             
             if parent_window:
@@ -1211,11 +1226,24 @@ RFID 카드를 리더기에 터치해주세요
                 print("✅ 메인 윈도우 표시 및 리프레시 완료")
             else:
                 print("⚠️ 메인 윈도우를 찾을 수 없습니다.")
-                # 애플리케이션 종료
+                print("🔍 사용 가능한 윈도우들:")
+                for widget in QApplication.topLevelWidgets():
+                    if widget.isVisible():
+                        print(f"   - {type(widget).__name__}: {widget.windowTitle()}")
+                
+                # 메인 윈도우를 찾을 수 없는 경우, 현재 Payment 윈도우만 닫고 종료
+                print("🔄 Payment 윈도우를 닫고 프로그램을 종료합니다.")
+                self.dialog.close()
                 self.app.quit()
                 
         except Exception as e:
             print(f"❌ 메인 윈도우 표시 중 오류: {e}")
+            # 오류 시에도 Payment 윈도우 닫기
+            try:
+                self.dialog.close()
+                self.app.quit()
+            except:
+                pass
     
     def close_window(self):
         """창 닫기"""
@@ -1324,10 +1352,10 @@ RFID 카드를 리더기에 터치해주세요
         # 장바구니 테이블 설정 (있는 경우에만)
         if ui_elements_status.get('cart_table', False):
             try:
-                self.dialog.cart_table.setColumnWidth(0, 180)  # Book 
-                self.dialog.cart_table.setColumnWidth(1, 50)   # Qty
-                self.dialog.cart_table.setColumnWidth(2, 80)   # Price
-                self.dialog.cart_table.setColumnWidth(3, 80)   # Total
+                self.dialog.cart_table.setColumnWidth(0, 380)  # Book 
+                self.dialog.cart_table.setColumnWidth(1, 100)   # Qty
+                self.dialog.cart_table.setColumnWidth(2, 150)   # Price
+                self.dialog.cart_table.setColumnWidth(3, 150)   # Total
                 
                 # 테이블 헤더 설정
                 self.dialog.cart_table.setHorizontalHeaderLabels(["Book", "Qty", "Price", "Total"])
@@ -1395,8 +1423,8 @@ RFID 카드를 리더기에 터치해주세요
         """Payment 윈도우 중앙 정렬"""
         screen = QApplication.desktop().screenGeometry()
         
-        window_width = 1000
-        window_height = 700
+        window_width = 1800
+        window_height = 1000
         
         center_x = (screen.width() - window_width) // 2
         center_y = (screen.height() - window_height) // 2
@@ -1448,9 +1476,18 @@ def main(args=None):
     import os
     os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)  # OpenCV Qt 경로 제거
     os.environ['QT_QPA_PLATFORM'] = 'xcb'  # 명시적으로 xcb 사용
+    os.environ['DISPLAY'] = os.environ.get('DISPLAY', ':0')  # PyQt와 OpenCV 충돌 방지
     
-    # 🔧 PyQt와 OpenCV 충돌 방지
-    os.environ['DISPLAY'] = os.environ.get('DISPLAY', ':0')
+    # 🔧 ROS2 환경 확인
+    ros_distro = os.environ.get('ROS_DISTRO', 'unknown')
+    ros_version = os.environ.get('ROS_VERSION', 'unknown')
+    print(f"🔧 ROS2 환경: {ros_distro} {ros_version}")
+    
+    # 🔧 Python 경로 설정
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    src_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))  # ros_ws/src
+    if src_dir not in sys.path:
+        sys.path.insert(0, src_dir)
     
     try:
         # ROS2 초기화 (PyQt 앱 생성 전에!)
@@ -1466,6 +1503,11 @@ def main(args=None):
     except KeyboardInterrupt:
         print("⚠️ 사용자가 프로그램을 중단했습니다.")
         return 0
+    except ImportError as e:
+        print(f"❌ 모듈 import 오류: {e}")
+        print("💡 필요한 패키지를 설치하세요:")
+        print("   sudo apt install python3-opencv python3-pyzbar")
+        return 1
     except Exception as e:
         print(f"❌ 프로그램 실행 중 오류: {e}")
         import traceback

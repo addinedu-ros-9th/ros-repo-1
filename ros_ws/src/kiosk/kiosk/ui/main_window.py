@@ -26,6 +26,7 @@ class MainWindow(QMainWindow):
         
         # 🔧 Payment GUI 중복 실행 방지 플래그
         self.payment_gui_running = False
+        self.payment_process = None  # Payment GUI 프로세스 참조
         
         self.init_ui()
         self.setup_connections()
@@ -217,7 +218,7 @@ class MainWindow(QMainWindow):
         # 화면의 사용 가능한 영역 가져오기
         screen = QApplication.desktop().screenGeometry()
         
-        # 윈도우의 크기 가져오기 (새로운 크기)
+        # 윈도우의 크기 가져오기 (새로운 디자인에 맞게)
         window_width = 1200
         window_height = 800
         
@@ -281,10 +282,68 @@ class MainWindow(QMainWindow):
         """Payment 버튼 클릭"""
         print("💳 결제 화면으로 전환")
         
-        # 🔧 중복 실행 방지
-        if self.payment_gui_running:
-            print("⚠️ Payment GUI가 이미 실행 중입니다.")
-            return
+        # 🔧 기존 Payment GUI 프로세스 종료
+        if self.payment_gui_running and hasattr(self, 'payment_process') and self.payment_process:
+            try:
+                print("🔄 기존 Payment GUI 프로세스 종료 중...")
+                self.payment_process.terminate()
+                self.payment_process.wait(timeout=3)  # 3초 대기
+                print("✅ 기존 Payment GUI 프로세스 종료 완료")
+            except subprocess.TimeoutExpired:
+                print("⚠️ 프로세스 종료 시간 초과, 강제 종료")
+                self.payment_process.kill()
+            except Exception as e:
+                print(f"❌ 프로세스 종료 중 오류: {e}")
+            
+            self.payment_gui_running = False
+            self.payment_process = None
+        
+        # 🔧 시스템에서 실행 중인 다른 payment_gui 프로세스 확인 및 종료
+        try:
+            import subprocess
+            import time
+            
+            # 모든 payment_gui.py 프로세스 찾기
+            result = subprocess.run(['pgrep', '-f', 'payment_gui.py'], 
+                                  capture_output=True, text=True)
+            if result.returncode == 0:  # 프로세스가 실행 중
+                pids = result.stdout.strip().split('\n')
+                print(f"🔄 발견된 Payment GUI 프로세스: {pids}")
+                
+                for pid in pids:
+                    if pid and pid != str(os.getpid()):  # 현재 프로세스 제외
+                        try:
+                            print(f"🔄 Payment GUI 프로세스 종료 중: PID {pid}")
+                            # 먼저 SIGTERM으로 정상 종료 시도
+                            subprocess.run(['kill', '-TERM', pid], timeout=2)
+                            time.sleep(0.5)  # 0.5초 대기
+                            
+                            # 프로세스가 여전히 실행 중인지 확인
+                            try:
+                                subprocess.run(['kill', '-0', pid], check=True, timeout=1)
+                                print(f"⚠️ 프로세스 {pid}가 여전히 실행 중, 강제 종료")
+                                subprocess.run(['kill', '-KILL', pid], timeout=2)
+                            except subprocess.CalledProcessError:
+                                print(f"✅ 프로세스 {pid} 정상 종료됨")
+                            except subprocess.TimeoutExpired:
+                                print(f"⚠️ 프로세스 {pid} 종료 시간 초과")
+                        except Exception as e:
+                            print(f"❌ 프로세스 {pid} 종료 중 오류: {e}")
+                
+                # 모든 프로세스가 종료될 때까지 잠시 대기
+                time.sleep(1)
+                
+                # 다시 한 번 확인하여 모든 프로세스가 종료되었는지 확인
+                result = subprocess.run(['pgrep', '-f', 'payment_gui.py'], 
+                                      capture_output=True, text=True)
+                if result.returncode == 0:
+                    remaining_pids = result.stdout.strip().split('\n')
+                    print(f"⚠️ 여전히 실행 중인 프로세스: {remaining_pids}")
+                else:
+                    print("✅ 모든 Payment GUI 프로세스가 종료됨")
+                    
+        except Exception as e:
+            print(f"❌ 시스템 프로세스 확인 중 오류: {e}")
         
         try:
             # 현재 메인 윈도우 숨기기
@@ -301,17 +360,51 @@ class MainWindow(QMainWindow):
                 # 🔧 중복 실행 방지 플래그 설정
                 self.payment_gui_running = True
                 
-                # Python 스크립트로 실행
-                process = subprocess.Popen([sys.executable, payment_script])
+                # 환경변수 설정
+                env = os.environ.copy()
+                
+                # ROS2 환경 설정 - 현재 시스템 환경변수 사용
+                ros_ws_path = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # ros_ws
+                # env['ROS_DISTRO']와 env['ROS_VERSION']은 현재 시스템 환경에서 자동으로 설정됨
+                
+                # Python 경로 설정
+                src_path = os.path.join(ros_ws_path, 'src')
+                if src_path not in env.get('PYTHONPATH', ''):
+                    env['PYTHONPATH'] = os.pathsep.join([
+                        src_path,
+                        env.get('PYTHONPATH', '')
+                    ])
+                
+                # ROS2 setup.bash 소싱 효과를 위한 환경변수
+                install_path = os.path.join(ros_ws_path, 'install')
+                if os.path.exists(install_path):
+                    env['AMENT_PREFIX_PATH'] = os.pathsep.join([
+                        install_path,
+                        env.get('AMENT_PREFIX_PATH', '')
+                    ])
+                
+                print(f"🔧 Payment GUI 실행 환경:")
+                print(f"   스크립트: {payment_script}")
+                print(f"   Python 경로: {env.get('PYTHONPATH', '')[:100]}...")
+                print(f"   ROS 환경: {env.get('ROS_DISTRO', 'N/A')} {env.get('ROS_VERSION', 'N/A')}")
+                
+                self.payment_process = subprocess.Popen(
+                    [sys.executable, payment_script],
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    cwd=ros_ws_path  # 작업 디렉토리를 ros_ws로 설정
+                )
                 print("✅ Payment GUI 실행됨")
                 
                 # 🔧 프로세스 종료 감지를 위한 타이머 설정
                 def check_payment_process():
-                    if process.poll() is not None:  # 프로세스가 종료됨
+                    if self.payment_process and self.payment_process.poll() is not None:  # 프로세스가 종료됨
                         self.payment_gui_running = False
+                        self.payment_process = None
                         print("✅ Payment GUI 프로세스 종료됨")
-                        # 메인 윈도우 다시 표시
-                        self.show()
+                        # 메인 윈도우 다시 표시 및 리프레시
+                        QTimer.singleShot(100, self.show_main_window_after_payment)
                     else:
                         # 프로세스가 아직 실행 중이면 다시 체크
                         QTimer.singleShot(1000, check_payment_process)
@@ -328,6 +421,7 @@ class MainWindow(QMainWindow):
             print(f"❌ Payment 화면 전환 중 오류: {e}")
             QMessageBox.critical(self, "오류", f"결제 화면을 열 수 없습니다.\n{str(e)}")
             self.payment_gui_running = False  # 플래그 리셋
+            self.payment_process = None
             self.show()  # 메인 윈도우 다시 표시
     
     def on_book_corner_clicked(self):
@@ -380,6 +474,30 @@ class MainWindow(QMainWindow):
         
         # 메인 윈도우 강제 중앙 정렬
         self.force_center_window()
+    
+    def show_main_window_after_payment(self):
+        """결제 후 메인 윈도우 표시 및 리프레시"""
+        print("🏠 결제 후 메인 윈도우 복귀")
+        
+        try:
+            # 메인 윈도우 표시
+            self.show()
+            self.raise_()
+            self.activateWindow()
+            
+            # 메인 윈도우 중앙 정렬
+            self.force_center_window()
+            
+            # 메인 윈도우 리프레시 (UI 상태 초기화)
+            self.refresh_main_window()
+            
+            print("✅ 결제 후 메인 윈도우 복귀 완료")
+            
+        except Exception as e:
+            print(f"❌ 결제 후 메인 윈도우 복귀 중 오류: {e}")
+            # 오류 시에도 기본 표시
+            self.show()
+            self.force_center_window()
     
     def closeEvent(self, event):
         """윈도우 종료 시 리소스 정리"""
