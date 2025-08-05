@@ -341,21 +341,21 @@ class BookSearchWidget(QWidget):
         title_label.setMinimumWidth(600)
         
         # 저자
-        author_label = QLabel(f"✍️ {book['author']}")
+        author_label = QLabel(f"저자: {book['author']}")
         author_label.setFont(QFont("Arial", 14))
         author_label.setStyleSheet("color: #34495e;")
         author_label.setMinimumHeight(35)
         author_label.setMinimumWidth(600)
         
         # 출판사
-        publisher_label = QLabel(f"🏢 {book['publisher']}")
+        publisher_label = QLabel(f"출판사: {book['publisher']}")
         publisher_label.setFont(QFont("Arial", 14))
         publisher_label.setStyleSheet("color: #7f8c8d;")
         publisher_label.setMinimumHeight(35)
         publisher_label.setMinimumWidth(600)
         
         # 가격
-        price_label = QLabel(f"💰 {int(book['price']):,}원")
+        price_label = QLabel(f"가격: {int(book['price']):,}원")
         price_label.setFont(QFont("Arial", 14))
         price_label.setStyleSheet("color: #27ae60;")
         price_label.setMinimumHeight(35)
@@ -363,7 +363,7 @@ class BookSearchWidget(QWidget):
 
         # 위치 - location 또는 location_id 처리
         location = book.get('location', book.get('location_id', 'Unknown'))
-        location_label = QLabel(f"📍 {location}구역")
+        location_label = QLabel(f"위치: {location}구역")
         location_label.setFont(QFont("Arial", 14))
         location_label.setStyleSheet("color: #e67e22;")
         location_label.setMinimumHeight(35)

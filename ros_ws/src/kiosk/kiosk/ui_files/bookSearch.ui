@@ -22,24 +22,18 @@
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QLabel" name="searchTitleLabel">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>80</height>
+      </size>
+     </property>
      <property name="font">
       <font>
        <pointsize>36</pointsize>
        <weight>75</weight>
        <bold>true</bold>
       </font>
-     </property>
-     <property name="text">
-      <string>📚 도서 검색</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>80</height>
-      </size>
      </property>
      <property name="styleSheet">
       <string>QLabel {
@@ -49,28 +43,28 @@
     padding: 10px;
 }</string>
      </property>
+     <property name="text">
+      <string>📚 도서 검색</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
     </widget>
    </item>
    <item>
     <widget class="QLabel" name="searchSubtitleLabel">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>40</height>
+      </size>
+     </property>
      <property name="font">
       <font>
        <pointsize>18</pointsize>
        <weight>50</weight>
        <bold>false</bold>
       </font>
-     </property>
-     <property name="text">
-      <string>원하는 도서를 검색해보세요</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>40</height>
-      </size>
      </property>
      <property name="styleSheet">
       <string>QLabel {
@@ -79,6 +73,12 @@
     border: none;
     font-weight: normal;
 }</string>
+     </property>
+     <property name="text">
+      <string>원하는 도서를 검색해보세요</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
      </property>
     </widget>
    </item>
@@ -99,19 +99,16 @@
      </item>
      <item>
       <widget class="QLineEdit" name="searchLineEdit">
-       <property name="font">
-        <font>
-         <pointsize>16</pointsize>
-        </font>
-       </property>
-       <property name="placeholderText">
-        <string>검색어를 입력하세요</string>
-       </property>
        <property name="minimumSize">
         <size>
          <width>600</width>
          <height>50</height>
         </size>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>-1</pointsize>
+        </font>
        </property>
        <property name="styleSheet">
         <string>QLineEdit {
@@ -129,25 +126,25 @@ QLineEdit:focus {
         stop:0 #ffffff, stop:1 #f0f2f1);
 }</string>
        </property>
+       <property name="placeholderText">
+        <string>검색어를 입력하세요</string>
+       </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="searchButton">
+       <property name="minimumSize">
+        <size>
+         <width>120</width>
+         <height>50</height>
+        </size>
+       </property>
        <property name="font">
         <font>
          <pointsize>16</pointsize>
          <weight>75</weight>
          <bold>true</bold>
         </font>
-       </property>
-       <property name="text">
-        <string>🔍 검색</string>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>120</width>
-         <height>50</height>
-        </size>
        </property>
        <property name="styleSheet">
         <string>QPushButton {
@@ -168,6 +165,9 @@ QPushButton:pressed {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
         stop:0 #5a6b4f, stop:1 #4a5a3f);
 }</string>
+       </property>
+       <property name="text">
+        <string>🔍 검색</string>
        </property>
       </widget>
      </item>
@@ -210,12 +210,6 @@ QPushButton:pressed {
          <bold>true</bold>
         </font>
        </property>
-       <property name="text">
-        <string>📖 제목</string>
-       </property>
-       <property name="checked">
-        <bool>true</bool>
-       </property>
        <property name="styleSheet">
         <string>QRadioButton {
     color: #2c3e50;
@@ -236,6 +230,12 @@ QRadioButton::indicator:checked {
     border-radius: 10px;
     background-color: #71866a;
 }</string>
+       </property>
+       <property name="text">
+        <string> 제목</string>
+       </property>
+       <property name="checked">
+        <bool>true</bool>
        </property>
       </widget>
      </item>
@@ -248,9 +248,6 @@ QRadioButton::indicator:checked {
          <bold>true</bold>
         </font>
        </property>
-       <property name="text">
-        <string>✍️ 저자</string>
-       </property>
        <property name="styleSheet">
         <string>QRadioButton {
     color: #2c3e50;
@@ -271,6 +268,9 @@ QRadioButton::indicator:checked {
     border-radius: 10px;
     background-color: #71866a;
 }</string>
+       </property>
+       <property name="text">
+        <string> 저자</string>
        </property>
       </widget>
      </item>
@@ -283,9 +283,6 @@ QRadioButton::indicator:checked {
          <bold>true</bold>
         </font>
        </property>
-       <property name="text">
-        <string>🏢 출판사</string>
-       </property>
        <property name="styleSheet">
         <string>QRadioButton {
     color: #2c3e50;
@@ -306,6 +303,9 @@ QRadioButton::indicator:checked {
     border-radius: 10px;
     background-color: #71866a;
 }</string>
+       </property>
+       <property name="text">
+        <string> 출판사</string>
        </property>
       </widget>
      </item>
@@ -318,9 +318,6 @@ QRadioButton::indicator:checked {
          <bold>true</bold>
         </font>
        </property>
-       <property name="text">
-        <string>📂 카테고리</string>
-       </property>
        <property name="styleSheet">
         <string>QRadioButton {
     color: #2c3e50;
@@ -341,6 +338,9 @@ QRadioButton::indicator:checked {
     border-radius: 10px;
     background-color: #71866a;
 }</string>
+       </property>
+       <property name="text">
+        <string> 카테고리</string>
        </property>
       </widget>
      </item>
@@ -361,24 +361,18 @@ QRadioButton::indicator:checked {
    </item>
    <item>
     <widget class="QLabel" name="bookListTitleLabel">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>50</height>
+      </size>
+     </property>
      <property name="font">
       <font>
        <pointsize>22</pointsize>
        <weight>75</weight>
        <bold>true</bold>
       </font>
-     </property>
-     <property name="text">
-      <string>📋 검색 결과</string>
-     </property>
-     <property name="alignment">
-      <set>Qt::AlignCenter</set>
-     </property>
-     <property name="minimumSize">
-      <size>
-       <width>0</width>
-       <height>50</height>
-      </size>
      </property>
      <property name="styleSheet">
       <string>QLabel {
@@ -390,6 +384,12 @@ QRadioButton::indicator:checked {
     margin: 10px 50px;
 }</string>
      </property>
+     <property name="text">
+      <string>📋 검색 결과</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
     </widget>
    </item>
    <item>
@@ -399,9 +399,6 @@ QRadioButton::indicator:checked {
        <width>0</width>
        <height>450</height>
       </size>
-     </property>
-     <property name="widgetResizable">
-      <bool>true</bool>
      </property>
      <property name="styleSheet">
       <string>QScrollArea {
@@ -436,13 +433,16 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     background: none;
 }</string>
      </property>
+     <property name="widgetResizable">
+      <bool>true</bool>
+     </property>
      <widget class="QWidget" name="bookListWidget">
       <property name="geometry">
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>1334</width>
-        <height>448</height>
+        <width>1318</width>
+        <height>386</height>
        </rect>
       </property>
       <property name="styleSheet">
@@ -468,21 +468,18 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
      </item>
      <item>
       <widget class="QPushButton" name="orderButton">
+       <property name="minimumSize">
+        <size>
+         <width>200</width>
+         <height>70</height>
+        </size>
+       </property>
        <property name="font">
         <font>
          <pointsize>16</pointsize>
          <weight>75</weight>
          <bold>true</bold>
         </font>
-       </property>
-       <property name="text">
-        <string>📋 주문 문의</string>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>200</width>
-         <height>70</height>
-        </size>
        </property>
        <property name="styleSheet">
         <string>QPushButton {
@@ -505,6 +502,9 @@ QPushButton:pressed {
         stop:0 #e67e22, stop:1 #d35400);
 }</string>
        </property>
+       <property name="text">
+        <string>📋 주문 문의</string>
+       </property>
       </widget>
      </item>
      <item>
@@ -522,21 +522,18 @@ QPushButton:pressed {
      </item>
      <item>
       <widget class="QPushButton" name="homeButton">
+       <property name="minimumSize">
+        <size>
+         <width>200</width>
+         <height>70</height>
+        </size>
+       </property>
        <property name="font">
         <font>
          <pointsize>16</pointsize>
          <weight>75</weight>
          <bold>true</bold>
         </font>
-       </property>
-       <property name="text">
-        <string>🏠 홈으로 돌아가기</string>
-       </property>
-       <property name="minimumSize">
-        <size>
-         <width>200</width>
-         <height>70</height>
-        </size>
        </property>
        <property name="styleSheet">
         <string>QPushButton {
@@ -558,6 +555,9 @@ QPushButton:pressed {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
         stop:0 #5a6b4f, stop:1 #4a5a3f);
 }</string>
+       </property>
+       <property name="text">
+        <string>🏠 홈으로 돌아가기</string>
        </property>
       </widget>
      </item>

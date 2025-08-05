@@ -10,396 +10,394 @@
     <height>1000</height>
    </rect>
   </property>
+  <property name="minimumSize">
+   <size>
+    <width>1200</width>
+    <height>800</height>
+   </size>
+  </property>
   <property name="windowTitle">
-   <string>도서 상세 정보</string>
+   <string>📖 도서 상세 정보</string>
+  </property>
+  <property name="styleSheet">
+   <string>QDialog {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #f8f9fa, stop:1 #e9ecef);
+}</string>
   </property>
   <property name="modal">
    <bool>true</bool>
   </property>
-  <property name="styleSheet">
-   <string notr="true">QDialog {
-    background-color: #f8f9fa;
-}</string>
-  </property>
   <layout class="QHBoxLayout" name="horizontalLayout">
    <item>
-    <widget class="QWidget" name="leftPanel">
-     <property name="minimumSize">
-      <size>
-       <width>500</width>
-       <height>0</height>
-      </size>
-     </property>
-     <property name="maximumSize">
-      <size>
-       <width>500</width>
-       <height>16777215</height>
-      </size>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">QWidget {
-    background-color: white;
+    <layout class="QVBoxLayout" name="mapLayout">
+     <item>
+      <widget class="QLabel" name="mapTitleLabel">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>18</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string>QLabel {
+    color: #2c3e50;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ecf0f1, stop:1 #d5dbdb);
+    border-radius: 10px;
+    padding: 10px;
+    margin: 10px;
+}</string>
+       </property>
+       <property name="text">
+        <string>📚 도서 위치</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="mapLabel">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>600</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string>QLabel {
     border: 2px solid #bdc3c7;
     border-radius: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #f8f9fa, stop:1 #ecf0f1);
+    padding: 5px;
+    margin: 10px;
 }</string>
-     </property>
-     <layout class="QVBoxLayout" name="mapLayout">
-      <item>
-       <widget class="QLabel" name="mapTitleLabel">
-        <property name="font">
-         <font>
-          <pointsize>18</pointsize>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text">
-         <string>도서 위치</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>30</height>
-         </size>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel {
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="locationInfoLabel">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>30</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>12</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string>QLabel {
     color: #2c3e50;
-    background-color: #ecf0f1;
-    border-radius: 5px;
-    padding: 3px;
-}</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="mapLabel">
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>500</height>
-         </size>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel {
-    border: 1px solid #dee2e6;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ecf0f1, stop:1 #d5dbdb);
     border-radius: 8px;
-    background-color: #f8f9fa;
-    padding: 2px;
+    padding: 8px;
+    margin: 10px;
+    font-weight: bold;
 }</string>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="locationInfoLabel">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>위치: A구역</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>25</height>
-         </size>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel {
-    color: #7f8c8d;
-    padding: 3px;
-}</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
+       </property>
+       <property name="text">
+        <string>위치: A구역</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
    <item>
-    <widget class="QWidget" name="rightPanel">
-     <property name="minimumSize">
-      <size>
-       <width>300</width>
-       <height>0</height>
-      </size>
-     </property>
-     <property name="styleSheet">
-      <string notr="true">QWidget {
-    background-color: white;
-    border: 2px solid #bdc3c7;
-    border-radius: 10px;
-    padding: 5px;
-}</string>
-     </property>
-     <layout class="QVBoxLayout" name="infoLayout">
-      <item>
-       <widget class="QLabel" name="bookTitleLabel">
-        <property name="font">
-         <font>
-          <pointsize>20</pointsize>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text">
-         <string>도서 제목</string>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel {
+    <layout class="QVBoxLayout" name="infoLayout">
+     <item>
+      <widget class="QLabel" name="bookTitleLabel">
+       <property name="font">
+        <font>
+         <pointsize>18</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string>QLabel {
     color: #2c3e50;
     padding: 10px;
-    background-color: #ecf0f1;
-    border-radius: 5px;
-}</string>
-        </property>
-        <property name="wordWrap">
-         <bool>true</bool>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="bookCoverLabel">
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>280</height>
-         </size>
-        </property>
-        <property name="maximumSize">
-         <size>
-          <width>16777215</width>
-          <height>280</height>
-         </size>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel {
-    border: 2px solid #bdc3c7;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ecf0f1, stop:1 #d5dbdb);
     border-radius: 8px;
-    background-color: #f8f9fa;
-    padding: 2px;
+    margin-bottom: 8px;
 }</string>
-        </property>
-        <property name="text">
-         <string/>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignCenter</set>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="bookAuthorLabel">
-        <property name="font">
-         <font>
-          <pointsize>14</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>저자: </string>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel {
-    color: #34495e;
+       </property>
+       <property name="text">
+        <string>📚 도서 제목</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="bookCoverLabel">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>350</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>16777215</width>
+         <height>350</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string>QLabel {
+    border: 3px solid #71866a;
+    border-radius: 12px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #f8f9fa, stop:1 #ecf0f1);
     padding: 5px;
+    margin: 10px 0px;
 }</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="bookPublisherLabel">
-        <property name="font">
-         <font>
-          <pointsize>14</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>출판사: </string>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel {
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="bookAuthorLabel">
+       <property name="font">
+        <font>
+         <pointsize>13</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string>QLabel {
     color: #34495e;
-    padding: 5px;
+    padding: 6px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ffffff, stop:1 #f8f9fa);
+    border-radius: 6px;
+    margin: 2px 0px;
+    font-weight: bold;
 }</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="bookCategoryLabel">
-        <property name="font">
-         <font>
-          <pointsize>14</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>카테고리: </string>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel {
+       </property>
+       <property name="text">
+        <string> 저자: </string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="bookPublisherLabel">
+       <property name="font">
+        <font>
+         <pointsize>13</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string>QLabel {
     color: #34495e;
-    padding: 5px;
+    padding: 6px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ffffff, stop:1 #f8f9fa);
+    border-radius: 6px;
+    margin: 2px 0px;
+    font-weight: bold;
 }</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="bookPriceLabel">
-        <property name="font">
-         <font>
-          <pointsize>14</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>가격: </string>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel {
+       </property>
+       <property name="text">
+        <string> 출판사: </string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="bookCategoryLabel">
+       <property name="font">
+        <font>
+         <pointsize>13</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string>QLabel {
+    color: #34495e;
+    padding: 6px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ffffff, stop:1 #f8f9fa);
+    border-radius: 6px;
+    margin: 2px 0px;
+    font-weight: bold;
+}</string>
+       </property>
+       <property name="text">
+        <string> 카테고리: </string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="bookPriceLabel">
+       <property name="font">
+        <font>
+         <pointsize>15</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string>QLabel {
     color: #27ae60;
-    padding: 5px;
+    padding: 8px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #d5e8d4, stop:1 #c8e6c9);
+    border-radius: 6px;
+    margin: 2px 0px;
     font-weight: bold;
+    border: 2px solid #27ae60;
 }</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="bookStockLabel">
-        <property name="font">
-         <font>
-          <pointsize>14</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>재고: </string>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel {
+       </property>
+       <property name="text">
+        <string>💰 가격: </string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="bookStockLabel">
+       <property name="font">
+        <font>
+         <pointsize>15</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string>QLabel {
     color: #e67e22;
-    padding: 5px;
+    padding: 8px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #fdebd0, stop:1 #fadbd8);
+    border-radius: 6px;
+    margin: 2px 0px;
     font-weight: bold;
+    border: 2px solid #e67e22;
 }</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="bookIsbnLabel">
-        <property name="font">
-         <font>
-          <pointsize>12</pointsize>
-         </font>
-        </property>
-        <property name="text">
-         <string>ISBN: </string>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QLabel {
-    color: #7f8c8d;
-    padding: 5px;
-}</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <spacer name="verticalSpacer">
-        <property name="orientation">
-         <enum>Qt::Vertical</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>20</width>
-          <height>40</height>
-         </size>
-        </property>
-       </spacer>
-      </item>
-      <item>
-       <widget class="QPushButton" name="escortRequestButton">
-        <property name="font">
-         <font>
-          <pointsize>16</pointsize>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text">
-         <string>에스코팅 요청</string>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>60</height>
-         </size>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QPushButton {
-    background-color: #e74c3c;
+       </property>
+       <property name="text">
+        <string>📦 재고: </string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="escortRequestButton">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>60</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>16</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string>QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #f39c12, stop:1 #e67e22);
     color: white;
     border: none;
-    border-radius: 10px;
+    border-radius: 15px;
     font-weight: bold;
-    font-size: 16px;
+    margin: 5px 0px;
 }
 QPushButton:hover {
-    background-color: #c0392b;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #f1c40f, stop:1 #f39c12);
+    border: 3px solid #d35400;
 }
 QPushButton:pressed {
-    background-color: #a93226;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #e67e22, stop:1 #d35400);
 }</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="closeButton">
-        <property name="font">
-         <font>
-          <pointsize>14</pointsize>
-          <weight>75</weight>
-          <bold>true</bold>
-         </font>
-        </property>
-        <property name="text">
-         <string>닫기</string>
-        </property>
-        <property name="minimumSize">
-         <size>
-          <width>0</width>
-          <height>50</height>
-         </size>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">QPushButton {
-    background-color: #95a5a6;
+       </property>
+       <property name="text">
+        <string>에스코팅 요청</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="closeButton">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>50</height>
+        </size>
+       </property>
+       <property name="font">
+        <font>
+         <pointsize>14</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
+        </font>
+       </property>
+       <property name="styleSheet">
+        <string>QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #95a5a6, stop:1 #7f8c8d);
     color: white;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px;
     font-weight: bold;
+    margin: 5px 0px;
 }
 QPushButton:hover {
-    background-color: #7f8c8d;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #bdc3c7, stop:1 #95a5a6);
+    border: 2px solid #7f8c8d;
 }
 QPushButton:pressed {
-    background-color: #6c7b7d;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #7f8c8d, stop:1 #6c7b7d);
 }</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
+       </property>
+       <property name="text">
+        <string>❌ 닫기</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>
  <resources/>
  <connections/>
-</ui> 
+</ui>
