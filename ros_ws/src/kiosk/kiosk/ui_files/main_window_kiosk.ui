@@ -110,7 +110,7 @@ QPushButton:pressed {
 }</string>
     </property>
     <property name="text">
-     <string>📚\nBook Search</string>
+     <string>📚 Book Search</string>
     </property>
    </widget>
    <widget class="QPushButton" name="book_corner">
@@ -151,7 +151,7 @@ QPushButton:pressed {
 }</string>
     </property>
     <property name="text">
-     <string>📖\nBook Corner</string>
+     <string>⤵️ Book Corner</string>
     </property>
    </widget>
    <widget class="QPushButton" name="payment">
@@ -192,7 +192,7 @@ QPushButton:pressed {
 }</string>
     </property>
     <property name="text">
-     <string>💳\nPayment</string>
+     <string>💳 Payment</string>
     </property>
    </widget>
    <widget class="QPushButton" name="call_manager">
@@ -254,18 +254,18 @@ QPushButton:pressed {
       <bold>true</bold>
      </font>
     </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::DefaultContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
     <property name="styleSheet">
      <string>QLabel {
     color: #2c3e50;
     background: transparent;
     border: none;
 }</string>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::DefaultContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
     </property>
     <property name="text">
      <string>LIBO BOOK STORE</string>
@@ -287,6 +287,12 @@ QPushButton:pressed {
       <bold>false</bold>
      </font>
     </property>
+    <property name="contextMenuPolicy">
+     <enum>Qt::DefaultContextMenu</enum>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
     <property name="styleSheet">
      <string>QLabel {
     color: #71866a;
@@ -294,12 +300,6 @@ QPushButton:pressed {
     border: none;
     font-weight: normal;
 }</string>
-    </property>
-    <property name="contextMenuPolicy">
-     <enum>Qt::DefaultContextMenu</enum>
-    </property>
-    <property name="layoutDirection">
-     <enum>Qt::LeftToRight</enum>
     </property>
     <property name="text">
      <string>Please select the service</string>

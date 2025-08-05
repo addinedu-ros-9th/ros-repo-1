@@ -24,6 +24,9 @@ class MainWindow(QMainWindow):
         self.admin_authenticated = False  # 관리자 인증 상태
         self.call_robot_timer = None  # Call Robot 버튼 타이머
         
+        # 🔧 Payment GUI 중복 실행 방지 플래그
+        self.payment_gui_running = False
+        
         self.init_ui()
         self.setup_connections()
         self.init_ros_clients()
@@ -277,8 +280,55 @@ class MainWindow(QMainWindow):
     def on_payment_clicked(self):
         """Payment 버튼 클릭"""
         print("💳 결제 화면으로 전환")
-        # TODO: 결제 위젯으로 화면 전환
-        QMessageBox.information(self, "결제", "결제 기능은 준비 중입니다.")
+        
+        # 🔧 중복 실행 방지
+        if self.payment_gui_running:
+            print("⚠️ Payment GUI가 이미 실행 중입니다.")
+            return
+        
+        try:
+            # 현재 메인 윈도우 숨기기
+            self.hide()
+            
+            # Payment GUI 실행 (별도 프로세스로)
+            import subprocess
+            import sys
+            
+            # payment_gui.py 파일 경로 (kiosk 패키지 내)
+            payment_script = os.path.join(os.path.dirname(__file__), 'payment_gui.py')
+            
+            if os.path.exists(payment_script):
+                # 🔧 중복 실행 방지 플래그 설정
+                self.payment_gui_running = True
+                
+                # Python 스크립트로 실행
+                process = subprocess.Popen([sys.executable, payment_script])
+                print("✅ Payment GUI 실행됨")
+                
+                # 🔧 프로세스 종료 감지를 위한 타이머 설정
+                def check_payment_process():
+                    if process.poll() is not None:  # 프로세스가 종료됨
+                        self.payment_gui_running = False
+                        print("✅ Payment GUI 프로세스 종료됨")
+                        # 메인 윈도우 다시 표시
+                        self.show()
+                    else:
+                        # 프로세스가 아직 실행 중이면 다시 체크
+                        QTimer.singleShot(1000, check_payment_process)
+                
+                # 1초마다 프로세스 상태 확인
+                QTimer.singleShot(1000, check_payment_process)
+                
+            else:
+                print(f"❌ Payment 스크립트를 찾을 수 없습니다: {payment_script}")
+                QMessageBox.critical(self, "오류", "결제 시스템을 찾을 수 없습니다.")
+                self.show()  # 메인 윈도우 다시 표시
+            
+        except Exception as e:
+            print(f"❌ Payment 화면 전환 중 오류: {e}")
+            QMessageBox.critical(self, "오류", f"결제 화면을 열 수 없습니다.\n{str(e)}")
+            self.payment_gui_running = False  # 플래그 리셋
+            self.show()  # 메인 윈도우 다시 표시
     
     def on_book_corner_clicked(self):
         """Book Corner 버튼 클릭"""
@@ -428,35 +478,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             print(f"❌ Call Robot 버튼 숨김 처리 중 오류: {e}")
 
-    # MainWindow의 on_payment_clicked 함수 수정
-    def on_payment_clicked(self):
-        """Payment 버튼 클릭"""
-        print("💳 결제 화면으로 전환")
-        
-        try:
-            # 현재 메인 윈도우 숨기기
-            self.hide()
-            
-            # Payment GUI 실행 (별도 프로세스로)
-            import subprocess
-            import sys
-            
-            # payment_gui.py 파일 경로 (kiosk 패키지 내)
-            payment_script = os.path.join(os.path.dirname(__file__), 'payment_gui.py')
-            
-            if os.path.exists(payment_script):
-                # Python 스크립트로 실행
-                subprocess.Popen([sys.executable, payment_script])
-                print("✅ Payment GUI 실행됨")
-            else:
-                print(f"❌ Payment 스크립트를 찾을 수 없습니다: {payment_script}")
-                QMessageBox.critical(self, "오류", "결제 시스템을 찾을 수 없습니다.")
-                self.show()  # 메인 윈도우 다시 표시
-            
-        except Exception as e:
-            print(f"❌ Payment 화면 전환 중 오류: {e}")
-            QMessageBox.critical(self, "오류", f"결제 화면을 열 수 없습니다.\n{str(e)}")
-            self.show()  # 메인 윈도우 다시 표시
+
 
 def main(args=None):
     app = QApplication(sys.argv)

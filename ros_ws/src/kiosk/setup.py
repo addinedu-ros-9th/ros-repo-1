@@ -14,6 +14,7 @@ setup(
         ('share/' + package_name + '/ui_files', ['kiosk/ui_files/book_detail_popup.ui']),
         ('share/' + package_name + '/ui_files', ['kiosk/ui_files/bookSearch.ui']),
         ('share/' + package_name + '/ui_files', ['kiosk/ui_files/book_corner_widget.ui']),
+        ('share/' + package_name + '/ui_files', ['kiosk/ui_files/payment_window.ui']),
     ],
     install_requires=[
         'setuptools',

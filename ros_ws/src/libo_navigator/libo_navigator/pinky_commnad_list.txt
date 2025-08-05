@@ -1,0 +1,17 @@
+# (x: ?? , y: ?? ) 좌표로 이동 명령
+ros2 service call /set_navigation_goal libo_interfaces/srv/SetGoal "{x: 4.5, y: 3.17}"
+
+# 주행 중에 취소 명령
+ros2 service call /cancel_navigation libo_interfaces/srv/CancelNavigation "{}"/ros-repo-1/ros_ws$ ros2 run libo_navigator navigator_node 
+Traceback (most recent call last):
+(ID: 15)nmd:~/dev_ws/ros-repo-1/ros_ws$ 
+
+로봇 접속 
+빅핑키 핫스팟:ssh vic@192.168.5.1
+빅핑키 연결된 와이파이 :ssh vic@192.168.1.9
+
+핑키 브링업:
+ros2 launch vicpinky_bringup bringup.launch.xml
+
+네비게이션 브링업:
+ros2 launch vicpinky_bringup bringup.launch.xml

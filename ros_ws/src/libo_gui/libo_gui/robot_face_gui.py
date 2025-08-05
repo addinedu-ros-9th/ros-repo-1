@@ -13,24 +13,20 @@ import os
 
 # Libo 인터페이스 메시지 임포트
 try:
-    from libo_interfaces.msg import FaceExpression, VoiceExpression
+    from libo_interfaces.msg import FaceExpression
 except ImportError:
     print("⚠️ libo_interfaces 패키지를 찾을 수 없습니다. 기본 메시지를 사용합니다.")
     FaceExpression = None
-    VoiceExpression = None
 
 
 class RobotFaceWidget(QWidget):
-    """로봇 얼굴을 그리는 위젯 - 통합된 상태 시스템"""
+    """로봇 얼굴을 그리는 위젯 - 통합된 FaceExpression 시스템"""
     
     def __init__(self):
         super().__init__()
         # 통합된 상태 시스템
         self.current_state = "normal"  # 통합된 현재 상태
         self.current_robot_id = "libo_a"  # 현재 로봇 ID
-        
-        # 상태 소스 추적 (디버깅용)
-        self.state_source = "normal"  # "face_expression" 또는 "voice_expression"
         
         self.setMinimumSize(800, 400)
         self.setStyleSheet("background-color: black;")
@@ -68,12 +64,12 @@ class RobotFaceWidget(QWidget):
         self.previous_color = None
         self.target_color = None
         
-        # 음성 상태별 특수 효과 (normal 상태일 때만 사용)
+        # 음성 상태별 특수 효과
         self.voice_animation_progress = 0.0
         self.voice_animation_direction = 1
         
     def set_face_state(self, state, robot_id=None):
-        """FaceExpression 상태 설정 - 우선순위 높음"""
+        """FaceExpression 상태 설정"""
         if robot_id:
             self.current_robot_id = robot_id
             
@@ -81,7 +77,6 @@ class RobotFaceWidget(QWidget):
             # 색상 전환 시작
             self.previous_color = self._get_eye_color()
             self.current_state = state
-            self.state_source = "face_expression"
             self.target_color = self._get_eye_color()
             self.color_transition_progress = 0.0
             
@@ -89,31 +84,9 @@ class RobotFaceWidget(QWidget):
         self.animation_direction = 1
         self.update()
         
-    def set_voice_state(self, state, robot_id=None):
-        """VoiceExpression 상태 설정 - 독립적인 상태"""
-        if robot_id:
-            self.current_robot_id = robot_id
-            
-        # 독립적인 상태로 변경
-        if self.current_state != state:
-            # 색상 전환 시작
-            self.previous_color = self._get_eye_color()
-            self.current_state = state
-            self.state_source = "voice_expression"
-            self.target_color = self._get_eye_color()
-            self.color_transition_progress = 0.0
-            
-        self.voice_animation_progress = 0.0
-        self.voice_animation_direction = 1
-        self.update()
-        
     def get_current_state(self):
         """현재 상태 반환"""
         return self.current_state
-        
-    def get_state_source(self):
-        """현재 상태의 소스 반환"""
-        return self.state_source
         
     def blink_animation(self):
         """깜빡임 애니메이션 시작"""
@@ -149,7 +122,7 @@ class RobotFaceWidget(QWidget):
         else:
             self.animation_progress = 0.0
             
-        # Voice 애니메이션 (독립적인 상태)
+        # Voice 애니메이션 (listening, speaking 상태)
         if self.current_state in ["listening", "speaking"]:
             self.voice_animation_progress += 0.05 * self.voice_animation_direction
             if self.voice_animation_progress >= 1.0:
@@ -225,9 +198,6 @@ class RobotFaceWidget(QWidget):
         # 상태에 따른 추가 표현 그리기
         self._draw_face_expression(painter, center_x, center_y)
         
-        # 음성 상태에 따른 추가 표현 그리기
-        self._draw_voice_expression(painter, center_x, center_y)
-        
     def _get_eye_color_with_transition(self):
         """색상 전환을 포함한 눈 색상 반환"""
         if self.previous_color and self.target_color and self.color_transition_progress < 1.0:
@@ -253,7 +223,7 @@ class RobotFaceWidget(QWidget):
             "heavy": QColor(139, 69, 19),       # 갈색
             "happy": QColor(255, 255, 0),       # 노란색
             "sad": QColor(220, 20, 60),         # 빨간색
-            # VoiceExpression 상태들 (독립적인 상태)
+            # 음성 상태들 (FaceExpression으로 통일)
             "listening": QColor(138, 43, 226),  # 보라색
             "speaking": QColor(255, 140, 0),    # 주황색
         }
@@ -320,10 +290,8 @@ class RobotFaceWidget(QWidget):
             painter.drawEllipse(center_x - 500, center_y - 50, 50, 80)
             painter.drawEllipse(center_x - 570, center_y - 100, 50, 80)
             painter.drawEllipse(center_x + 500, center_y - 40, 60, 90)
-
-    def _draw_voice_expression(self, painter, center_x, center_y):
-        """VoiceExpression 상태에 따른 추가 표현 그리기"""
-        if self.current_state == "listening":
+            
+        elif self.current_state == "listening":
             # 듣는 중 - 와이파이 모양 (양쪽에 4개씩, 중앙에서 간격 벌림)
             painter.setPen(QPen(QColor(138, 43, 226), 3))
             
@@ -383,7 +351,7 @@ class RobotFaceWidget(QWidget):
 
 
 class RobotFaceGUI(QMainWindow):
-    """로봇 얼굴 GUI 메인 윈도우 - 통합된 상태 시스템"""
+    """로봇 얼굴 GUI 메인 윈도우 - 통합된 FaceExpression 시스템"""
     
     def __init__(self):
         super().__init__()
@@ -431,22 +399,22 @@ class RobotFaceGUI(QMainWindow):
         
     def setup_connections(self):
         """새로운 버튼 연결 설정"""
-        # 기본 상태 버튼들 (FaceExpression 우선순위)
+        # 기본 상태 버튼들
         self.normal_button.clicked.connect(lambda: self.change_face_state("normal"))
         self.focused_button.clicked.connect(lambda: self.change_face_state("focused"))
         self.charging_button.clicked.connect(lambda: self.change_face_state("charging"))
         self.heavy_button.clicked.connect(lambda: self.change_face_state("heavy"))
         
-        # 특별 표정 버튼들 (FaceExpression 우선순위)
+        # 특별 표정 버튼들
         self.happy_button.clicked.connect(lambda: self.change_face_state("happy"))
         self.sad_button.clicked.connect(lambda: self.change_face_state("sad"))
         
-        # 음성 상태 버튼들 (독립적인 상태)
-        self.listening_button.clicked.connect(lambda: self.change_voice_state("listening"))
-        self.speaking_button.clicked.connect(lambda: self.change_voice_state("speaking"))
+        # 음성 상태 버튼들 (FaceExpression으로 통일)
+        self.listening_button.clicked.connect(lambda: self.change_face_state("listening"))
+        self.speaking_button.clicked.connect(lambda: self.change_face_state("speaking"))
             
     def change_face_state(self, state):
-        """FaceExpression 상태 변경 - 우선순위 높음"""
+        """FaceExpression 상태 변경"""
         self.current_state = state
         self.face_widget.set_face_state(state, self.current_robot_id)
         self.update_status_display()
@@ -454,28 +422,17 @@ class RobotFaceGUI(QMainWindow):
         # ROS 노드를 통해 FaceExpression 메시지 발행 (테스트용)
         if self.ros_node and hasattr(self.ros_node, 'publish_face_expression'):
             self.ros_node.publish_face_expression(self.current_robot_id, state, f"Manual change to {state}")
-        
-    def change_voice_state(self, state):
-        """VoiceExpression 상태 변경 - 독립적인 상태"""
-        self.current_state = state
-        self.face_widget.set_voice_state(state, self.current_robot_id)
-        self.update_status_display()
-        
-        # ROS 노드를 통해 VoiceExpression 메시지 발행 (테스트용)
-        if self.ros_node and hasattr(self.ros_node, 'publish_voice_expression'):
-            self.ros_node.publish_voice_expression(self.current_robot_id, state)
     
     def update_status_display(self):
         """상태 표시 업데이트"""
         current_state = self.face_widget.get_current_state()
-        state_source = self.face_widget.get_state_source()
         emoji = self._get_state_emoji(current_state)
         
-        status_text = f"{emoji} 상태: {current_state} (소스: {state_source})"
+        status_text = f"{emoji} 상태: {current_state}"
         self.status_label.setText(status_text)
         
     def _get_state_emoji(self, state):
-        """통합된 상태에 따른 이모지 반환"""
+        """상태에 따른 이모지 반환"""
         emojis = {
             # FaceExpression 상태들
             "normal": "🟢",
@@ -484,15 +441,24 @@ class RobotFaceGUI(QMainWindow):
             "heavy": "🟤",
             "happy": "💛",
             "sad": "🔴",
-            # VoiceExpression 상태들 (normal 상태일 때만)
+            # 음성 상태들 (FaceExpression으로 통일)
             "listening": "🟣",
             "speaking": "🟠"
         }
         return emojis.get(state, "🟢")
     
     def handle_face_expression_message(self, msg):
+<<<<<<< HEAD
+        """외부에서 받은 FaceExpression 메시지 처리"""
+=======
         """외부에서 받은 FaceExpression 메시지 처리 - 우선순위 높음"""
+        # 디버깅 로그 추가
+        print(f"🎭 FaceExpression 메시지 수신됨: robot_id={msg.robot_id}, expression_type={msg.expression_type}")
+        print(f"🎭 현재 GUI robot_id: {self.current_robot_id}")
+        
+>>>>>>> 4d635f5bdb763380f74dc0d4cb6c23a0590ab66a
         if msg.robot_id == self.current_robot_id:
+            print(f"✅ robot_id 매칭됨! 표정 변경: {msg.expression_type}")
             self.current_state = msg.expression_type
             self.face_widget.set_face_state(msg.expression_type, msg.robot_id)
             self.update_status_display()
@@ -501,6 +467,10 @@ class RobotFaceGUI(QMainWindow):
                 self.ros_node.get_logger().info(
                     f"🎭 FaceExpression 수신: {msg.robot_id} -> {msg.expression_type} ({msg.description})"
                 )
+<<<<<<< HEAD
+=======
+        else:
+            print(f"❌ robot_id 불일치: 수신={msg.robot_id}, GUI={self.current_robot_id}")
     
     def handle_voice_expression_message(self, msg):
         """외부에서 받은 VoiceExpression 메시지 처리 - 독립적인 상태"""
@@ -513,15 +483,16 @@ class RobotFaceGUI(QMainWindow):
                 self.ros_node.get_logger().info(
                     f"🎤 VoiceExpression 수신: {msg.robot_id} -> {msg.voice_state} (독립적인 상태)"
                 )
+>>>>>>> 4d635f5bdb763380f74dc0d4cb6c23a0590ab66a
 
 
 class RobotFaceNode(Node):
-    """ROS2 노드 - 통합된 상태 시스템"""
+    """ROS2 노드 - 통합된 FaceExpression 시스템"""
     
     def __init__(self):
         super().__init__('robot_face_gui')
         
-        # 구독자들 (외부에서 메시지 받기)
+        # 구독자 (외부에서 메시지 받기)
         if FaceExpression:
             self.face_expression_sub = self.create_subscription(
                 FaceExpression,
@@ -530,6 +501,9 @@ class RobotFaceNode(Node):
                 10
             )
         
+<<<<<<< HEAD
+        # 발행자 (테스트용 메시지 발행)
+=======
         if VoiceExpression:
             self.voice_expression_sub = self.create_subscription(
                 VoiceExpression,
@@ -539,9 +513,21 @@ class RobotFaceNode(Node):
             )
         
         # 발행자들 (테스트용 메시지 발행)
+>>>>>>> 4d635f5bdb763380f74dc0d4cb6c23a0590ab66a
         if FaceExpression:
             self.face_expression_pub = self.create_publisher(FaceExpression, '/face_expression', 10)  # 이미 변경됨
         
+<<<<<<< HEAD
+        self.gui = None  # GUI 인스턴스 저장용
+        
+        self.get_logger().info('🤖 Libo Robot Face GUI Node started - 통합된 FaceExpression 시스템!')
+        self.get_logger().info(f'   📥 구독 토픽: libo_face_expression')
+        self.get_logger().info(f'   📤 발행 토픽: libo_face_expression')
+        self.get_logger().info(f'   🎯 상태 시스템: 모든 상태가 FaceExpression으로 통일')
+    
+    def face_expression_callback(self, msg):
+        """FaceExpression 메시지 수신 콜백"""
+=======
         if VoiceExpression:
             self.voice_expression_pub = self.create_publisher(VoiceExpression, '/voice_expression', 10)  # libo_voice_expression에서 변경
         
@@ -554,32 +540,23 @@ class RobotFaceNode(Node):
     
     def face_expression_callback(self, msg):
         """FaceExpression 메시지 수신 콜백 - 우선순위 높음"""
+        print(f"📥 FaceExpression 콜백 호출됨: robot_id={msg.robot_id}, expression_type={msg.expression_type}")
+>>>>>>> 4d635f5bdb763380f74dc0d4cb6c23a0590ab66a
         if self.gui:
+            print(f"✅ GUI 인스턴스 존재, handle_face_expression_message 호출")
             self.gui.handle_face_expression_message(msg)
-    
-    def voice_expression_callback(self, msg):
-        """VoiceExpression 메시지 수신 콜백 - normal 상태일 때만"""
-        if self.gui:
-            self.gui.handle_voice_expression_message(msg)
+        else:
+            print(f"❌ GUI 인스턴스가 없음")
     
     def publish_face_expression(self, robot_id, expression_type, description=""):
-        """FaceExpression 메시지 발행 (테스트용) - 우선순위 높음"""
+        """FaceExpression 메시지 발행 (테스트용)"""
         if FaceExpression and hasattr(self, 'face_expression_pub'):
             msg = FaceExpression()
             msg.robot_id = robot_id
             msg.expression_type = expression_type
             msg.description = description
             self.face_expression_pub.publish(msg)
-            self.get_logger().info(f"📤 FaceExpression 발행: {robot_id} -> {expression_type} (우선순위 높음)")
-    
-    def publish_voice_expression(self, robot_id, voice_state):
-        """VoiceExpression 메시지 발행 (테스트용) - 독립적인 상태"""
-        if VoiceExpression and hasattr(self, 'voice_expression_pub'):
-            msg = VoiceExpression()
-            msg.robot_id = robot_id
-            msg.voice_state = voice_state
-            self.voice_expression_pub.publish(msg)
-            self.get_logger().info(f"📤 VoiceExpression 발행: {robot_id} -> {voice_state} (독립적인 상태)")
+            self.get_logger().info(f"📤 FaceExpression 발행: {robot_id} -> {expression_type}")
 
 
 def main(args=None):
@@ -605,10 +582,16 @@ def main(args=None):
     
     # 애플리케이션 시작 로그
     print("🚀 Libo Robot Face GUI 시작!")
+<<<<<<< HEAD
+    print("   🎭 지원 표정: normal, focused, charging, heavy, happy, sad, listening, speaking")
+    print("   🔗 ROS2 토픽: libo_face_expression (통일된 시스템)")
+    print("   🎯 상태 시스템: 모든 상태가 FaceExpression으로 통일")
+=======
     print("   🎭 지원 표정: normal, focused, charging, heavy, happy, sad")
     print("   🎤 지원 음성: listening, speaking (독립적인 상태)")
     print("   🔗 ROS2 토픽: /face_expression, /voice_expression (모두 독립적인 상태)")  # 로그 업데이트
     print("   🎯 상태 시스템: FaceExpression과 VoiceExpression 모두 독립적인 상태")
+>>>>>>> 4d635f5bdb763380f74dc0d4cb6c23a0590ab66a
     
     # 애플리케이션 실행
     try:

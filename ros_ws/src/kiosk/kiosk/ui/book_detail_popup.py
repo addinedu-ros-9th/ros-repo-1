@@ -109,8 +109,8 @@ class BookDetailPopup(QDialog):
                 map_ratio = map_width / map_height
                 
                 # 지도 라벨 크기 설정 (지도 크기 유지하면서 조정)
-                map_label_width = max(480, int(280 * map_ratio))  # 지도 크기 더욱 줄임
-                map_label_height = max(580, int(420 / map_ratio))  # 지도 높이 더욱 줄임
+                map_label_width = max(600, int(400 * map_ratio))  # 지도 크기 확대
+                map_label_height = max(700, int(500 / map_ratio))  # 지도 높이 확대
                 
                 # 지도 라벨 크기 조정
                 self.mapLabel.setMinimumSize(map_label_width, map_label_height)
@@ -118,7 +118,7 @@ class BookDetailPopup(QDialog):
                 
                 # 전체 윈도우 크기 조정
                 total_width = map_label_width + 100  # 지도 + 정보 패널 (패널 크기 최소화)
-                total_height = max(map_label_height + 80, 680)  # 최소 높이 최소화
+                total_height = max(map_label_height + 120, 900)  # 전체 창 높이 확대
                 
                 self.resize(total_width, total_height)
                 

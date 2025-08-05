@@ -55,7 +55,7 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
         self.setWindowTitle("LIBO Book Corner")
         
         # 창 크기 고정
-        self.setFixedSize(1200, 900)
+        self.setFixedSize(1100, 900)
         
         # 지도 이미지 설정
         self.setup_map_image()
@@ -76,16 +76,16 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
         # 지도 라벨을 부모로 하는 버튼들 생성
         # 각 코너의 상대적 위치 (지도 내에서의 위치)
         corner_positions = {
-            "컴퓨터": (250, 330),
-            "언어": (500, 330),
-            "소설": (750, 330)
+            "컴퓨터": (300, 310),
+            "언어": (490, 310),
+            "소설": (680, 310)
         }
         
         # 각 코너별 버튼 크기 설정
         corner_sizes = {
-            "컴퓨터": (140, 180),    # 가로 짧고 세로 긴
-            "언어": (140, 180),      # 가로 짧고 세로 긴
-            "소설": (180, 140)       # 가로 길고 세로 짧음
+            "컴퓨터": (90, 130),    # 가로 짧고 세로 긴
+            "언어": (90, 130),      # 가로 짧고 세로 긴
+            "소설": (130, 90)       # 가로 길고 세로 짧음
         }
         
         # 각 코너에 버튼 생성
@@ -124,9 +124,18 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
             
             if os.path.exists(image_path):
                 pixmap = QPixmap(image_path)
-                self.mapLabel.setPixmap(pixmap)
-                self.mapLabel.setScaledContents(True)
-                print(f"✅ 지도 이미지 설정 완료: {image_path}")
+                
+                # 지도 크기 축소 (원본 크기의 80%로 축소)
+                scaled_pixmap = pixmap.scaled(
+                    int(pixmap.width() * 0.9), 
+                    int(pixmap.height() * 0.7), 
+                    Qt.KeepAspectRatio, 
+                    Qt.SmoothTransformation
+                )
+                
+                self.mapLabel.setPixmap(scaled_pixmap)
+                self.mapLabel.setScaledContents(False)  # 비율 유지하면서 축소
+                print(f"✅ 지도 이미지 설정 완료 (축소됨): {image_path}")
             else:
                 print(f"❌ 지도 이미지를 찾을 수 없습니다: {image_path}")
                 
@@ -426,7 +435,7 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
         screen = QApplication.desktop().screenGeometry()
         
         # 고정된 창 크기 사용
-        window_width = 1200
+        window_width = 1100
         window_height = 900
         
         center_x = (screen.width() - window_width) // 2
