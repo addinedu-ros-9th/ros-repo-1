@@ -33,6 +33,7 @@ CMD_LISTEN_PORT = 7009
 REID_THRESHOLD = 0.4
 # 추적 중인 타겟의 외모 특징을 갱신할 때 사용하는 학습률입니다. 조명이나 자세 변화에 점진적으로 적응하게 해줍니다.
 FEATURE_UPDATE_ALPHA = 0.1
+last_status_send_time = 0  # 루프 밖에 정의
 
 # ===== 모델 로드 (Model Loading) =====
 print("🤖 모델을 로딩합니다...")
@@ -195,8 +196,12 @@ try:
                  lost_time = time.time() - target_lost_time
 
         # 4. 상태 전송 및 시각화
-        message = {'timestamp': time.time(), 'lost_time': lost_time}
-        status_sock.sendto(json.dumps(message).encode(), (ROS_BRIDGE_IP, ROS_BRIDGE_PORT))
+        current_time = time.time()
+        if current_time - last_status_send_time > 1.0:  # 1초마다 전송
+        # current_time = time.time()
+            message = {'timestamp': time.time(), 'lost_time': lost_time}
+            status_sock.sendto(json.dumps(message).encode(), (ROS_BRIDGE_IP, ROS_BRIDGE_PORT))
+            last_status_send_time = current_time
 
         # 현재 프레임에 보이는 모든 객체에 대해 바운딩 박스를 그립니다.
         for output in tracked_outputs:
