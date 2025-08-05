@@ -1,3 +1,55 @@
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < 총 정리본 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+
+
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < 환경 설정 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+LIBO_5G WIFI 연결
+export ROS_DOMAIN_ID=77
+
+
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < 메인 서버 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+ros2 run main_server task_manager               
+ros2 run admin admin_gui
+ros2 run main_server book_search_service
+ros2 run libo_navigator navigator_node              
+
+
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < AI Server > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+ros2 run ai_service talker_manager
+ros2 run ai_service ros2_bridege_node
+python3 strongsort_client.py                    -> 파이썬파일로 직접 실행 + 파이썬 3.10 가상환경으로 실행
+ros2 run ai_service human_detector_node         -> (파이썬 3.10 가상환경으로 실행)
+ros2 run ai_service obstacle_detector_node
+ros2 run ai_service vision_manager_assist
+ros2 run ai_service qr_scanner_node
+
+
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < HW Handler 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+ros2 run hardware_handler mic_streamer.py
+ros2 run hardware_handler speaker_node.py
+ros2 run hardware_handler heartbeat_sender
+ros2 run libo_gui robot_face_gui 
+
+
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < ROBOT > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+ros2 launch vicpinky_bringup bringup.launch.xml
+ros2 launch vicpinky_navigation bringup_launch.xml map:=map3_final.yaml 
+
+
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < rviz2 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+ros2 launch vicpinky_navigation nav2_view.launch.xml
+
+
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < Kiosk GUI > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+ros2 run kiosk main_ui
+ros2 run stock stock_gui
+
+
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+
 1. 터미널 1: 메인 서버(책찾기 기능) 실행
 ros2 run main_server book_search_service
 
@@ -41,22 +93,3 @@ ros2 run ai_service ros2_bridege_node.py
 
 python310
 python ros-repo-1/ros_ws/src/ai_service/ai_service/nodes/strongsort_client.py
-
-
-
-< 에스코트를 위한 AI 서버 실행 >
-ros2_bridege_node
-python3 strongsort_client.py                -> 파이썬파일로 직접 실행 + 파이썬 3.10 가상환경으로 실행
-ros2 run ai_service talker_manager
-
-< 어시스트를 위한 AI 서버 실행 >
-ros2 run ai_service human_detector_node     -> (파이썬 3.10 가상환경으로 실행)
-ros2 run ai_service obstacle_detector_node
-ros2 run ai_service vision_manager_assist
-ros2 run ai_service qr_scanner_node
-ros2 run ai_service talker_manager
-
-< 메인 서버 실행>
-ros2 run main_server task_manager
-ros2 run admin admin_gui
-ros2 run hardware_handler heartbeat_sender
