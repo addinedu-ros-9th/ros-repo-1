@@ -27,7 +27,7 @@ print("🤖 모델을 로딩합니다...")
 yolo_model = torch.hub.load('ultralytics/yolov5', YOLO_MODEL_NAME, pretrained=True).to(DEVICE)
 tracker = StrongSORT(
     model_weights=REID_WEIGHT_PATH, device=DEVICE, fp16=False,
-    max_age=200, max_dist=0.3, max_iou_distance=0.7, n_init=3
+    max_age=40, max_dist=0.3, max_iou_distance=0.7, n_init=3
 )
 print("✅ 모델 로딩 완료.")
 

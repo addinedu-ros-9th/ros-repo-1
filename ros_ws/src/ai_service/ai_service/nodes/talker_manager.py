@@ -28,7 +28,7 @@ from libo_interfaces.srv import EndTask, ActivateTalker, DeactivateTalker
 
 # ================== 네트워크/오디오 기본 설정 ==================
 # 네트워크 설정
-HARDWARE_HANDLER_IP = "127.0.0.1"      # 🖥️ Hardware Handler IP (UDP/TCP 서버 주소)
+HARDWARE_HANDLER_IP = "0.0.0.0"      # 🖥️ Hardware Handler IP (UDP/TCP 서버 주소)
 MIC_STREAM_PORT = 7010                 # 🎤 마이크 스트림 포트 (UDP 수신)
 SPEAKER_PORT = 7002                    # 🔊 스피커 출력 포트 (TCP 서버)
 
@@ -104,15 +104,18 @@ for path in [PORCUPINE_MODEL_PATH, PORCUPINE_KEYWORD_PATH]:
 VOICE_COMMANDS = {
     # 공통 음성 명령
     "common": {
-        "power_on": {"type": "mp3", "value": "power_on.mp3"},  # (전원 켜지는 소리 - 삐빅)
-        "initialized": {"type": "mp3", "value": "robot_initialized.mp3"},  # (초기화 완료 소리 - 따리리리링)
+        "power_on": {"type": "mp3", "value": "power_on.mp3"},                   # (전원 켜지는 소리 - 삐빅)
+        "initialized": {"type": "mp3", "value": "robot_initialized.mp3"},       # (초기화 완료 소리 - 따리리리링)
         "charging": {"type": "tts", "value": "충전을 시작하겠습니다."},
         "battery_sufficient": {"type": "tts", "value": "배터리가 충분합니다. 대기모드로 전환합니다."},
-        "depart_base": {"type": "tts", "value": "출발합니다~ (종잔기를 뽑고)"},
-        "obstacle_detected": {"type": "mp3", "value": "honk.mp3"},  # (장애물이 감지됐습니다. 잠시합니다. / 빵!!!!!!!!!!)
+        "depart_base": {"type": "tts", "value": "출발합니다~ (충전기를 뽑고)"},
+        "obstacle_detected": {"type": "mp3", "value": "honk.mp3"},              # (장애물이 감지됐습니다. 잠시합니다. / 빵!!!!!!!!!!)
         "reroute": {"type": "tts", "value": "새로운 경로로 안내합니다."},
-        "return": {"type": "mp3", "value": "complete.mp3"},  # (복귀하겠습니다. / (북귀음 소리 - 빠빕))
-        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
+        "return": {"type": "mp3", "value": "complete.mp3"},                     # (복귀하겠습니다. / (북귀음 소리 - 빠빕))
+        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."},
+        "navigation_canceled": {"type": "tts", "value": "주행이 취소되었습니다"},
+        "emergency_stop": {"type": "tts", "value": "비상 정지! 안전을 위해 모든 작업을 중단합니다."},
+        "emergency_recovery": {"type": "tts", "value": "비상 상황이 해결되었습니다. 정상 상태로 복구합니다"}
     },
     
     # 안내 관련 음성 명령
@@ -120,9 +123,9 @@ VOICE_COMMANDS = {
         "depart_base": {"type": "tts", "value": "출발합니다~"},
         "arrived_kiosk": {"type": "tts", "value": "잭 위치까지 에스코팅을 시작하겠습니다. 뒤로 따라와주시길 바랍니다."},
         "lost_user": {"type": "tts", "value": "손님이 보이지 않습니다. 20초 후에 자동종료 됩니다."},
-        "user_reconnected": {"type": "mp3", "value": "reconnected.mp3"},  # (다시 연결된 소리, 뿌루루? 빠빅?)
+        "user_reconnected": {"type": "mp3", "value": "reconnected.mp3"},        # (다시 연결된 소리, 뿌루루? 빠빅?)
         "arrived_destination": {"type": "tts", "value": "도착했습니다. 더 필요한 것이 있으면 키오스크에서 불러주세요."},
-        "return": {"type": "mp3", "value": "complete.mp3"},  # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
+        "return": {"type": "mp3", "value": "complete.mp3"},                     # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
         "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
     },
     
@@ -132,8 +135,8 @@ VOICE_COMMANDS = {
         "arrived_admin_desk": {"type": "tts", "value": "딜리버리 준비가 완료되었습니다. 다음 목적지를 선택해주세요."},
         "receive_next_goal": {"type": "tts", "value": "목적지를 수신하였습니다. 출발하겠습니다."},
         "arrived_destination": {"type": "tts", "value": "도착했습니다. 작업이 완료되면 말해주세요."},
-        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},  # 네? / (삐빅)
-        "return": {"type": "mp3", "value": "complete.mp3"},  # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
+        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},        # 네? / (삐빅)
+        "return": {"type": "mp3", "value": "complete.mp3"},                      # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
         "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
     },
     
@@ -144,10 +147,10 @@ VOICE_COMMANDS = {
         "qr_authenticated": {"type": "tts", "value": "QR 인증 완료! 어시스트를 시작하면 카메라 앞에서 대기 해주시길 바랍니다."},
         "no_person_5s": {"type": "tts", "value": "감지 실패!"},
         "person_detected": {"type": "tts", "value": "감지 성공!"},
-        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},  # 네? / (삐빅)
+        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},       # 네? / (삐빅)
         "pause": {"type": "tts", "value": "일시정지합니다."},
         "resume": {"type": "tts", "value": "어시스트를 재개합니다."},
-        "return": {"type": "mp3", "value": "complete.mp3"},  # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
+        "return": {"type": "mp3", "value": "complete.mp3"},                     # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
         "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
     }
 }
