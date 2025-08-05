@@ -313,6 +313,10 @@ class TaskManager(Node):
         self.current_weight = 0.0  # 현재 무게 (g 단위)
         self.last_weight_update = None  # 마지막 무게 업데이트 시간
         
+        # DetectionTimer 상태 추적 변수 (user_reconnected 로직용)
+        self.detection_timer_reached_5s = False  # 5초 이상 도달했는지 여부
+        self.last_detection_timer_value = 0  # 마지막 detection timer 값
+        
         # OverallStatus 퍼블리셔 생성
         self.status_publisher = self.create_publisher(OverallStatus, 'robot_status', 10)  # OverallStatus 토픽 퍼블리셔
         
@@ -401,6 +405,9 @@ class TaskManager(Node):
                         {'action': 'cancel_navigation'},  # 네비게이션 취소
                         {'action': 'deactivate_detector'},  # 감지기 비활성화
                         {'action': 'force_stage', 'target': 3}  # 강제로 Stage 3으로 이동
+                    ],
+                    'user_reconnected': [  # 사용자 재연결 시 실행할 액션들
+                        {'action': 'voice', 'command': 'user_reconnected'}  # 사용자 재연결 알림 음성
                     ]
                 },
                 3: {  # Stage 3: Base로 복귀하는 단계
@@ -1200,6 +1207,27 @@ class TaskManager(Node):
             try:
                 counter_value = int(msg.command)
                 self.get_logger().info(f'📊 [DetectionTimer] 카운터: {counter_value}초 (robot: {msg.robot_id})')
+                
+                # user_reconnected 로직: 5초 이상 도달했다가 0으로 돌아오면 재연결 알림
+                if counter_value >= 5:
+                    self.detection_timer_reached_5s = True  # 5초 이상 도달했음을 표시
+                    self.get_logger().info(f'⚠️ [DetectionTimer] 5초 이상 도달: {counter_value}초 (user_reconnected 대기 중)')
+                elif counter_value == 0 and self.detection_timer_reached_5s:
+                    # 5초 이상 도달했다가 0으로 돌아온 경우 - 사람을 다시 감지했다는 의미
+                    self.get_logger().info(f'🔄 [DetectionTimer] 사람 재감지! 0초로 리셋됨 (user_reconnected 이벤트 발생)')
+                    
+                    # 현재 활성 task 확인 후 user_reconnected 이벤트 처리
+                    if self.tasks and len(self.tasks) > 0:
+                        current_task = self.tasks[0]  # 첫 번째 활성 task
+                        self.process_task_stage_logic(current_task, current_task.stage, 'user_reconnected')
+                    else:
+                        self.get_logger().warning(f'⚠️ [DetectionTimer] user_reconnected 이벤트 발생했지만 활성 task가 없음')
+                    
+                    # 상태 리셋
+                    self.detection_timer_reached_5s = False
+                
+                # 마지막 값 업데이트
+                self.last_detection_timer_value = counter_value
                 
                 # 현재 활성 task 확인
                 if self.tasks and len(self.tasks) > 0:
