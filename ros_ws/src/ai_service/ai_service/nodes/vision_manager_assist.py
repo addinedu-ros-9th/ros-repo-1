@@ -20,6 +20,7 @@ class PIDController:
         self.max_output, self.min_output = max_output, min_output
         # 내부 상태 변수 초기화
         self.previous_error, self.integral = 0.0, 0.0
+        self.stop = True
 
     def update(self, error, dt=0.1):
         """새로운 오차 값을 입력받아 PID 제어 출력을 계산합니다."""
@@ -98,6 +99,7 @@ class AdvancedAssistFollowFSM(Node):
     def handle_activate_tracker(self, request, response):
         self.get_logger().info(f"🟢 Activate 요청 수신 - robot_id: {request.robot_id}")
         self.qr_authenticated = True
+        self.stop = False
         response.success = True
         response.message = "Assist mode activated with advanced FSM."
         return response
@@ -106,6 +108,7 @@ class AdvancedAssistFollowFSM(Node):
         self.get_logger().info(f"🔴 Deactivate 요청 수신 - robot_id: {request.robot_id}")
         self.qr_authenticated = False
         self.stop_robot()
+        self.stop = True
         response.success = True
         response.message = "Assist mode deactivated."
         return response
@@ -121,15 +124,18 @@ class AdvancedAssistFollowFSM(Node):
             if not self.is_paused_by_voice:
                 self.get_logger().info("🎤 음성 명령으로 추종을 일시 중지합니다.")
                 self.is_paused_by_voice = True
+                self.stop = True
                 self.stop_robot()
         
         elif msg.action == "follow":
             if self.is_paused_by_voice:
                 self.get_logger().info("🎤 음성 명령으로 추종을 재개합니다.")
                 self.is_paused_by_voice = False
+                self.stop = False
         
     def human_info_callback(self, msg: HumanInfo):
         if not self.qr_authenticated: return
+        if self.stop: return
         if self.obstacle_status is None:
             self.get_logger().info('장애물 감지 정보 수신 대기 중...', once=True)
             return
