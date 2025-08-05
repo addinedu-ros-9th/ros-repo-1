@@ -24,7 +24,7 @@ def main(args=None):
     SEND_TO_FOLLOWING = True
 
     # 사용할 카메라의 번호. 0은 보통 내장 웹캠을 의미합니다.
-    CAMERA_INDEX = 0
+    CAMERA_INDEX = 1
 
     # ===== 소켓 설정: UDP 통신을 위한 소켓을 생성하는 부분 =====
     # 모니터링 서비스로 데이터를 보내기 위한 UDP 소켓 생성

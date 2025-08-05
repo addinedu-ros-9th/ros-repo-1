@@ -1492,12 +1492,11 @@ class TaskManager(Node):
         """EndTask 서비스 콜백"""
         self.get_logger().info(f'📥 EndTask 요청 받음!')
         self.get_logger().info(f'   - 로봇 ID: {request.robot_id}')
-        self.get_logger().info(f'   - Task Type: {request.task_type}')
         
-        # 해당 로봇의 활성 작업 찾기
+        # 해당 로봇의 활성 작업 찾기 (로봇당 하나의 활성 작업만 있음)
         active_task = None
         for task in self.tasks:
-            if task.robot_id == request.robot_id and task.task_type == request.task_type:
+            if task.robot_id == request.robot_id:  # robot_id만으로 작업 찾기
                 active_task = task
                 break
         
@@ -1505,10 +1504,10 @@ class TaskManager(Node):
             # task_stage_logic에서 end_task 이벤트 처리
             self.process_task_stage_logic(active_task, active_task.stage, 'end_task')
             response.success = True
-            response.message = f"EndTask 이벤트 처리 완료: {request.robot_id} - {request.task_type}"
+            response.message = f"EndTask 이벤트 처리 완료: {request.robot_id} - {active_task.task_type}"  # active_task에서 task_type 가져오기
         else:
             response.success = False
-            response.message = f"로봇 <{request.robot_id}>의 {request.task_type} 작업을 찾을 수 없습니다"
+            response.message = f"로봇 <{request.robot_id}>의 활성 작업을 찾을 수 없습니다"
         
         return response
 

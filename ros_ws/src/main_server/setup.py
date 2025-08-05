@@ -12,7 +12,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', ['launch/weight_sensor.launch.py']),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'pymysql>=1.1.0'],
     zip_safe=True,
     maintainer='robolee',
     maintainer_email='leesh20806@gmail.com',
