@@ -16,13 +16,17 @@ ros2 run libo_navigator navigator_node
 
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < AI Server > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
-ros2 run ai_service talker_manager
-ros2 run ai_service ros2_bridege_node
+pyenv activate libo_python3_10_venv             -> 가상환경 실행
 python3 strongsort_client.py                    -> 파이썬파일로 직접 실행 + 파이썬 3.10 가상환경으로 실행
+ros2 run ai_service ros2_bridege_node
+
 ros2 run ai_service human_detector_node         -> (파이썬 3.10 가상환경으로 실행)
 ros2 run ai_service obstacle_detector_node
 ros2 run ai_service vision_manager_assist
+
 ros2 run ai_service qr_scanner_node
+
+ros2 run ai_service talker_manager
 
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < HW Handler 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
