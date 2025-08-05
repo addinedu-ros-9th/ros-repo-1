@@ -123,7 +123,7 @@ VOICE_COMMANDS = {
     "escort": {
         "depart_base": {"type": "tts", "value": "출발합니다~"},
         "arrived_kiosk": {"type": "tts", "value": "잭 위치까지 에스코팅을 시작하겠습니다. 뒤로 따라와주시길 바랍니다."},
-        "lost_user": {"type": "tts", "value": "손님이 보이지 않습니다. 20초 후에 자동종료 됩니다."},
+        "lost_user": {"type": "tts", "value": "손님이 보이지 않습니다. 5초 후에 자동종료 됩니다."},
         "user_reconnected": {"type": "mp3", "value": "reconnected.mp3"},        # (다시 연결된 소리, 뿌루루? 빠빅?)
         "arrived_destination": {"type": "tts", "value": "도착했습니다. 더 필요한 것이 있으면 키오스크에서 불러주세요."},
         "return": {"type": "mp3", "value": "complete.mp3"},                     # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
@@ -1017,6 +1017,8 @@ def main(args=None):
                                 if success:
                                     # EndTask 서비스 호출
                                     talker_node.call_end_task(robot_id)
+                                    print(f"[{get_kr_time()}][SYSTEM] EndTask 서비스 호출 후 현재 음성 처리 로직 종료")
+                                    break  # 현재 음성 인식 및 처리 로직 종료, 웨이크워드 대기로 복귀
                             
                             # 성공 여부에 따른 로그
                             if success:
@@ -1187,6 +1189,8 @@ def main(args=None):
                             if success:
                                 # EndTask 서비스 호출
                                 talker_node.call_end_task(robot_id)
+                                print(f"[{get_kr_time()}][SYSTEM] EndTask 서비스 호출 후 현재 음성 처리 로직 종료")
+                                break  # 현재 음성 인식 및 처리 로직 종료, 웨이크워드 대기로 복귀
                         
                         # 성공 여부에 따른 로그
                         if success:
