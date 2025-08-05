@@ -492,7 +492,12 @@ class RobotFaceGUI(QMainWindow):
     
     def handle_face_expression_message(self, msg):
         """외부에서 받은 FaceExpression 메시지 처리 - 우선순위 높음"""
+        # 디버깅 로그 추가
+        print(f"🎭 FaceExpression 메시지 수신됨: robot_id={msg.robot_id}, expression_type={msg.expression_type}")
+        print(f"🎭 현재 GUI robot_id: {self.current_robot_id}")
+        
         if msg.robot_id == self.current_robot_id:
+            print(f"✅ robot_id 매칭됨! 표정 변경: {msg.expression_type}")
             self.current_state = msg.expression_type
             self.face_widget.set_face_state(msg.expression_type, msg.robot_id)
             self.update_status_display()
@@ -501,6 +506,8 @@ class RobotFaceGUI(QMainWindow):
                 self.ros_node.get_logger().info(
                     f"🎭 FaceExpression 수신: {msg.robot_id} -> {msg.expression_type} ({msg.description})"
                 )
+        else:
+            print(f"❌ robot_id 불일치: 수신={msg.robot_id}, GUI={self.current_robot_id}")
     
     def handle_voice_expression_message(self, msg):
         """외부에서 받은 VoiceExpression 메시지 처리 - 독립적인 상태"""
@@ -554,8 +561,12 @@ class RobotFaceNode(Node):
     
     def face_expression_callback(self, msg):
         """FaceExpression 메시지 수신 콜백 - 우선순위 높음"""
+        print(f"📥 FaceExpression 콜백 호출됨: robot_id={msg.robot_id}, expression_type={msg.expression_type}")
         if self.gui:
+            print(f"✅ GUI 인스턴스 존재, handle_face_expression_message 호출")
             self.gui.handle_face_expression_message(msg)
+        else:
+            print(f"❌ GUI 인스턴스가 없음")
     
     def voice_expression_callback(self, msg):
         """VoiceExpression 메시지 수신 콜백 - normal 상태일 때만"""
