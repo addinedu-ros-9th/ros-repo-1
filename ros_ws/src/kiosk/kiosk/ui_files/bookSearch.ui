@@ -13,18 +13,24 @@
   <property name="windowTitle">
    <string>LIBO Book Search</string>
   </property>
+  <property name="styleSheet">
+   <string>QWidget {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #f8f9fa, stop:1 #e9ecef);
+}</string>
+  </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
     <widget class="QLabel" name="searchTitleLabel">
      <property name="font">
       <font>
-       <pointsize>24</pointsize>
+       <pointsize>36</pointsize>
        <weight>75</weight>
        <bold>true</bold>
       </font>
      </property>
      <property name="text">
-      <string>도서 검색</string>
+      <string>📚 도서 검색</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -32,18 +38,70 @@
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>60</height>
+       <height>80</height>
       </size>
+     </property>
+     <property name="styleSheet">
+      <string>QLabel {
+    color: #2c3e50;
+    background: transparent;
+    border: none;
+    padding: 10px;
+}</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="searchSubtitleLabel">
+     <property name="font">
+      <font>
+       <pointsize>18</pointsize>
+       <weight>50</weight>
+       <bold>false</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>원하는 도서를 검색해보세요</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
+     </property>
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>40</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string>QLabel {
+    color: #71866a;
+    background: transparent;
+    border: none;
+    font-weight: normal;
+}</string>
      </property>
     </widget>
    </item>
    <item>
     <layout class="QHBoxLayout" name="searchInputLayout">
      <item>
+      <spacer name="leftSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>100</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
       <widget class="QLineEdit" name="searchLineEdit">
        <property name="font">
         <font>
-         <pointsize>14</pointsize>
+         <pointsize>16</pointsize>
         </font>
        </property>
        <property name="placeholderText">
@@ -51,19 +109,24 @@
        </property>
        <property name="minimumSize">
         <size>
-         <width>0</width>
-         <height>40</height>
+         <width>600</width>
+         <height>50</height>
         </size>
        </property>
        <property name="styleSheet">
-        <string notr="true">QLineEdit {
-    border: 2px solid #bdc3c7;
-    border-radius: 8px;
-    padding: 8px;
-    font-size: 14px;
+        <string>QLineEdit {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ffffff, stop:1 #f8f9fa);
+    border: 2px solid #71866a;
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 16px;
+    color: #2c3e50;
 }
 QLineEdit:focus {
-    border-color: #3498db;
+    border: 3px solid #5a6b4f;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ffffff, stop:1 #f0f2f1);
 }</string>
        </property>
       </widget>
@@ -72,54 +135,107 @@ QLineEdit:focus {
       <widget class="QPushButton" name="searchButton">
        <property name="font">
         <font>
-         <pointsize>14</pointsize>
+         <pointsize>16</pointsize>
          <weight>75</weight>
          <bold>true</bold>
         </font>
        </property>
        <property name="text">
-        <string>검색</string>
+        <string>🔍 검색</string>
        </property>
        <property name="minimumSize">
         <size>
-         <width>80</width>
-         <height>40</height>
+         <width>120</width>
+         <height>50</height>
         </size>
        </property>
        <property name="styleSheet">
-        <string notr="true">QPushButton {
-    background-color: #3498db;
+        <string>QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #71866a, stop:1 #5a6b4f);
     color: white;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px;
+    padding: 12px 20px;
     font-weight: bold;
-    font-size: 14px;
 }
 QPushButton:hover {
-    background-color: #2980b9;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #7d9270, stop:1 #64755a);
+    border: 2px solid #5a6b4f;
 }
 QPushButton:pressed {
-    background-color: #1f5f8b;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #5a6b4f, stop:1 #4a5a3f);
 }</string>
        </property>
       </widget>
+     </item>
+     <item>
+      <spacer name="rightSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>100</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
      </item>
     </layout>
    </item>
    <item>
     <layout class="QHBoxLayout" name="radioButtonLayout">
      <item>
+      <spacer name="radioLeftSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>200</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
       <widget class="QRadioButton" name="titleRadioButton">
        <property name="font">
         <font>
-         <pointsize>12</pointsize>
+         <pointsize>14</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
         </font>
        </property>
        <property name="text">
-        <string>제목</string>
+        <string>📖 제목</string>
        </property>
        <property name="checked">
         <bool>true</bool>
+       </property>
+       <property name="styleSheet">
+        <string>QRadioButton {
+    color: #2c3e50;
+    font-weight: bold;
+    spacing: 8px;
+}
+QRadioButton::indicator {
+    width: 20px;
+    height: 20px;
+}
+QRadioButton::indicator:unchecked {
+    border: 2px solid #71866a;
+    border-radius: 10px;
+    background-color: white;
+}
+QRadioButton::indicator:checked {
+    border: 2px solid #5a6b4f;
+    border-radius: 10px;
+    background-color: #71866a;
+}</string>
        </property>
       </widget>
      </item>
@@ -127,11 +243,34 @@ QPushButton:pressed {
       <widget class="QRadioButton" name="authorRadioButton">
        <property name="font">
         <font>
-         <pointsize>12</pointsize>
+         <pointsize>14</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
         </font>
        </property>
        <property name="text">
-        <string>저자</string>
+        <string>✍️ 저자</string>
+       </property>
+       <property name="styleSheet">
+        <string>QRadioButton {
+    color: #2c3e50;
+    font-weight: bold;
+    spacing: 8px;
+}
+QRadioButton::indicator {
+    width: 20px;
+    height: 20px;
+}
+QRadioButton::indicator:unchecked {
+    border: 2px solid #71866a;
+    border-radius: 10px;
+    background-color: white;
+}
+QRadioButton::indicator:checked {
+    border: 2px solid #5a6b4f;
+    border-radius: 10px;
+    background-color: #71866a;
+}</string>
        </property>
       </widget>
      </item>
@@ -139,11 +278,34 @@ QPushButton:pressed {
       <widget class="QRadioButton" name="publisherRadioButton">
        <property name="font">
         <font>
-         <pointsize>12</pointsize>
+         <pointsize>14</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
         </font>
        </property>
        <property name="text">
-        <string>출판사</string>
+        <string>🏢 출판사</string>
+       </property>
+       <property name="styleSheet">
+        <string>QRadioButton {
+    color: #2c3e50;
+    font-weight: bold;
+    spacing: 8px;
+}
+QRadioButton::indicator {
+    width: 20px;
+    height: 20px;
+}
+QRadioButton::indicator:unchecked {
+    border: 2px solid #71866a;
+    border-radius: 10px;
+    background-color: white;
+}
+QRadioButton::indicator:checked {
+    border: 2px solid #5a6b4f;
+    border-radius: 10px;
+    background-color: #71866a;
+}</string>
        </property>
       </widget>
      </item>
@@ -151,22 +313,45 @@ QPushButton:pressed {
       <widget class="QRadioButton" name="categoryRadioButton">
        <property name="font">
         <font>
-         <pointsize>12</pointsize>
+         <pointsize>14</pointsize>
+         <weight>75</weight>
+         <bold>true</bold>
         </font>
        </property>
        <property name="text">
-        <string>카테고리</string>
+        <string>📂 카테고리</string>
+       </property>
+       <property name="styleSheet">
+        <string>QRadioButton {
+    color: #2c3e50;
+    font-weight: bold;
+    spacing: 8px;
+}
+QRadioButton::indicator {
+    width: 20px;
+    height: 20px;
+}
+QRadioButton::indicator:unchecked {
+    border: 2px solid #71866a;
+    border-radius: 10px;
+    background-color: white;
+}
+QRadioButton::indicator:checked {
+    border: 2px solid #5a6b4f;
+    border-radius: 10px;
+    background-color: #71866a;
+}</string>
        </property>
       </widget>
      </item>
      <item>
-      <spacer name="horizontalSpacer">
+      <spacer name="radioRightSpacer">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="sizeHint" stdset="0">
         <size>
-         <width>40</width>
+         <width>200</width>
          <height>20</height>
         </size>
        </property>
@@ -178,13 +363,13 @@ QPushButton:pressed {
     <widget class="QLabel" name="bookListTitleLabel">
      <property name="font">
       <font>
-       <pointsize>18</pointsize>
+       <pointsize>22</pointsize>
        <weight>75</weight>
        <bold>true</bold>
       </font>
      </property>
      <property name="text">
-      <string>검색 결과</string>
+      <string>📋 검색 결과</string>
      </property>
      <property name="alignment">
       <set>Qt::AlignCenter</set>
@@ -192,8 +377,18 @@ QPushButton:pressed {
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>40</height>
+       <height>50</height>
       </size>
+     </property>
+     <property name="styleSheet">
+      <string>QLabel {
+    color: #2c3e50;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #ecf0f1, stop:1 #d5dbdb);
+    border-radius: 10px;
+    padding: 10px;
+    margin: 10px 50px;
+}</string>
      </property>
     </widget>
    </item>
@@ -202,29 +397,43 @@ QPushButton:pressed {
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>600</height>
+       <height>450</height>
       </size>
      </property>
      <property name="widgetResizable">
       <bool>true</bool>
      </property>
      <property name="styleSheet">
-      <string notr="true">QScrollArea {
-    border: 2px solid #bdc3c7;
+      <string>QScrollArea {
+    border: 2px solid #71866a;
     background-color: #f8f9fa;
+    border-radius: 10px;
+    margin: 0px 30px;
 }
 QScrollBar:vertical {
-    background-color: #ecf0f1;
-    width: 15px;
-    border-radius: 7px;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #ecf0f1, stop:1 #d5dbdb);
+    width: 18px;
+    border-radius: 9px;
+    margin: 2px;
 }
 QScrollBar::handle:vertical {
-    background-color: #3498db;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #71866a, stop:1 #5a6b4f);
     border-radius: 7px;
     min-height: 20px;
+    margin: 2px;
 }
 QScrollBar::handle:vertical:hover {
-    background-color: #2980b9;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #7d9270, stop:1 #64755a);
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    background: none;
+    border: none;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
 }</string>
      </property>
      <widget class="QWidget" name="bookListWidget">
@@ -232,18 +441,31 @@ QScrollBar::handle:vertical:hover {
        <rect>
         <x>0</x>
         <y>0</y>
-        <width>1394</width>
-        <height>598</height>
+        <width>1334</width>
+        <height>448</height>
        </rect>
       </property>
       <property name="styleSheet">
-       <string notr="true">background-color: transparent;</string>
+       <string>background-color: transparent;</string>
       </property>
      </widget>
     </widget>
    </item>
    <item>
     <layout class="QHBoxLayout" name="bottomButtonLayout">
+     <item>
+      <spacer name="bottomLeftSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>100</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
      <item>
       <widget class="QPushButton" name="orderButton">
        <property name="font">
@@ -254,40 +476,45 @@ QScrollBar::handle:vertical:hover {
         </font>
        </property>
        <property name="text">
-        <string>주문 문의</string>
+        <string>📋 주문 문의</string>
        </property>
        <property name="minimumSize">
         <size>
-         <width>180</width>
-         <height>60</height>
+         <width>200</width>
+         <height>70</height>
         </size>
        </property>
        <property name="styleSheet">
-        <string notr="true">QPushButton {
-    background-color: #e74c3c;
+        <string>QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #f39c12, stop:1 #e67e22);
     color: white;
     border: none;
     border-radius: 15px;
+    padding: 15px;
     font-weight: bold;
-    font-size: 16px;
+    margin: 10px;
 }
 QPushButton:hover {
-    background-color: #c0392b;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #f1c40f, stop:1 #f39c12);
+    border: 2px solid #d35400;
 }
 QPushButton:pressed {
-    background-color: #a93226;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #e67e22, stop:1 #d35400);
 }</string>
        </property>
       </widget>
      </item>
      <item>
-      <spacer name="horizontalSpacer_2">
+      <spacer name="bottomCenterSpacer">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="sizeHint" stdset="0">
         <size>
-         <width>40</width>
+         <width>200</width>
          <height>20</height>
         </size>
        </property>
@@ -303,31 +530,49 @@ QPushButton:pressed {
         </font>
        </property>
        <property name="text">
-        <string>홈으로 돌아가기</string>
+        <string>🏠 홈으로 돌아가기</string>
        </property>
        <property name="minimumSize">
         <size>
-         <width>180</width>
-         <height>60</height>
+         <width>200</width>
+         <height>70</height>
         </size>
        </property>
        <property name="styleSheet">
-        <string notr="true">QPushButton {
-    background-color: #27ae60;
+        <string>QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #71866a, stop:1 #5a6b4f);
     color: white;
     border: none;
     border-radius: 15px;
+    padding: 15px;
     font-weight: bold;
-    font-size: 16px;
+    margin: 10px;
 }
 QPushButton:hover {
-    background-color: #229954;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #7d9270, stop:1 #64755a);
+    border: 2px solid #5a6b4f;
 }
 QPushButton:pressed {
-    background-color: #1e8449;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #5a6b4f, stop:1 #4a5a3f);
 }</string>
        </property>
       </widget>
+     </item>
+     <item>
+      <spacer name="bottomRightSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>100</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
      </item>
     </layout>
    </item>
