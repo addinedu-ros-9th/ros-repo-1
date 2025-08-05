@@ -46,10 +46,10 @@ class AdvancedAssistFollowFSM(Node):
 
         # --- 1. ROS 파라미터 선언 ---
         # [수정] Foxy/Galactic 호환을 위해 'description' 인자 제거
-        self.declare_parameter('target_distance', 0.5)
-        self.declare_parameter('safe_distance_min', 0.3)
-        self.declare_parameter('max_linear_vel', 0.3)
-        self.declare_parameter('max_angular_vel', 0.5)
+        self.declare_parameter('target_distance', 0.2)
+        self.declare_parameter('safe_distance_min', 0.1)
+        self.declare_parameter('max_linear_vel', 0.2)
+        self.declare_parameter('max_angular_vel', 0.1)
         self.declare_parameter('avoidance_linear_vel', 0.1)
         self.declare_parameter('avoidance_angular_vel', 0.2)
         self.declare_parameter('avoidance_backup_vel', -0.1)
