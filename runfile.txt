@@ -41,3 +41,14 @@ ros2 run ai_service ros2_bridege_node.py
 
 python310
 python ros-repo-1/ros_ws/src/ai_service/ai_service/nodes/strongsort_client.py
+
+
+< 에스코트를 위한 AI 서버 실행 >
+ros2_bridege_node
+strongsort_client.py       -> 파이썬파일로 직접 실행 + 파이썬 3.10 가상환경으로 실행
+
+< 어시스트를 위한 AI 서버 실행 >
+
+human_detector_node.py     -> (파이썬 3.10 가상환경으로 실행)
+obstacle_detector_node.py
+vision_manager_assist
