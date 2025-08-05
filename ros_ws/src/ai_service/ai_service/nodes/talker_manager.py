@@ -377,8 +377,15 @@ class CommunicationManager:
                 samples = np.array(sound.get_array_of_samples())
                 audio_float32 = samples.astype(np.float32) / 32768.0  # int16 범위에서 float32로 변환
                 
+                # 볼륨 증가 (약 3데시벨 증가 = 약 1.4배 볼륨)
+                volume_factor = 1.4  # 약 3dB 증가
+                audio_float32 = audio_float32 * volume_factor
+                
+                # 클리핑 방지 (값이 1.0을 넘지 않도록)
+                audio_float32 = np.clip(audio_float32, -1.0, 1.0)
+                
                 # float32 형식으로 오디오 데이터 전송
-                print(f"[{get_kr_time()}][AUDIO] MP3 오디오 데이터 전송 중...")
+                print(f"[{get_kr_time()}][AUDIO] MP3 오디오 데이터 전송 중... (볼륨 3dB 증가)")
                 success = self.send_audio_data(audio_float32)
                 
                 if success:
@@ -424,8 +431,16 @@ class CommunicationManager:
             audio_data = np.frombuffer(tts_response.audio_content, dtype=np.int16)
             audio_float32 = audio_data.astype(np.float32) / 32768.0
             
+            # 볼륨 증가 (약 3데시벨 증가 = 약 1.4배 볼륨)
+            # 3dB 증가는 약 1.4배(10^(3/20))의 amplitude 증가에 해당
+            volume_factor = 1.4  # 약 3dB 증가
+            audio_float32 = audio_float32 * volume_factor
+            
+            # 클리핑 방지 (값이 1.0을 넘지 않도록)
+            audio_float32 = np.clip(audio_float32, -1.0, 1.0)
+            
             # TCP를 통해 스피커 노드로 전송
-            print(f"[{get_kr_time()}][AUDIO] TTS 오디오 데이터 전송 중...")
+            print(f"[{get_kr_time()}][AUDIO] TTS 오디오 데이터 전송 중... (볼륨 3dB 증가)")
             success = self.send_audio_data(audio_float32)
             
             if success:
@@ -545,12 +560,11 @@ class TalkerNode(Node):
         
         self.get_logger().info('TalkerNode 초기화 완료!')
     
-    def call_end_task(self, robot_id, task_type):
+    def call_end_task(self, robot_id):
         """작업 종료 서비스 호출
         
         Args:
             robot_id (str): 로봇 ID (예: "libo_a")
-            task_type (str): 작업 유형 ("assist" 또는 "delivery")
         """
         # 서비스 가용성 확인
         if not self.end_task_client.service_is_ready():
@@ -561,9 +575,8 @@ class TalkerNode(Node):
         
         request = EndTask.Request()
         request.robot_id = robot_id
-        request.task_type = task_type
         
-        self.get_logger().info(f"EndTask 서비스 호출 중 (robot_id: {robot_id}, task_type: {task_type})")
+        self.get_logger().info(f"EndTask 서비스 호출 중 (robot_id: {robot_id})")
         future = self.end_task_client.call_async(request)
         future.add_done_callback(self.on_end_task_response)
         
@@ -778,6 +791,10 @@ def main(args=None):
                     if keyword_index >= 0:
                         print(f"\n[{get_kr_time()}][WAKE] 🟢 Wakeword('리보야') 감지됨!")
                         
+                        # 웨이크워드 감지 시 'stop' 명령 바로 발행
+                        print(f"[{get_kr_time()}][COMMAND] TalkCommand 발행: robot_id=libo_a, action=stop")
+                        talker_node.publish_talk_command("libo_a", "stop")
+                        
                         # 웨이크워드 감지 시 응답 출력
                         print(f"[{get_kr_time()}][TTS] 웨이크워드 확인 응답 생성 중...")
                         
@@ -814,8 +831,15 @@ def main(args=None):
                                     wake_audio_data = np.frombuffer(wake_tts_response.audio_content, dtype=np.int16)
                                     wake_audio_float32 = wake_audio_data.astype(np.float32) / 32768.0
                                     
+                                    # 볼륨 증가 (약 3데시벨 증가 = 약 1.4배 볼륨)
+                                    volume_factor = 1.4  # 약 3dB 증가
+                                    wake_audio_float32 = wake_audio_float32 * volume_factor
+                                    
+                                    # 클리핑 방지 (값이 1.0을 넘지 않도록)
+                                    wake_audio_float32 = np.clip(wake_audio_float32, -1.0, 1.0)
+                                    
                                     # TCP를 통해 스피커 노드로 전송
-                                    print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 중...")
+                                    print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 중... (볼륨 3dB 증가)")
                                     
                                     if comm_manager.send_audio_data(wake_audio_float32):
                                         print(f"[{get_kr_time()}][AUDIO] 웨이크워드 응답 전송 완료 (TTS)")
@@ -922,9 +946,15 @@ def main(args=None):
                             except sr.UnknownValueError:
                                 transcript = None
                                 print(f"[{get_kr_time()}][STT] ❌ 음성 인식 실패 (음성을 감지할 수 없음)")
+                                # 음성이 감지되지 않았을 때 사용자에게 TTS로 알림
+                                comm_manager.play_tts_response("음성이 감지되지 않았습니다. 다시 불러주세요.")
+                                print(f"[{get_kr_time()}][TTS] 음성 감지 실패 안내 메시지 재생")
                             except Exception as e:
                                 transcript = None
                                 print(f"[{get_kr_time()}][STT] ❌ STT 오류: {e}")
+                                # 기타 오류 발생 시에도 안내
+                                comm_manager.play_tts_response("음성 인식 중 오류가 발생했습니다. 다시 시도해주세요.")
+                                print(f"[{get_kr_time()}][TTS] 음성 인식 오류 안내 메시지 재생")
 
                         os.remove(tmp_wav)
 
@@ -935,7 +965,7 @@ def main(args=None):
                                 "사용자의 발화를 듣고, 아래 4가지 의도 중 하나로 분류하세요.\n\n"
                                 "- pause_follow: '잠깐 멈춰', '멈춰봐' 등 일시정지 명령\n"
                                 "- resume_follow: '다시 따라와', '다시 시작해' 등 팔로윙 재개 명령\n"
-                                "- stop_assist: '어시스트 그만하고 복귀해', '그만' 등 어시스트 종료 명령\n"
+                                "- stop_follow: '어시스트 그만하고 복귀해', '그만' 등 어시스트 종료 명령\n"
                                 "- ignore: '고마워', '아니야' 등 기타 대화나 무시해도 되는 표현\n\n"
                                 "결과는 반드시 다음 JSON 형식으로만 출력해야 합니다:\n"
                                 '{"intent": "..."}'
@@ -979,13 +1009,13 @@ def main(args=None):
                                 if success:
                                     talker_node.publish_talk_command(robot_id, "stop")
                                     
-                            elif intent == "stop_assist":
+                            elif intent == "stop_follow":
                                 # 어시스트 종료: EndTask 서비스 호출
                                 print(f"[{get_kr_time()}][RESPONSE] '어시스트 종료' 명령 처리")
                                 success = comm_manager.play_tts_response("네, 어시스트를 종료하고 복귀하겠습니다.")
                                 if success:
-                                    # EndTask 서비스 호출 - task_type은 "assist"로 고정
-                                    talker_node.call_end_task(robot_id, task_type="assist")
+                                    # EndTask 서비스 호출
+                                    talker_node.call_end_task(robot_id)
                             
                             # 성공 여부에 따른 로그
                             if success:
@@ -1086,9 +1116,15 @@ def main(args=None):
                         except sr.UnknownValueError:
                             transcript = None
                             print(f"[{get_kr_time()}][STT] ❌ 음성 인식 실패 (음성을 감지할 수 없음)")
+                            # 음성이 감지되지 않았을 때 사용자에게 TTS로 알림
+                            comm_manager.play_tts_response("음성이 감지되지 않았습니다. 다시 불러주세요.")
+                            print(f"[{get_kr_time()}][TTS] 음성 감지 실패 안내 메시지 재생")
                         except Exception as e:
                             transcript = None
                             print(f"[{get_kr_time()}][STT] ❌ STT 오류: {e}")
+                            # 기타 오류 발생 시에도 안내
+                            comm_manager.play_tts_response("음성 인식 중 오류가 발생했습니다. 다시 시도해주세요.")
+                            print(f"[{get_kr_time()}][TTS] 음성 인식 오류 안내 메시지 재생")
 
                     os.remove(tmp_wav)
 
@@ -1099,7 +1135,7 @@ def main(args=None):
                             "사용자의 발화를 듣고, 아래 4가지 의도 중 하나로 분류하세요.\n\n"
                             "- pause_follow: '잠깐 멈춰', '멈춰봐' 등 일시정지 명령\n"
                             "- resume_follow: '다시 따라와', '다시 시작해' 등 팔로윙 재개 명령\n"
-                            "- stop_assist: '어시스트 그만하고 복귀해', '그만' 등 어시스트 종료 명령\n"
+                            "- stop_follow: '작업 그만하고 복귀해', '작업그만' 등 어시스트 또는 에스코팅 종료 명령\n"
                             "- ignore: '고마워', '아니야' 등 기타 대화나 무시해도 되는 표현\n\n"
                             "결과는 반드시 다음 JSON 형식으로만 출력해야 합니다:\n"
                             '{"intent": "..."}'
@@ -1143,13 +1179,13 @@ def main(args=None):
                             if success:
                                 talker_node.publish_talk_command(robot_id, "stop")
                                 
-                        elif intent == "stop_assist":
+                        elif intent == "stop_follow":
                             # 어시스트 종료: EndTask 서비스 호출
                             print(f"[{get_kr_time()}][RESPONSE] '어시스트 종료' 명령 처리")
                             success = comm_manager.play_tts_response("네, 어시스트를 종료하고 복귀하겠습니다.")
                             if success:
-                                # EndTask 서비스 호출 - task_type은 "assist"로 고정
-                                talker_node.call_end_task(robot_id, task_type="assist")
+                                # EndTask 서비스 호출
+                                talker_node.call_end_task(robot_id)
                         
                         # 성공 여부에 따른 로그
                         if success:
