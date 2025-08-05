@@ -78,13 +78,10 @@ controller_server:
     controller_plugins: ["FollowPath"]
 
     # Progress checker parameters
-    failure_tolerance: 0.25  # 🔸 0.3에서 0.25로 더 빠른 실패 감지
     progress_checker:
       plugin: "nav2_controller::SimpleProgressChecker"
-      # required_movement_radius: 0.5
-      required_movement_radius: 0.1  # 0.5에서 0.2로 더 민감하게!!!
-      # movement_time_allowance: 2.0
-      movement_time_allowance: 2.0 # 🔸 2.0에서 1.0초로 더 빠르게!!!!!
+      required_movement_radius: 0.5
+      movement_time_allowance: 10.0
     # Goal checker parameters
     #precise_goal_checker:
     #  plugin: "nav2_controller::SimpleGoalChecker"
@@ -95,7 +92,7 @@ controller_server:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.1
     # DWB parameters
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
@@ -126,7 +123,7 @@ controller_server:
       short_circuit_trajectory_evaluation: True
       stateful: True
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.01
+      BaseObstacle.scale: 0.02
       PathAlign.scale: 32.0
       PathAlign.forward_point_distance: 0.1
       GoalAlign.scale: 24.0
@@ -155,7 +152,7 @@ local_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.35
+        inflation_radius: 0.7
       voxel_layer:
         plugin: "nav2_costmap_2d::VoxelLayer"
         enabled: True
@@ -189,7 +186,7 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_footprint
       use_sim_time: False
-      robot_radius: 0.20
+      robot_radius: 0.25
       resolution: 0.05
       track_unknown_space: true
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
@@ -213,7 +210,7 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 0.35
+        inflation_radius: 0.6
       always_send_full_costmap: True
 
 map_server:
@@ -240,7 +237,7 @@ planner_server:
       plugin: "nav2_navfn_planner::NavfnPlanner"
       tolerance: 0.5
       use_astar: false
-      allow_unknown: false  # 🔸 true에서 false로 - unknown 영역 통과 금지 여기가 뭔가 재경로로직이랑 연관되 중요해보임
+      allow_unknown: true
 
 smoother_server:
   ros__parameters:
@@ -287,8 +284,7 @@ waypoint_follower:
   ros__parameters:
     use_sim_time: False
     loop_rate: 20
-    # stop_on_failure: false # if true, the robot will stop if it cannot reach a waypoint
-    stop_on_failure: True 
+    stop_on_failure: false
     waypoint_task_executor_plugin: "wait_at_waypoint"
     wait_at_waypoint:
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"

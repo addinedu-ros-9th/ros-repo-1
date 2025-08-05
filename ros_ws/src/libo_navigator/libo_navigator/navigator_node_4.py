@@ -12,13 +12,11 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDur
 # libo_interfaces에 정의된 우리만의 서비스 타입들을 import합니다.
 from libo_interfaces.srv import SetGoal, CancelNavigation, NavigationResult
 from geometry_msgs.msg import PoseStamped, Pose, PoseWithCovarianceStamped
-from nav2_msgs.action import FollowWaypoints, NavigateToPose
+from nav2_msgs.action import FollowWaypoints
 from nav2_msgs.msg import Costmap
-from nav_msgs.msg import Path
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 from enum import Enum
 from ament_index_python.packages import get_package_share_directory
-import time
 
 class NavigatorState(Enum):
     IDLE = "IDLE"
@@ -95,27 +93,6 @@ class LiboNavigator(Node):
         self.pending_goal = None
         self.is_canceling = False
         
-        # ETA 기반 우회로 감지 시스템
-        self.navigation_start_time = None
-        self.initial_eta_estimate = None
-        self.eta_monitoring_active = False
-        self.eta_spike_threshold = 2.0  # ETA가 2배 이상 증가하면 우회로로 판단 (더 민감하게)
-        self.min_monitoring_time = 1.0  # 최소 1초 후부터 ETA 모니터링 시작
-        self.initial_direct_distance = None  # 초기 직선 거리
-        self.current_planned_path = None  # Nav2의 계획된 경로
-        
-        # Nav2 경로 구독 (실제 계획된 경로 모니터링용)
-        self.create_subscription(
-            Path,
-            '/plan',
-            self.path_callback,
-            10,
-            callback_group=self.callback_group
-        )
-        
-        # Nav2 액션 클라이언트 (ETA 정보 모니터링용)
-        self.nav_action_client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
-        
         # --- 외부와 통신하기 위한 서비스 서버들을 생성합니다 ---
         self.create_service(
             SetGoal, 'set_navigation_goal', self.set_goal_callback, callback_group=self.callback_group
@@ -135,45 +112,6 @@ class LiboNavigator(Node):
         if not self.initial_pose_received:
             self.get_logger().info('AMCL로부터 유효한 첫 위치 정보를 받았습니다! 시스템 준비 완료.')
             self.initial_pose_received = True
-
-    def path_callback(self, msg):
-        """Nav2의 계획된 경로를 수신하여 ETA 모니터링에 활용합니다."""
-        self.current_planned_path = msg
-        
-        if self.eta_monitoring_active and self.navigation_start_time:
-            # 계획된 경로 길이 계산
-            path_length = self.calculate_path_length(msg)
-            
-            if path_length > 0 and self.initial_direct_distance:
-                # 우회로 비율 계산 (계획된 경로 / 직선 거리)
-                detour_ratio = path_length / self.initial_direct_distance
-                
-                self.get_logger().debug(f'📊 경로 모니터링 - 직선: {self.initial_direct_distance:.2f}m, 계획: {path_length:.2f}m, 우회비율: {detour_ratio:.2f}')
-                
-                # 우회로 감지 기준: 직선 거리의 1.5배 이상이면 우회로로 판단
-                if detour_ratio >= 1.5:
-                    self.get_logger().warn(f'🚨 우회로 감지! 직선({self.initial_direct_distance:.2f}m) vs 계획({path_length:.2f}m) = x{detour_ratio:.1f}')
-                    
-                    # ETA 모니터링 중단
-                    self.eta_monitoring_active = False
-                    
-                    # 즉시 Nav2 중단하고 웨이포인트 재최적화
-                    self.handle_eta_spike_detection()
-
-    def calculate_path_length(self, path_msg):
-        """Nav2의 계획된 경로 길이를 계산합니다."""
-        if not path_msg.poses or len(path_msg.poses) < 2:
-            return 0.0
-        
-        total_length = 0.0
-        for i in range(len(path_msg.poses) - 1):
-            p1 = path_msg.poses[i].pose.position
-            p2 = path_msg.poses[i + 1].pose.position
-            
-            distance = math.sqrt((p2.x - p1.x)**2 + (p2.y - p1.y)**2)
-            total_length += distance
-        
-        return total_length
 
     def costmap_callback(self, msg):
         """Costmap 정보를 저장하고 장애물을 감지합니다."""
@@ -559,165 +497,86 @@ class LiboNavigator(Node):
         return True
 
     def start_navigation(self, waypoint_poses):
-        """웨이포인트를 단계별로 주행합니다 (FollowWaypoints 대신 개별 NavigateToPose 사용)."""
-        self.get_logger().info(f"{len(waypoint_poses)}개의 지점으로 단계별 주행을 시작합니다...")
+        """Nav2에 웨이포인트 주행을 요청합니다."""
+        self.get_logger().info(f"{len(waypoint_poses)}개의 지점으로 주행을 시작합니다...")
         self.current_state = NavigatorState.NAVIGATING
         
         # 웨이포인트 추적을 위한 변수 설정
         self.current_waypoint_poses = waypoint_poses
         self.current_waypoint_index = 0
         
-        # 첫 번째 웨이포인트로 이동 시작
-        self.navigate_to_current_waypoint()
+        self.navigator.followWaypoints(waypoint_poses)
+        # isTaskComplete()를 주기적으로 확인하여 완료 시 콜백을 직접 호출하는 방식으로 변경
+        self.status_check_timer = self.create_timer(1.0, self.check_navigation_status)
 
-    def navigate_to_current_waypoint(self):
-        """현재 인덱스의 웨이포인트로 이동합니다."""
-        if self.current_waypoint_index >= len(self.current_waypoint_poses):
-            # 모든 웨이포인트 완료
-            self.get_logger().info('🎉 모든 웨이포인트 주행 완료!')
-            self.current_state = NavigatorState.IDLE
-            self.blocked_waypoints.clear()
-            self.notify_navigation_done("SUCCEEDED")
-            return
-        
-        target = self.current_waypoint_poses[self.current_waypoint_index]
-        wp_name = self.current_waypoint_names[self.current_waypoint_index] if self.current_waypoint_index < len(self.current_waypoint_names) else f"WP_{self.current_waypoint_index}"
-        
-        self.get_logger().info(f'🚀 웨이포인트 {self.current_waypoint_index + 1}/{len(self.current_waypoint_poses)} ({wp_name})로 이동 시작')
-        self.get_logger().info(f'   목표: ({target.pose.position.x:.2f}, {target.pose.position.y:.2f})')
-        
-        # 🔥 핵심 해결책: 중간 웨이포인트가 있으면 더 가까운 목표로 설정
-        if self.robot_current_pose:
-            current_x = self.robot_current_pose.position.x
-            current_y = self.robot_current_pose.position.y
-            target_x = target.pose.position.x
-            target_y = target.pose.position.y
-            
-            # 현재 위치에서 목표까지 거리 계산
-            distance = math.sqrt((target_x - current_x)**2 + (target_y - current_y)**2)
-            
-            # ETA 모니터링 시작 준비
-            self.navigation_start_time = time.time()
-            self.initial_eta_estimate = distance / 0.5  # 가정: 평균 속도 0.5m/s
-            self.initial_direct_distance = distance  # 초기 직선 거리 저장
-            self.eta_monitoring_active = True
-            
-            self.get_logger().info(f'📊 경로 모니터링 시작 - 직선거리: {distance:.2f}m, 우회감지 임계값: 1.5배({distance * 1.5:.2f}m)')
-            
-            # 거리가 2m 이상이면 중간 지점 생성 (Nav2 우회 방지)
-            if distance > 2.0:
-                # 현재 위치에서 목표 방향으로 1.5m 지점을 중간 목표로 설정
-                direction_x = (target_x - current_x) / distance
-                direction_y = (target_y - current_y) / distance
-                
-                intermediate_target = PoseStamped()
-                intermediate_target.header.frame_id = 'map'
-                intermediate_target.header.stamp = self.get_clock().now().to_msg()
-                intermediate_target.pose.position.x = current_x + direction_x * 1.5
-                intermediate_target.pose.position.y = current_y + direction_y * 1.5
-                intermediate_target.pose.position.z = 0.0
-                
-                # 목표 방향으로 헤딩 설정
-                yaw = math.atan2(direction_y, direction_x)
-                qx, qy, qz, qw = self.euler_to_quaternion(0, 0, yaw)
-                intermediate_target.pose.orientation.x = qx
-                intermediate_target.pose.orientation.y = qy
-                intermediate_target.pose.orientation.z = qz
-                intermediate_target.pose.orientation.w = qw
-                
-                self.get_logger().info(f'📍 거리 {distance:.2f}m > 2m: 중간 목표 설정 ({intermediate_target.pose.position.x:.2f}, {intermediate_target.pose.position.y:.2f})')
-                
-                # 중간 목표로 Nav2 실행
-                self.navigator.goToPose(intermediate_target)
-            else:
-                # 거리가 가까우면 원래 목표로 직접 이동
-                self.get_logger().info(f'📍 거리 {distance:.2f}m <= 2m: 직접 이동')
-                self.navigator.goToPose(target)
-        else:
-            # 로봇 위치를 모르면 원래 목표로 이동
-            self.navigator.goToPose(target)
-        
-        # 상태 확인 타이머 시작 (ETA 모니터링 포함)
-        self.status_check_timer = self.create_timer(0.5, self.check_single_navigation_status)
-
-    def check_single_navigation_status(self):
-        """단일 웨이포인트 주행 상태를 확인하고 우회로를 모니터링합니다."""
-        # 우회로 감지는 이제 path_callback에서 처리됨
-        # 여기서는 추가적인 ETA 기반 모니터링만 수행
-        if self.eta_monitoring_active and self.navigation_start_time:
-            elapsed_time = time.time() - self.navigation_start_time
-            
-            # 최소 모니터링 시간 경과 후부터 감지 시작
-            if elapsed_time >= self.min_monitoring_time:
-                current_eta = self.get_current_navigation_eta()
-                
-                if current_eta and self.initial_eta_estimate:
-                    eta_ratio = current_eta / self.initial_eta_estimate
-                    
-                    self.get_logger().debug(f'📊 ETA 백업 모니터링 - 초기: {self.initial_eta_estimate:.1f}s, 현재: {current_eta:.1f}s, 비율: {eta_ratio:.2f}')
-                    
-                    # 백업 ETA 급증 감지 (경로 기반 감지가 실패한 경우를 위한 보완)
-                    if eta_ratio >= self.eta_spike_threshold:
-                        self.get_logger().warn(f'🚨 백업 ETA 급증 감지! {self.initial_eta_estimate:.1f}s -> {current_eta:.1f}s (x{eta_ratio:.1f})')
-                        
-                        # ETA 모니터링 중단
-                        self.eta_monitoring_active = False
-                        
-                        # 즉시 Nav2 중단하고 웨이포인트 재최적화
-                        self.handle_eta_spike_detection()
-                        return
-        
-        # 기존 네비게이션 완료 확인
+    def check_navigation_status(self):
+        """1초마다 Nav2 주행 상태를 확인합니다."""
         if not self.navigator.isTaskComplete():
+            feedback = self.navigator.getFeedback()
+            if feedback:
+                # 현재 웨이포인트 인덱스 업데이트
+                self.current_waypoint_index = feedback.current_waypoint
+                self.get_logger().info(f'주행 진행률: 웨이포인트 {feedback.current_waypoint + 1}')
             return
         
-        # ETA 모니터링 종료
-        self.eta_monitoring_active = False
-        
-        # 타이머 정리
+        # 주행이 끝났으면 타이머를 멈추고 결과 처리
         if self.status_check_timer is not None:
             self.destroy_timer(self.status_check_timer)
             self.status_check_timer = None
             
         result = self.navigator.getResult()
-        wp_name = self.current_waypoint_names[self.current_waypoint_index] if self.current_waypoint_index < len(self.current_waypoint_names) else f"WP_{self.current_waypoint_index}"
         
         if result == TaskResult.SUCCEEDED:
-            # 목표 웨이포인트에 도달했는지 확인
-            target = self.current_waypoint_poses[self.current_waypoint_index]
-            current_x = self.robot_current_pose.position.x if self.robot_current_pose else 0
-            current_y = self.robot_current_pose.position.y if self.robot_current_pose else 0
-            target_x = target.pose.position.x
-            target_y = target.pose.position.y
-            
-            distance_to_target = math.sqrt((target_x - current_x)**2 + (target_y - current_y)**2)
-            
-            # 목표 웨이포인트에 충분히 가까우면 다음 웨이포인트로
-            if distance_to_target <= 0.5:  # 50cm 이내
-                self.get_logger().info(f'✅ 웨이포인트 {wp_name} 도달 완료! (거리: {distance_to_target:.2f}m)')
-                # 다음 웨이포인트로 진행
-                self.current_waypoint_index += 1
-                self.navigate_to_current_waypoint()
-            else:
-                # 아직 목표 웨이포인트에 도달하지 않았으면 계속 이동
-                self.get_logger().info(f'🔄 중간 목표 도달, 웨이포인트 {wp_name}로 계속 이동 (남은 거리: {distance_to_target:.2f}m)')
-                self.navigate_to_current_waypoint()
-            
+            self.get_logger().info('주행 완료! 최종 목적지에 도착했습니다.')
+            self.current_state = NavigatorState.IDLE
+            # 성공적으로 완료되면 막힌 웨이포인트 목록 초기화
+            self.blocked_waypoints.clear()
+            # 리보서비스에 완료 알림
+            self.notify_navigation_done("SUCCEEDED")
         elif result == TaskResult.CANCELED:
+            self.get_logger().info('주행이 외부 요청에 의해 취소되었습니다.')
+            self.current_state = NavigatorState.IDLE
+            
+            # 외부 취소가 아닌 Nav2 내부 취소인 경우에만 알림
             if not self.is_canceling:
-                self.get_logger().warn(f'❌ 웨이포인트 {wp_name} 주행이 취소됨')
-                # 재계획 로직 실행
-                self.handle_dynamic_obstacle_delayed()
-            else:
-                self.get_logger().info('외부 요청에 의한 주행 취소')
-                self.current_state = NavigatorState.IDLE
+                # 리보서비스에 취소 알림
+                self.notify_navigation_done("CANCELED")
+        else: # FAILED
+            self.get_logger().warn(f'주행 실패 감지! Nav2 FAILED 상태: {result}')
+            
+            # 실패한 웨이포인트 인덱스 추출 및 블랙리스트 추가
+            try:
+                # BasicNavigator의 내부 결과 접근
+                raw_result = self.navigator._task_result
+                failed_indices = set()
                 
-        else:  # FAILED
-            self.get_logger().warn(f'❌ 웨이포인트 {wp_name} 주행 실패!')
-            # 실패한 웨이포인트를 블랙리스트에 추가하고 재계획
-            self.blocked_waypoints.add(wp_name)
-            self.get_logger().warn(f'⛔ 웨이포인트 {wp_name}을 블랙리스트에 추가')
-            self.handle_dynamic_obstacle_delayed()
+                # ROS2 Jazzy에서는 missed_waypoints 사용
+                if hasattr(raw_result, 'missed_waypoints'):
+                    failed_indices.update(raw_result.missed_waypoints)
+                
+                # 이전 버전 호환성을 위해 failed_waypoint도 확인
+                if hasattr(raw_result, 'failed_waypoint') and raw_result.failed_waypoint >= 0:
+                    failed_indices.add(raw_result.failed_waypoint)
+                
+                # 실패한 웨이포인트들을 블랙리스트에 추가
+                for idx in failed_indices:
+                    if idx < len(self.current_waypoint_names):
+                        failed_wp_name = self.current_waypoint_names[idx]
+                        self.blocked_waypoints.add(failed_wp_name)
+                        self.get_logger().warn(f'실패한 웨이포인트 {failed_wp_name}을 블랙리스트에 추가')
+                
+                # 실패한 웨이포인트가 있으면 즉시 재계획
+                if failed_indices:
+                    self.get_logger().info('Nav2 실패로 인한 즉시 재계획 시작!')
+                    self.handle_dynamic_obstacle_delayed()
+                    return  # ERROR 상태로 두지 않고 재계획으로
+                    
+            except Exception as e:
+                self.get_logger().warn(f'실패 웨이포인트 추출 중 오류: {e}')
+            
+            # 재계획할 수 없는 경우만 ERROR 상태로
+            self.current_state = NavigatorState.ERROR
+            self.notify_navigation_done("FAILED")
 
     def notify_navigation_done(self, result_str):
         """리보서비스에 네비게이션 완료 상태를 알립니다."""
@@ -732,112 +591,6 @@ class LiboNavigator(Node):
                 self.get_logger().warn('navigation_result 서비스가 준비되지 않았습니다.')
         except Exception as e:
             self.get_logger().warn(f'네비게이션 결과 알림 중 오류: {e}')
-
-    def get_current_navigation_eta(self):
-        """현재 네비게이션의 예상 도착 시간을 계산합니다."""
-        try:
-            if not self.robot_current_pose:
-                return None
-            
-            # 목표 웨이포인트까지의 남은 거리 계산
-            target = self.current_waypoint_poses[self.current_waypoint_index]
-            current_x = self.robot_current_pose.position.x
-            current_y = self.robot_current_pose.position.y
-            target_x = target.pose.position.x
-            target_y = target.pose.position.y
-            
-            remaining_distance = math.sqrt((target_x - current_x)**2 + (target_y - current_y)**2)
-            
-            # 평균 속도로 ETA 계산 (Nav2가 우회로를 생성하면 거리가 급증함)
-            estimated_speed = 0.5  # m/s
-            eta = remaining_distance / estimated_speed
-            
-            return eta
-            
-        except Exception as e:
-            self.get_logger().debug(f'ETA 계산 중 오류: {e}')
-            return None
-
-    def handle_eta_spike_detection(self):
-        """우회로 감지 시 Nav2 중단하고 웨이포인트 재최적화를 실행합니다."""
-        try:
-            self.get_logger().warn('🛑 Nav2 우회로 감지! 즉시 중단하고 웨이포인트 재최적화 시작!')
-            
-            # 1. Nav2 즉시 중단
-            self.navigator.cancelTask()
-            
-            # 2. 타이머 정리
-            if self.status_check_timer is not None:
-                self.destroy_timer(self.status_check_timer)
-                self.status_check_timer = None
-            
-            # 3. 현재 웨이포인트를 문제 있는 것으로 간주하고 제외
-            if hasattr(self, 'current_waypoint_names') and hasattr(self, 'current_waypoint_index'):
-                if self.current_waypoint_index < len(self.current_waypoint_names):
-                    problematic_wp = self.current_waypoint_names[self.current_waypoint_index]
-                    self.blocked_waypoints.add(problematic_wp)
-                    self.get_logger().warn(f'⛔ 우회로 발생 웨이포인트 {problematic_wp}를 제외 리스트에 추가')
-            
-            # 4. 0.1초 후 웨이포인트 재최적화 실행 (Nav2 취소 처리 시간 확보)
-            self.current_state = NavigatorState.IDLE
-            self._replanning = True
-            # once=True 인자 대신 타이머 콜백 내에서 직접 destroy_timer 호출
-            def eta_replan_callback():
-                self.execute_eta_based_replan()
-                # 타이머 객체를 직접 파괴
-                if hasattr(self, 'eta_replan_timer') and self.eta_replan_timer is not None:
-                    self.destroy_timer(self.eta_replan_timer)
-                    self.eta_replan_timer = None
-            self.eta_replan_timer = self.create_timer(0.1, eta_replan_callback)
-            
-        except Exception as e:
-            self.get_logger().error(f'우회로 감지 처리 중 오류: {e}')
-            self.current_state = NavigatorState.ERROR
-
-    def execute_eta_based_replan(self):
-        """우회로 감지 후 웨이포인트 재계획을 실행합니다."""
-        try:
-            self.get_logger().info('🔄 우회로 감지 기반 웨이포인트 재최적화 실행 중...')
-            
-            # 현재 위치에서 목표까지 새로운 웨이포인트 경로 계산
-            start_wp = self.get_closest_waypoint(self.robot_current_pose)
-            goal_wp = self.get_closest_waypoint(self.current_goal_pose)
-            
-            if not start_wp or not goal_wp:
-                self.get_logger().error("우회로 감지 기반 재계획을 위한 시작/목표 웨이포인트를 찾을 수 없습니다.")
-                self.current_state = NavigatorState.ERROR
-                self._replanning = False
-                return
-            
-            # 문제가 있던 웨이포인트를 제외한 새로운 경로 계산
-            path_wp_names = self.find_path_astar_with_blocked(start_wp, goal_wp)
-            
-            if not path_wp_names:
-                self.get_logger().error("❌ 문제 웨이포인트를 제외한 대체 경로를 찾을 수 없습니다!")
-                self.current_state = NavigatorState.ERROR
-                self._replanning = False
-                return
-            
-            self.get_logger().info(f"✅ 우회로 감지 기반 새로운 웨이포인트 경로: {path_wp_names}")
-            self.get_logger().info(f"🚫 제외된 문제 웨이포인트: {list(self.blocked_waypoints)}")
-            
-            # 새로운 웨이포인트 리스트로 헤딩 계산
-            waypoint_poses = self.create_waypoint_poses_with_heading(path_wp_names)
-            
-            # 새로운 웨이포인트 경로로 주행 재시작
-            self.current_waypoint_names = path_wp_names
-            self.current_waypoint_poses = waypoint_poses
-            self.current_waypoint_index = 0
-            
-            self.get_logger().info(f'🚀 우회로 감지 기반 재최적화 경로로 주행 재시작! ({len(waypoint_poses)}개 지점)')
-            self.start_navigation(waypoint_poses)
-            
-            self._replanning = False
-            
-        except Exception as e:
-            self.get_logger().error(f'우회로 감지 기반 재계획 실행 중 오류: {e}')
-            self.current_state = NavigatorState.ERROR
-            self._replanning = False
 
     def calculate_edge_cost_with_costmap(self, pos1, pos2):
         """두 웨이포인트 사이의 costmap 기반 비용을 계산합니다."""
