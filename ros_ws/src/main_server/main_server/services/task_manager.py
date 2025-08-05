@@ -996,12 +996,19 @@ class TaskManager(Node):
                 old_state, _ = self.robots[current_task.robot_id].change_state(RobotState.CHARGING)
                 self.get_logger().info(f'🔋 로봇 <{current_task.robot_id}> Task 완료 후 충전 상태로 변경: {old_state.value} → CHARGING')
                 
-                # Base 도착 음성 명령 발행
-                self.get_logger().info(f'🗣️ Base 도착 음성 명령 발행: {current_task.task_type}.arrived_base')
-                if self.send_voice_command_by_task_type(current_task.robot_id, current_task.task_type, 'arrived_base'):
-                    self.get_logger().info(f'✅ Base 도착 음성 명령 발행 완료')
+                # 충전 시작 음성 명령 발행
+                self.get_logger().info(f'🗣️ 충전 시작 음성 명령 발행: charging')
+                if self.send_voice_command(current_task.robot_id, 'common', 'charging'):
+                    self.get_logger().info(f'✅ 충전 시작 음성 명령 발행 완료')
                 else:
-                    self.get_logger().warning(f'⚠️ Base 도착 음성 명령 발행 실패')
+                    self.get_logger().warning(f'⚠️ 충전 시작 음성 명령 발행 실패')
+                
+                # Base 도착 음성 명령은 task_stage_logic에서 이미 처리됨 (중복 제거)
+                # self.get_logger().info(f'🗣️ Base 도착 음성 명령 발행: {current_task.task_type}.arrived_base')
+                # if self.send_voice_command_by_task_type(current_task.robot_id, current_task.task_type, 'arrived_base'):
+                #     self.get_logger().info(f'✅ Base 도착 음성 명령 발행 완료')
+                # else:
+                #     self.get_logger().warning(f'⚠️ Base 도착 음성 명령 발행 실패')
             else:
                 self.get_logger().warning(f'⚠️  로봇 <{current_task.robot_id}> 찾을 수 없음 - state 변경 불가')
             
