@@ -43,12 +43,20 @@ python310
 python ros-repo-1/ros_ws/src/ai_service/ai_service/nodes/strongsort_client.py
 
 
+
 < 에스코트를 위한 AI 서버 실행 >
 ros2_bridege_node
-strongsort_client.py       -> 파이썬파일로 직접 실행 + 파이썬 3.10 가상환경으로 실행
+python3 strongsort_client.py                -> 파이썬파일로 직접 실행 + 파이썬 3.10 가상환경으로 실행
+ros2 run ai_service talker_manager
 
 < 어시스트를 위한 AI 서버 실행 >
+ros2 run ai_service human_detector_node     -> (파이썬 3.10 가상환경으로 실행)
+ros2 run ai_service obstacle_detector_node
+ros2 run ai_service vision_manager_assist
+ros2 run ai_service qr_scanner_node
+ros2 run ai_service talker_manager
 
-human_detector_node.py     -> (파이썬 3.10 가상환경으로 실행)
-obstacle_detector_node.py
-vision_manager_assist
+< 메인 서버 실행>
+ros2 run main_server task_manager
+ros2 run admin admin_gui
+ros2 run hardware_handler heartbeat_sender
