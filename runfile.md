@@ -11,16 +11,16 @@ Colcon build
 Local setup .bash
 
 
-ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < 메인 서버 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
-ros2 run main_server task_manager               
-ros2 run admin admin_gui
-ros2 run main_server book_search_service
-ros2 run stock stock_gui
-
-
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < ROBOT > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 ros2 launch vicpinky_bringup bringup.launch.xml
 ros2 launch vicpinky_navigation bringup_launch.xml map:=map3_final.yaml
+
+
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < 메인 서버 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+ros2 run main_server task_manager
+ros2 run admin admin_gui
+ros2 run main_server book_search_service
+ros2 run stock stock_gui
 
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < 메인 서버 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
@@ -42,16 +42,15 @@ ros2 run ai_service vision_manager_assist
 
 ros2 run ai_service qr_scanner_node
 
-ros2 run ai_service talker_manager
+ros2 run ai_service talker_manager2
 
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < HW Handler 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 ros2 run hardware_handler mic_streamer
-ros2 run hardware_handler speaker_node
+ros2 run hardware_handler speaker_node2
 ros2 run hardware_handler heartbeat_sender
 ros2 run libo_gui robot_face_gui 
 ros2 run hardware_handler cam_sender
-
 
 ros2 launch ascamera nuwa.launch.py -> depth camera, depth_ws 워크스페이스
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200 ->  esp

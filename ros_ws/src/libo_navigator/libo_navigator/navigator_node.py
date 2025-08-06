@@ -35,7 +35,12 @@ class LiboNavigator(Node):
         self.robot_current_pose = None
         self.initial_pose_received = False
         self.nav_goal_handle = None
+        
+        # 타이머 멤버 변수들 초기화
         self.status_check_timer = None
+        self.eta_replan_timer = None
+        self.dynamic_obstacle_timer = None
+        self.cancellation_timer = None
 
         # BasicNavigator 초기화 (중요!)
         self.navigator = BasicNavigator()
@@ -95,6 +100,10 @@ class LiboNavigator(Node):
         self.pending_goal = None
         self.is_canceling = False
         
+        # 취소 원인 구분을 위한 플래그들
+        self.is_external_cancel = False  # 외부 취소 요청 (리보서비스에서 온 취소)
+        self.is_internal_replan = False  # 내부 재계획을 위한 취소 (장애물/우회로 감지)
+        
         # ETA 기반 우회로 감지 시스템
         self.navigation_start_time = None
         self.initial_eta_estimate = None
@@ -126,6 +135,56 @@ class LiboNavigator(Node):
 
         self.load_waypoints()
         self.get_logger().info('Libo Navigator 서비스 시작. /set_navigation_goal 요청 대기 중...')
+
+    def safe_create_timer(self, timer_attr_name, period, callback, once=False):
+        """타이머 중복 생성을 방지하는 안전한 타이머 생성 함수"""
+        try:
+            # 기존 타이머가 있으면 먼저 정리
+            existing_timer = getattr(self, timer_attr_name, None)
+            if existing_timer is not None:
+                self.destroy_timer(existing_timer)
+                self.get_logger().debug(f'기존 {timer_attr_name} 타이머 정리 완료')
+            
+            # 새 타이머 생성
+            if once:
+                # once=True인 경우 콜백을 래핑하여 실행 후 자동 정리
+                def auto_cleanup_callback():
+                    try:
+                        callback()
+                    finally:
+                        timer_to_cleanup = getattr(self, timer_attr_name, None)
+                        if timer_to_cleanup is not None:
+                            self.destroy_timer(timer_to_cleanup)
+                            setattr(self, timer_attr_name, None)
+                            self.get_logger().debug(f'{timer_attr_name} once 타이머 자동 정리 완료')
+                
+                new_timer = self.create_timer(period, auto_cleanup_callback)
+            else:
+                new_timer = self.create_timer(period, callback)
+            
+            # 멤버 변수에 저장
+            setattr(self, timer_attr_name, new_timer)
+            self.get_logger().debug(f'{timer_attr_name} 타이머 생성 완료 (once={once})')
+            
+            return new_timer
+            
+        except Exception as e:
+            self.get_logger().error(f'{timer_attr_name} 타이머 생성 중 오류: {e}')
+            return None
+
+    def safe_destroy_timer(self, timer_attr_name):
+        """안전한 타이머 해제 함수"""
+        try:
+            timer = getattr(self, timer_attr_name, None)
+            if timer is not None:
+                self.destroy_timer(timer)
+                setattr(self, timer_attr_name, None)
+                self.get_logger().debug(f'{timer_attr_name} 타이머 안전 해제 완료')
+                return True
+            return False
+        except Exception as e:
+            self.get_logger().error(f'{timer_attr_name} 타이머 해제 중 오류: {e}')
+            return False
 
     def amcl_pose_callback(self, msg):
         """AMCL로부터 로봇의 현재 위치를 계속해서 업데이트합니다."""
@@ -202,7 +261,7 @@ class LiboNavigator(Node):
                         self._replanning = True
                         self.get_logger().warn(f'🚨 웨이포인트 {self.current_waypoint_index}에서 장애물 감지! 웨이포인트 재계획 시작!')
                         # 즉시 처리하도록 타이머 설정 (Nav2 우회로 생성 방지)
-                        self.create_timer(0.05, self.handle_dynamic_obstacle_delayed)
+                        self.safe_create_timer('dynamic_obstacle_timer', 0.05, self.handle_dynamic_obstacle_delayed, once=True)
                     else:
                         self.get_logger().debug('이미 재계획 중이므로 추가 감지 무시')
             else:
@@ -282,9 +341,7 @@ class LiboNavigator(Node):
             self.navigator.cancelTask()
             
             # 2. 타이머 정리
-            if self.status_check_timer is not None:
-                self.destroy_timer(self.status_check_timer)
-                self.status_check_timer = None
+            self.safe_destroy_timer('status_check_timer')
             
             # 3. 막힌 웨이포인트 추가 (현재 목표 웨이포인트)
             if hasattr(self, 'current_waypoint_names') and hasattr(self, 'current_waypoint_index'):
@@ -483,15 +540,14 @@ class LiboNavigator(Node):
             response.message = "현재 진행 중인 주행이 없습니다."
             return response
 
-        self.get_logger().warn("외부 요청에 의해 현재 주행을 취소합니다...")
+        self.get_logger().warn("🛑 외부 요청에 의해 현재 주행을 취소합니다...")
         
-        # 취소 진행 상태로 설정
+        # 외부 취소 플래그 설정
+        self.is_external_cancel = True
         self.is_canceling = True
         
-        # 타이머가 존재하면 먼저 정리
-        if hasattr(self, 'status_check_timer') and self.status_check_timer is not None:
-            self.destroy_timer(self.status_check_timer)
-            self.status_check_timer = None
+        # 타이머 정리
+        self.safe_destroy_timer('status_check_timer')
         
         # BasicNavigator를 통해 취소
         self.navigator.cancelTask()
@@ -503,7 +559,7 @@ class LiboNavigator(Node):
         self.blocked_waypoints.clear()
         
         # 0.5초 후 취소 완료 처리 (Nav2 취소 처리 시간 확보)
-        self.create_timer(0.5, self.complete_cancellation, once=True)
+        self.safe_create_timer('cancellation_timer', 0.5, self.complete_cancellation, once=True)
         
         response.success = True
         response.message = "주행 취소 요청을 보냈습니다."
@@ -512,7 +568,8 @@ class LiboNavigator(Node):
     def complete_cancellation(self):
         """취소 완료 후 대기 중인 목표가 있으면 처리"""
         self.is_canceling = False
-        self.get_logger().info("주행 취소 완료!")
+        self.is_external_cancel = False  # 외부 취소 플래그 초기화
+        self.get_logger().info("🔄 주행 취소 완료!")
         
         # 대기 중인 목표가 있으면 처리
         if self.pending_goal is not None:
@@ -638,7 +695,7 @@ class LiboNavigator(Node):
             self.navigator.goToPose(target)
         
         # 상태 확인 타이머 시작 (ETA 모니터링 포함)
-        self.status_check_timer = self.create_timer(0.5, self.check_single_navigation_status)
+        self.safe_create_timer('status_check_timer', 0.5, self.check_single_navigation_status)
 
     def check_single_navigation_status(self):
         """단일 웨이포인트 주행 상태를 확인하고 우회로를 모니터링합니다."""
@@ -675,9 +732,7 @@ class LiboNavigator(Node):
         self.eta_monitoring_active = False
         
         # 타이머 정리
-        if self.status_check_timer is not None:
-            self.destroy_timer(self.status_check_timer)
-            self.status_check_timer = None
+        self.safe_destroy_timer('status_check_timer')
             
         result = self.navigator.getResult()
         wp_name = self.current_waypoint_names[self.current_waypoint_index] if self.current_waypoint_index < len(self.current_waypoint_names) else f"WP_{self.current_waypoint_index}"
@@ -704,13 +759,19 @@ class LiboNavigator(Node):
                 self.navigate_to_current_waypoint()
             
         elif result == TaskResult.CANCELED:
-            if not self.is_canceling:
-                self.get_logger().warn(f'❌ 웨이포인트 {wp_name} 주행이 취소됨')
-                # 재계획 로직 실행
-                self.handle_dynamic_obstacle_delayed()
-            else:
-                self.get_logger().info('외부 요청에 의한 주행 취소')
+            if self.is_external_cancel:
+                # 외부에서 요청한 취소 (리보서비스에서 온 취소)
+                self.get_logger().info(f'🛑 외부 요청에 의한 웨이포인트 {wp_name} 주행 취소')
                 self.current_state = NavigatorState.IDLE
+            elif self.is_internal_replan:
+                # 내부 재계획을 위한 취소 (장애물/우회로 감지)
+                self.get_logger().info(f'🔄 내부 재계획을 위한 웨이포인트 {wp_name} 주행 중단')
+                # 재계획이 이미 진행 중이므로 추가 작업 불필요
+                self.is_internal_replan = False  # 플래그 초기화
+            else:
+                # 원인 불명의 취소 - 재계획 로직 실행
+                self.get_logger().warn(f'❓ 원인 불명의 웨이포인트 {wp_name} 주행 취소 - 재계획 실행')
+                self.handle_dynamic_obstacle_delayed()
                 
         else:  # FAILED
             self.get_logger().warn(f'❌ 웨이포인트 {wp_name} 주행 실패!')
@@ -763,13 +824,14 @@ class LiboNavigator(Node):
         try:
             self.get_logger().warn('🛑 Nav2 우회로 감지! 즉시 중단하고 웨이포인트 재최적화 시작!')
             
+            # 내부 재계획 플래그 설정
+            self.is_internal_replan = True
+            
             # 1. Nav2 즉시 중단
             self.navigator.cancelTask()
             
             # 2. 타이머 정리
-            if self.status_check_timer is not None:
-                self.destroy_timer(self.status_check_timer)
-                self.status_check_timer = None
+            self.safe_destroy_timer('status_check_timer')
             
             # 3. 현재 웨이포인트를 문제 있는 것으로 간주하고 제외
             if hasattr(self, 'current_waypoint_names') and hasattr(self, 'current_waypoint_index'):
@@ -781,14 +843,20 @@ class LiboNavigator(Node):
             # 4. 0.1초 후 웨이포인트 재최적화 실행 (Nav2 취소 처리 시간 확보)
             self.current_state = NavigatorState.IDLE
             self._replanning = True
-            # once=True 인자 대신 타이머 콜백 내에서 직접 destroy_timer 호출
-            def eta_replan_callback():
-                self.execute_eta_based_replan()
-                # 타이머 객체를 직접 파괴
-                if hasattr(self, 'eta_replan_timer') and self.eta_replan_timer is not None:
-                    self.destroy_timer(self.eta_replan_timer)
-                    self.eta_replan_timer = None
-            self.eta_replan_timer = self.create_timer(0.1, eta_replan_callback)
+            
+            def safe_eta_replan_callback():
+                try:
+                    self.execute_eta_based_replan()
+                except Exception as e:
+                    self.get_logger().error(f'ETA 재계획 콜백 실행 중 오류: {e}')
+                    self.current_state = NavigatorState.ERROR
+                    self._replanning = False
+                    self.is_internal_replan = False
+                finally:
+                    # 타이머 정리는 safe_create_timer에서 자동 처리됨
+                    pass
+            
+            self.safe_create_timer('eta_replan_timer', 0.1, safe_eta_replan_callback, once=True)
             
         except Exception as e:
             self.get_logger().error(f'우회로 감지 처리 중 오류: {e}')
@@ -1092,13 +1160,14 @@ class LiboNavigator(Node):
         try:
             self.get_logger().warn('🚨 막힌 웨이포인트 감지! Nav2 글로벌 플래너 중단하고 새로운 웨이포인트 경로 계산 시작!')
             
+            # 내부 재계획 플래그 설정
+            self.is_internal_replan = True
+            
             # 1. 현재 네비게이션 즉시 취소 (Nav2 글로벌 플래너 중단)
             self.navigator.cancelTask()
             
             # 2. 타이머 정리
-            if self.status_check_timer is not None:
-                self.destroy_timer(self.status_check_timer)
-                self.status_check_timer = None
+            self.safe_destroy_timer('status_check_timer')
             
             # 3. 상태를 즉시 변경하여 추가 감지 방지
             self.current_state = NavigatorState.IDLE
@@ -1111,7 +1180,23 @@ class LiboNavigator(Node):
                     self.get_logger().warn(f'⛔ 웨이포인트 {blocked_wp}를 웨이포인트 그래프에서 완전 제외!')
             
             # 5. 즉시 웨이포인트 기반 재계획 실행 (Nav2 우회로 생성 방지)
-            self.create_timer(0.0, self.execute_waypoint_replan, once=True)
+            def safe_replan_callback():
+                try:
+                    # 타이머 먼저 정리 (안전한 함수 사용)
+                    self.safe_destroy_timer('dynamic_obstacle_timer')
+                    
+                    self.execute_waypoint_replan()
+                except Exception as e:
+                    self.get_logger().error(f'재계획 콜백 실행 중 오류: {e}')
+                    self.current_state = NavigatorState.ERROR
+                    self._replanning = False
+                    self.is_internal_replan = False
+            
+            # 기존 타이머가 있으면 정리 (안전한 함수 사용)
+            self.safe_destroy_timer('eta_replan_timer')
+
+            # 새 타이머 생성
+            self.dynamic_obstacle_timer = self.create_timer(0.05, safe_replan_callback)
             
         except Exception as e:
             self.get_logger().error(f'웨이포인트 재계획 처리 중 오류: {e}')
@@ -1163,6 +1248,18 @@ class LiboNavigator(Node):
             self.current_state = NavigatorState.ERROR
             self._replanning = False
 
+    def safe_complete_cancellation(self):
+        """안전한 취소 완료 처리"""
+        try:
+            # 타이머 먼저 정리
+            if self.cancellation_timer is not None:
+                self.destroy_timer(self.cancellation_timer)
+                self.cancellation_timer = None
+            
+            self.complete_cancellation()
+        except Exception as e:
+            self.get_logger().error(f'취소 완료 처리 중 오류: {e}')
+
 def main(args=None):
     rclpy.init(args=args)
     navigator_node = LiboNavigator()  # 변수명 변경하여 클래스와 구분
@@ -1172,9 +1269,16 @@ def main(args=None):
     except KeyboardInterrupt:
         navigator_node.get_logger().info('키보드 인터럽트로 종료합니다...')
     finally:
-        # 정리 작업
-        if hasattr(navigator_node, 'status_check_timer') and navigator_node.status_check_timer is not None:
-            navigator_node.destroy_timer(navigator_node.status_check_timer)
+        # 모든 타이머 안전 정리
+        timers_to_clean = [
+            'status_check_timer', 
+            'eta_replan_timer', 
+            'dynamic_obstacle_timer', 
+            'cancellation_timer'
+        ]
+        
+        for timer_name in timers_to_clean:
+            navigator_node.safe_destroy_timer(timer_name)
         
         navigator_node.destroy_node()
         rclpy.shutdown()
