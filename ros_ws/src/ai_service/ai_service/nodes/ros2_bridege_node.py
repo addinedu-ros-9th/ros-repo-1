@@ -2,7 +2,7 @@
 
 import rclpy
 from rclpy.node import Node
-from libo_interfaces.msg import DetectionTimer, VoiceCommand # VoiceCommand 메시지 임포트
+from libo_interfaces.msg import DetectionTimer, VoiceCommand
 from libo_interfaces.srv import ActivateDetector, DeactivateDetector
 import socket
 import json
@@ -12,13 +12,12 @@ class ROS2BridgeNode(Node):
     def __init__(self):
         super().__init__('ros2_bridge_node')
 
-        # 파라미터 선언
+        # 파라미터 선언 및 가져오기
         self.declare_parameter('udp_listen_port', 7008)
         self.declare_parameter('robot_id', 'libo_a')
         self.declare_parameter('detector_ip', '127.0.0.1')
         self.declare_parameter('detector_cmd_port', 7009)
 
-        # 파라미터 가져오기
         self.udp_listen_port = self.get_parameter('udp_listen_port').get_parameter_value().integer_value
         self.robot_id = self.get_parameter('robot_id').get_parameter_value().string_value
         self.detector_ip = self.get_parameter('detector_ip').get_parameter_value().string_value
@@ -26,7 +25,6 @@ class ROS2BridgeNode(Node):
 
         # 퍼블리셔 및 서비스 서버
         self.detection_timer_pub = self.create_publisher(DetectionTimer, 'detection_timer', 10)
-        # VoiceCommand 퍼블리셔 추가
         self.voice_command_pub = self.create_publisher(VoiceCommand, 'voice_command', 10)
         
         self.activate_service = self.create_service(ActivateDetector, 'activate_detector', self.activate_callback)
@@ -39,7 +37,6 @@ class ROS2BridgeNode(Node):
         self.get_logger().info(f"📱 UDP 수신 대기: 포트 {self.udp_listen_port}")
 
         self.tracking_active = False
-        # 5초 이상 사람 없음 메시지를 보냈는지 추적하는 상태 변수
         self.no_person_message_sent = False
         
         threading.Thread(target=self.udp_listener, daemon=True).start()
@@ -48,7 +45,7 @@ class ROS2BridgeNode(Node):
         """감지 활성화 및 중앙 타겟 찾기 명령 전송"""
         self.get_logger().info(f"▶️ 감지 활성화 요청. 추적기에게 중앙 타겟 찾기를 명령합니다.")
         self.tracking_active = True
-        self.no_person_message_sent = False # 활성화 시 상태 초기화
+        self.no_person_message_sent = False
         
         try:
             command = {'command': 'activate_and_find_center'}
@@ -82,21 +79,39 @@ class ROS2BridgeNode(Node):
         return response
 
     def udp_listener(self):
+        """
+        UDP 데이터를 수신하고 JSON 형식일 경우에만 처리하는 안정적인 리스너.
+        """
         while True:
             try:
                 data, _ = self.listen_sock.recvfrom(65536)
-                if self.tracking_active:
-                    message = json.loads(data.decode())
+
+                # 추적이 활성화된 상태일 때만 데이터 처리
+                if not self.tracking_active:
+                    continue
+
+                # --- 핵심 수정 부분 ---
+                # 수신한 데이터가 올바른 JSON 형식인지 확인하고 처리합니다.
+                # 비디오 스트림 같은 바이너리 데이터는 여기서 걸러집니다.
+                message = json.loads(data.decode('utf-8'))
+                
+                # 'lost_time' 키가 있는 경우에만 로직 수행
+                if 'lost_time' in message:
                     lost_time = message.get("lost_time", 0)
                     
-                    # 1. 기존 DetectionTimer 메시지 발행
+                    # 1. DetectionTimer 메시지 발행
                     self.publish_detection_timer(int(lost_time))
                     
-                    # 2. 새로운 VoiceCommand 로직
+                    # 2. VoiceCommand 로직 처리
                     self.handle_voice_command(int(lost_time))
 
+            # json.JSONDecodeError: 데이터가 JSON 형식이 아닐 때 발생 (예: 비디오 스트림)
+            # UnicodeDecodeError: 데이터가 UTF-8 텍스트가 아닐 때 발생 (예: 비디오 스트림)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                self.get_logger().warn("수신 데이터가 유효한 JSON이 아니므로 무시합니다. (비디오 스트림일 수 있음)")
+                continue # 다음 데이터 수신을 위해 루프 계속
             except Exception as e:
-                self.get_logger().error(f"❗ 데이터 수신 실패: {e}")
+                self.get_logger().error(f"❗ 데이터 처리 중 예외 발생: {e}")
 
     def publish_detection_timer(self, seconds):
         """DetectionTimer 메시지를 발행하는 함수"""
@@ -116,17 +131,15 @@ class ROS2BridgeNode(Node):
 
     def handle_voice_command(self, lost_time_seconds):
         """감지 상태에 따라 음성 명령을 처리하는 함수"""
-        # 조건 1: 감지 실패 시간이 5초 이상이고, 아직 메시지를 보내지 않았을 때
         if lost_time_seconds >= 5 and not self.no_person_message_sent:
             self.get_logger().warn("감지 실패 5초 이상! 'no_person_5s' 메시지를 보냅니다.")
             self.publish_voice_command("assist", "no_person_5s")
-            self.no_person_message_sent = True # 메시지를 보냈다고 상태 변경
+            self.no_person_message_sent = True
 
-        # 조건 2: 사람이 감지되었고, 이전에 '감지 실패' 상태였을 때
         elif lost_time_seconds < 5 and self.no_person_message_sent:
             self.get_logger().info("사람 재감지! 'person_detected' 메시지를 보냅니다.")
             self.publish_voice_command("assist", "person_detected")
-            self.no_person_message_sent = False # 상태 초기화
+            self.no_person_message_sent = False
 
 def main(args=None):
     rclpy.init(args=args)
