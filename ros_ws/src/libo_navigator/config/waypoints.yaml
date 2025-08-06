@@ -1,90 +1,90 @@
 # 사용자님의 파일 구조를 그대로 유지합니다. (최상위 'waypoints:' 없음)
 # --- 1번 라인 ---
 A1:
-  position: {x: -5.54, y: 5.76}
+  position: {x: -5.3862, y: 6.3501}
   neighbors: [B1, A2]
 B1:
-  position: {x: -5.76, y: 4.9}
+  position: {x: -5.3761, y: 4.6925}
   neighbors: [A1, C1]
 C1:
-  position: {x: -5.79, y: 3.25}
+  position: {x: -5.4063, y: 3.5777}
   neighbors: [B1]
 
 # --- 2번 라인 ---
 A2:
-  position: {x: -3.59, y: 5.69}
+  position: {x: -3.3422, y: 6.4722}
   neighbors: [A1, A3]
 
 # --- 3번 라인 ---
 A3:
-  position: {x: -0.19, y: 5.53}
+  position: {x: 0.1064, y: 6.2238}
   neighbors: [A2, B3]
 B3:
-  position: {x: 0.01, y: 4.01}
+  position: {x: 0.0757, y: 5.0622}
   neighbors: [A3, C3]
 C3:
-  position: {x: 0.06, y: 2.7}
+  position: {x: 0.1, y: 3.2450}
   neighbors: [B3, D3, C4]
 D3:
-  position: {x: 0.03, y: 0.96}
+  position: {x: 0.15, y: 1.7411}
   neighbors: [C3, E3]
 E3:
-  position: {x: 0.05, y: -0.34}
+  position: {x: 0.088, y: 0.0743}
   neighbors: [D3, E4]
 
 # --- 4번 라인 ---
 C4:
-  position: {x: 1.61, y: 2.65}
+  position: {x: 1.9483, y: 3.2892}
   neighbors: [C3, C5]
 E4:
-  position: {x: 1.66, y: -0.53}
+  position: {x: 1.9111, y: 0.0166}
   neighbors: [E3, E5]
 
 # --- 5번 라인 ---
 C5:
-  position: {x: 2.97, y: 2.57}
+  position: {x: 3.2429, y: 3.234}
   neighbors: [C4, D5, C6]
 D5:
-  position: {x: 2.92, y: 0.98}
+  position: {x: 3.2418, y: 1.6709}
   neighbors: [C5, E5]
 E5:
-  position: {x: 3.06, y: -0.51}
+  position: {x: 3.3497, y: 0.0123}
   neighbors: [E4, D5, E6]
 
 # --- 6번 라인 ---
 C6:
-  position: {x: 4.45, y: 2.58}
+  position: {x: 4.6446, y: 4.6981}
   neighbors: [C5, C7]
 E6:
-  position: {x: 4.53, y: -0.53}
+  position: {x: 4.53, y: 0.0679}
   neighbors: [E5, E7]
 
 # --- 7번 라인 ---
 C7:
-  position: {x: 5.74, y: 2.49}
+  position: {x: 5.9597, y: 3.1693}
   neighbors: [C6, C8, D7]
 D7:
-  position: {x: 5.74, y: 1.18}
+  position: {x: 6.0458, y: 1.6253}
   neighbors: [C7, E7]
 E7:
-  position: {x: 5.74, y: -0.12}
+  position: {x: 5.9853, y: 0.5879}
   neighbors: [D7, E6, E8]
 
 # --- 8번 라인 ---
 C8:
-  position: {x: 7.53, y: 2.36}
+  position: {x: 7.502, y: 3.1582}
   neighbors: [C7, C9]
 E8:
-  position: {x: 7.67, y: -0.10} # y좌표 오타 수정
+  position: {x: 7.758, y: 0.5479}
   neighbors: [E7, E9]
 
 # --- 9번 라인 ---
 C9:
-  position: {x: 8.97, y: 1.96}
-  neighbors: [C8, D9] # 이웃 논리 오류 수정
+  position: {x: 9.2177, y: 2.7412}
+  neighbors: [C8, D9]
 D9:
-  position: {x: 9.10, y: 1.11}
+  position: {x: 9.309, y: 1.7148}
   neighbors: [C9, E9]
 E9:
-  position: {x: 8.98, y: -0.16}
+  position: {x: 9.2161, y: 0.5687}
   neighbors: [E8, D9]
