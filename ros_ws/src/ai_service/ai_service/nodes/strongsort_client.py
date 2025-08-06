@@ -22,7 +22,7 @@ YOLO_MODEL_NAME = 'yolov5n'
 # 재식별(Re-identification) 모델의 가중치 파일 경로입니다. StrongSORT가 객체의 외모 특징을 추출하는 데 사용합니다.
 REID_WEIGHT_PATH = Path('./osnet_x1_0_msmt17.pt')
 # 이미지(비디오 프레임)를 수신할 UDP 포트 번호입니다.
-IMAGE_LISTEN_PORT = 7003
+IMAGE_LISTEN_PORT = 7020
 # 추적 상태 정보를 전송할 ROS 브릿지의 IP 주소입니다. (로컬 환경에서는 127.0.0.1)
 ROS_BRIDGE_IP = '127.0.0.1'
 # 추적 상태 정보를 전송할 ROS 브릿지의 포트 번호입니다.
@@ -38,7 +38,7 @@ last_status_send_time = 0  # 루프 밖에 정의
 # ===== 모델 로드 (Model Loading) =====
 print("🤖 모델을 로딩합니다...")
 # YOLOv5 모델을 PyTorch Hub를 통해 로드하고, 지정된 장치(DEVICE)로 보냅니다.
-yolo_model = torch.hub.load('ultralytics/yolov5n', YOLO_MODEL_NAME, pretrained=True).to(DEVICE)
+yolo_model = torch.hub.load('ultralytics/yolov5', 'yolov5n', pretrained=True).to(DEVICE)
 # StrongSORT 추적기를 초기화합니다.
 tracker = StrongSORT(
     model_weights=REID_WEIGHT_PATH,  # 재식별 모델 가중치
