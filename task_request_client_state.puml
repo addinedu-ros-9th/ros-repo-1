@@ -1,0 +1,116 @@
+@startuml TaskRequestClient State
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam stateFontSize 12
+
+[*] --> 초기화
+
+state 초기화 {
+    [*] --> 멤버변수_초기화
+    멤버변수_초기화 --> 대기중
+}
+
+state 대기중 {
+    [*] --> idle
+    idle --> 작업요청_수신
+}
+
+state 작업요청_수신 {
+    [*] --> 데이터_저장
+    데이터_저장 --> QThread_시작
+    QThread_시작 --> ROS2_초기화_시도
+}
+
+state ROS2_초기화_시도 {
+    [*] --> rclpy_초기화
+    rclpy_초기화 --> 노드_생성
+    노드_생성 --> 서비스_클라이언트_생성
+    서비스_클라이언트_생성 --> 서비스_서버_대기
+    
+    state 서비스_서버_대기 {
+        [*] --> 대기_루프
+        대기_루프 --> 서버_연결_확인
+        
+        alt 서버 연결 성공
+            서버_연결_확인 --> 초기화_완료
+        else 서버 연결 실패 (10초 타임아웃)
+            서버_연결_확인 --> 초기화_실패
+        end
+    }
+    
+    초기화_완료 --> 서비스_호출_준비
+    초기화_실패 --> 오류_처리
+}
+
+state 서비스_호출_준비 {
+    [*] --> Request_객체_생성
+    Request_객체_생성 --> 비동기_호출_시작
+}
+
+state 비동기_호출_시작 {
+    [*] --> call_async_호출
+    call_async_호출 --> 응답_대기_루프
+}
+
+state 응답_대기_루프 {
+    [*] --> future_done_확인
+    
+    loop 30초 타임아웃
+        future_done_확인 --> 응답_상태_확인
+        
+        alt 응답 수신
+            응답_상태_확인 --> 응답_처리
+            응답_처리 --> 시그널_발생
+            시그널_발생 --> 완료
+        else 타임아웃
+            응답_상태_확인 --> 타임아웃_처리
+            타임아웃_처리 --> 오류_처리
+        end
+        
+        응답_상태_확인 --> spin_once_호출
+        spin_once_호출 --> future_done_확인
+    end
+}
+
+state 완료 {
+    [*] --> 성공
+    [*] --> 실패
+    성공 --> 대기중
+    실패 --> 대기중
+}
+
+state 오류_처리 {
+    [*] --> 오류_시그널_발생
+    오류_시그널_발생 --> 대기중
+}
+
+state 정리 {
+    [*] --> cleanup_호출
+    cleanup_호출 --> 스레드_종료
+    스레드_종료 --> 리소스_정리
+    리소스_정리 --> [*]
+}
+
+대기중 --> 정리 : cleanup() 호출
+작업요청_수신 --> 정리 : cleanup() 호출
+ROS2_초기화_시도 --> 정리 : cleanup() 호출
+서비스_호출_준비 --> 정리 : cleanup() 호출
+비동기_호출_시작 --> 정리 : cleanup() 호출
+응답_대기_루프 --> 정리 : cleanup() 호출
+
+note right of 완료
+    task_request_completed 시그널 발생:
+    - 성공: (True, message)
+    - 실패: (False, error_message)
+end note
+
+note right of 오류_처리
+    주요 오류 상황:
+    - ROS2 초기화 실패
+    - 서비스 서버 연결 실패
+    - 서비스 호출 타임아웃
+    - 예외 발생
+end note
+
+@enduml 

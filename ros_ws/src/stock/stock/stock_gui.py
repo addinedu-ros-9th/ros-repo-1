@@ -94,7 +94,7 @@ class BarcodeScannerThread(QThread):
             # 🔧 Qt 충돌 방지를 위한 환경변수 설정
             os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)
             
-            self.vs = VideoStream(src=0).start()
+            self.vs = VideoStream(src=2).start()
             time.sleep(2.0)
             self.running = True
             self.status_update.emit("카메라가 준비되었습니다. 바코드를 비춰주세요.")
@@ -104,7 +104,7 @@ class BarcodeScannerThread(QThread):
                 if frame is None:
                     continue
                     
-                frame = cv2.resize(frame, (640, 480))
+                frame = cv2.resize(frame, (1280, 720))
                 
                 # 바코드 디코딩
                 barcodes = pyzbar.decode(frame)

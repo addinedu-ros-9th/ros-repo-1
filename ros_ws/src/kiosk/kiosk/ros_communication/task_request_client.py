@@ -6,6 +6,7 @@ from libo_interfaces.srv import TaskRequest
 from PyQt5.QtCore import QThread, pyqtSignal
 import threading
 import time
+import uuid
 
 class TaskRequestClient(QThread):
     """작업 요청 ROS2 서비스 클라이언트 (에스코팅 전용)"""
@@ -21,6 +22,7 @@ class TaskRequestClient(QThread):
         self._lock = threading.Lock()
         self._is_cleaning_up = False
         self._node_initialized = False
+        self._node_name = f'task_request_client_{uuid.uuid4().hex[:8]}'  # 고유한 노드 이름
         
     def init_ros(self):
         """ROS2 초기화"""
@@ -29,11 +31,28 @@ class TaskRequestClient(QThread):
                 if self._is_cleaning_up:
                     return False
                 
+                # 이미 초기화되어 있으면 성공 반환
+                if self._node_initialized and self.node is not None:
+                    print("✅ TaskRequestClient 이미 초기화됨")
+                    return True
+                
+                # 기존 노드가 있지만 초기화되지 않은 경우 정리
+                if self.node is not None and not self._node_initialized:
+                    try:
+                        if self.client:
+                            self.client.destroy()
+                            self.client = None
+                        self.node.destroy_node()
+                        self.node = None
+                    except Exception as e:
+                        print(f"⚠️ 기존 노드 정리 중 오류: {e}")
+                
                 if not rclpy.ok():
                     rclpy.init()
                 
                 if self.node is None:
-                    self.node = Node('task_request_client')
+                    # 고유한 노드 이름으로 생성
+                    self.node = Node(self._node_name)
                     self.client = self.node.create_client(TaskRequest, '/task_request')
                 
                 # 서비스 서버 대기 (타임아웃 설정)
@@ -52,11 +71,15 @@ class TaskRequestClient(QThread):
                         return False
                 
                 self._node_initialized = True
-                print("✅ TaskRequestClient ROS2 초기화 완료")
+                print(f"✅ TaskRequestClient ROS2 초기화 완료 (노드: {self._node_name})")
                 return True
                 
         except Exception as e:
             print(f"❌ TaskRequestClient ROS2 초기화 실패: {e}")
+            # 초기화 실패 시 상태 초기화
+            self._node_initialized = False
+            self.node = None
+            self.client = None
             return False
     
     def send_task_request(self, robot_id, task_type, call_location, goal_location):
@@ -117,6 +140,11 @@ class TaskRequestClient(QThread):
             
             if self.node is None or self.client is None:
                 self.task_request_completed.emit(False, "ROS2 클라이언트 초기화 실패")
+                return
+            
+            # 요청 데이터 확인
+            if self.request_data is None:
+                self.task_request_completed.emit(False, "요청 데이터가 없습니다")
                 return
             
             # 서비스 요청 생성
@@ -202,6 +230,8 @@ class TaskRequestClient(QThread):
                 finally:
                     self.node = None
                     self._node_initialized = False
+                    # 새로운 고유한 노드 이름 생성
+                    self._node_name = f'task_request_client_{uuid.uuid4().hex[:8]}'
         except Exception as e:
             print(f"⚠️ task_request_client cleanup 중 오류: {e}")
         

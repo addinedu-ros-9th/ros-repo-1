@@ -1,0 +1,67 @@
+@startuml TaskRequestClient Class
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam classAttributeIconSize 0
+skinparam classFontSize 12
+
+class TaskRequestClient {
+    -- 멤버 변수 --
+    - node: Node
+    - client: Client
+    - request_data: dict
+    - _lock: threading.Lock
+    - _is_cleaning_up: bool
+    - _node_initialized: bool
+    
+    -- 시그널 --
+    + task_request_completed: pyqtSignal(bool, str)
+    
+    -- 메서드 --
+    + __init__()
+    + init_ros(): bool
+    + send_task_request(robot_id, task_type, call_location, goal_location): bool
+    + request_escort_task(robot_id, call_location, goal_location): bool
+    + run(): void
+    + cleanup(): void
+}
+
+class QThread {
+    + start(): void
+    + quit(): void
+    + wait(msecs): bool
+    + isRunning(): bool
+    + run(): void
+}
+
+class TaskRequest {
+    + Request
+    + Response
+}
+
+class Node {
+    + create_client(service_type, service_name): Client
+    + get_logger(): Logger
+    + destroy_node(): void
+}
+
+class Client {
+    + wait_for_service(timeout_sec): bool
+    + call_async(request): Future
+}
+
+QThread <|-- TaskRequestClient
+TaskRequestClient --> TaskRequest : uses
+TaskRequestClient --> Node : creates
+TaskRequestClient --> Client : creates
+
+note right of TaskRequestClient
+    주요 특징:
+    - QThread 상속으로 비동기 처리
+    - PyQt5 시그널로 UI 통신
+    - 스레드 안전성 보장
+    - 타임아웃 처리
+    - 리소스 정리 기능
+end note
+
+@enduml 

@@ -413,22 +413,46 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
                 if self.task_request_client.isRunning():
                     self.task_request_client.quit()
                     self.task_request_client.wait(1000)
+                # cleanup은 호출하지 않고 노드만 정리
                 self.task_request_client.cleanup()
                 print("✅ task_request_client 정리 완료")
         except Exception as e:
             print(f"⚠️ task_request_client 정리 중 오류: {e}")
+    
+    def reset_task_request_client(self):
+        """TaskRequest 클라이언트 재초기화"""
+        try:
+            if hasattr(self, 'task_request_client') and self.task_request_client:
+                # 기존 클라이언트 정리
+                self.cleanup_task_request_client()
+                
+                # 새로운 클라이언트 생성
+                self.task_request_client = TaskRequestClient()
+                self.task_request_client.task_request_completed.connect(self.on_task_request_response)
+                print("✅ task_request_client 재초기화 완료")
+        except Exception as e:
+            print(f"⚠️ task_request_client 재초기화 중 오류: {e}")
     
     def reset_widget(self):
         """위젯 초기화"""
         print("🔄 Book Corner 위젯 초기화")
         # 필요한 초기화 작업 수행
         self.setup_map_image()
+        
+        # TaskRequestClient 재초기화
+        self.reset_task_request_client()
     
     def showEvent(self, event):
         """위젯이 표시될 때"""
         super().showEvent(event)
         # 윈도우 중앙 정렬
         self.center_window()
+        
+        # TaskRequestClient 초기화 상태 확인
+        if hasattr(self, 'task_request_client') and self.task_request_client:
+            if not self.task_request_client._node_initialized:
+                print("🔄 TaskRequestClient 재초기화 필요")
+                self.reset_task_request_client()
     
     def center_window(self):
         """윈도우를 화면 중앙에 위치시키기"""

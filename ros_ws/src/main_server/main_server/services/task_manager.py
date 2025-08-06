@@ -746,15 +746,16 @@ class TaskManager(Node):
         selected_robot_id = request.robot_id
         
         if request.task_type == 'escort' or request.task_type == 'assist':
-            self.get_logger().info(f'🚶 Escort/Assist task 감지됨 - 로봇 자동 할당 시작...')
+            task_type_display = f"{request.task_type.upper()} task"
+            self.get_logger().info(f'🚶 {task_type_display} 감지됨 - 로봇 자동 할당 시작...')
             
             # 사용 가능한 로봇들 찾기
             available_robots = self.get_available_robots()
             
             if not available_robots:
-                self.get_logger().error(f'❌ 사용 가능한 로봇이 없음 - Escort/Assist task 거절')
+                self.get_logger().error(f'❌ 사용 가능한 로봇이 없음 - {task_type_display} 거절')
                 response.success = False
-                response.message = "사용 가능한 로봇이 없어서 Escort/Assist task를 수행할 수 없습니다."
+                response.message = f"사용 가능한 로봇이 없어서 {request.task_type} task를 수행할 수 없습니다."
                 return response
             
             # 사용 가능한 로봇 중 하나를 임의로 선택

@@ -1,0 +1,68 @@
+@startuml TaskRequestClient Flow
+
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam sequenceArrowThickness 2
+skinparam roundcorner 20
+
+title TaskRequestClient 코드 흐름
+
+participant "UI/호출자" as UI
+participant "TaskRequestClient" as Client
+participant "QThread" as Thread
+participant "ROS2 Node" as ROS
+participant "TaskRequest Service" as Service
+
+== 초기화 ==
+UI -> Client: __init__()
+note right: 멤버 변수 초기화\n- node = None\n- client = None\n- request_data = None\n- _lock = threading.Lock()\n- _is_cleaning_up = False\n- _node_initialized = False
+
+== 작업 요청 시작 ==
+UI -> Client: send_task_request(robot_id, task_type, call_location, goal_location)
+note right: 1. 요청 데이터 저장\n2. QThread 시작
+
+Client -> Thread: start()
+Thread -> Client: run() [백그라운드]
+
+== ROS2 초기화 ==
+Client -> Client: init_ros()
+note right: 1. rclpy.init()\n2. Node 생성\n3. TaskRequest 클라이언트 생성\n4. 서비스 서버 대기 (10초 타임아웃)
+
+alt 서비스 서버 연결 성공
+    Client -> ROS: wait_for_service() ✅
+    note right: _node_initialized = True
+else 서비스 서버 연결 실패
+    Client -> ROS: wait_for_service() ❌
+    Client -> UI: task_request_completed(False, "서비스 서버 없음")
+end
+
+== 서비스 호출 ==
+Client -> Client: TaskRequest.Request 생성
+note right: robot_id, task_type\ncall_location, goal_location
+
+Client -> Service: call_async(request)
+note right: 비동기 호출 시작
+
+loop 30초 타임아웃
+    Client -> Service: future.done() 확인
+    Service -> Client: 응답 대기
+    
+    alt 응답 수신
+        Service -> Client: future.result()
+        Client -> UI: task_request_completed(success, message)
+        break
+    else 타임아웃
+        Client -> UI: task_request_completed(False, "타임아웃")
+        break
+    end
+    
+    Client -> ROS: spin_once(node, 0.1초)
+end
+
+== 정리 ==
+UI -> Client: cleanup()
+Client -> Thread: quit() + wait(3000ms)
+Client -> ROS: destroy_node()
+Client -> Client: 리소스 정리 완료
+
+@enduml 

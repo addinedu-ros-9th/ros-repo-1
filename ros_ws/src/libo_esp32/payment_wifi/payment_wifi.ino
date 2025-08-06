@@ -1,14 +1,15 @@
 /*
-   ESP32 RFID 결제 시스템 (micro-ROS Serial 통신)
+   ESP32 RFID 결제 시스템 (micro-ROS WiFi 통신)
    - MFRC522 RFID 리더기로 카드 인식
-   - micro-ROS Serial을 통해 /rfid_payment 토픽으로 카드 정보 퍼블리시
+   - micro-ROS WiFi를 통해 /rfid_payment 토픽으로 카드 정보 퍼블리시
    - 결제 성공시 LED 표시 및 피드백
    - 도메인 ID: 26 (프로젝트 표준)
-   - 통신: USB Serial (115200 baud)
+   - 통신: WiFi UDP (포트 8888)
 */
 
 #include <SPI.h>
 #include <MFRC522.h>
+#include <WiFi.h>
 #include <micro_ros_arduino.h>
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
@@ -16,6 +17,14 @@
 #include <std_msgs/msg/string.h>
 #include <std_msgs/msg/bool.h>
 #include <stdio.h>
+
+// ===== WiFi 설정 =====
+char ssid[] = "AIE_509_2.4G";
+char password[] = "addinedu_class1";
+
+// micro-ROS Agent 설정 (실제 PC IP로 변경 필요)
+char agent_ip[] = "192.168.0.76";  // PC의 실제 IP 주소로 변경
+const size_t agent_port = 8888;
 
 // ===== RFID 핀 설정 =====
 #define RST_PIN         21    // RFID RST 핀
@@ -54,6 +63,7 @@ char rfid_buffer[50];
 char payment_result_buffer[100];
 
 // ===== 상태 변수 =====
+bool wifi_connected = false;
 bool microros_connected = false;
 
 // RFID 관련
@@ -88,6 +98,40 @@ void error_loop() {
   }
 }
 
+// ===== WiFi 연결 함수 =====
+bool connectWiFi() {
+  Serial.println("📡 WiFi 연결 시작...");
+  Serial.print("🌐 SSID: ");
+  Serial.println(ssid);
+  
+  WiFi.begin(ssid, password);
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    wifi_connected = true;
+    Serial.println("");
+    Serial.println("✅ WiFi 연결 성공!");
+    Serial.print("📶 IP 주소: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("🎯 Agent IP: ");
+    Serial.println(agent_ip);
+    Serial.print("🔌 Agent Port: ");
+    Serial.println(agent_port);
+    return true;
+  } else {
+    wifi_connected = false;
+    Serial.println("");
+    Serial.println("❌ WiFi 연결 실패!");
+    return false;
+  }
+}
+
 // ===== 결제 결과 콜백 함수 =====
 void payment_result_callback(const void * msgin) {
   const std_msgs__msg__String * msg = (const std_msgs__msg__String *)msgin;
@@ -111,12 +155,12 @@ void payment_result_callback(const void * msgin) {
   payment_in_progress = false;
 }
 
-// ===== micro-ROS 연결 함수 (Serial 통신) =====
+// ===== micro-ROS 연결 함수 (WiFi 통신) =====
 bool connectMicroROS() {
-  Serial.println("🔧 micro-ROS Serial 연결 시도 중...");
+  Serial.println("🔧 micro-ROS WiFi 연결 시도 중...");
   
-  // Serial transport 설정
-  set_microros_transports();
+  // WiFi transport 설정
+  set_microros_wifi_transports(ssid, password, agent_ip, agent_port);
   
   allocator = rcl_get_default_allocator();
   
@@ -206,9 +250,9 @@ bool connectMicroROS() {
   payment_result_msg.data.capacity = sizeof(payment_result_buffer);
   
   microros_connected = true;
-  Serial.println("✅ micro-ROS Serial 연결 성공!");
+  Serial.println("✅ micro-ROS WiFi 연결 성공!");
   Serial.println("🌐 도메인 ID: 26 설정됨");
-  Serial.println("🔌 USB Serial 통신 사용");
+  Serial.println("📶 WiFi UDP 통신 사용");
   return true;
 }
 
@@ -368,21 +412,9 @@ void payment_failed_feedback() {
     delay(200);
   }
   
-  // 결제 상태 리셋 (안전한 초기화)
+  // 결제 상태 리셋
   payment_status_msg.data = false;
-  rcl_ret_t status_ret = rcl_publish(&payment_publisher, &payment_status_msg, NULL);
-  if (status_ret == RCL_RET_OK) {
-    Serial.println("✅ 결제 상태 리셋 완료");
-  } else {
-    Serial.printf("⚠️ 결제 상태 리셋 실패: %d\n", status_ret);
-  }
-  
-  // 다음 결제를 위한 완전 초기화
-  payment_in_progress = false;
-  led_state = false;
-  digitalWrite(SUCCESS_LED_PIN, LOW);
-  
-  Serial.println("🔄 다음 결제를 위한 시스템 초기화 완료");
+  rcl_publish(&payment_publisher, &payment_status_msg, NULL);
 }
 
 // ===== LED 깜빡임 처리 =====
@@ -410,13 +442,26 @@ void handlePaymentTimeout() {
 void setup() {
   Serial.begin(115200);
   delay(2000);  // Serial 통신 안정화 대기
-  Serial.println("=== ESP32 RFID 결제 시스템 (Serial) 시작 ===");
-  Serial.println("🔌 통신 방식: USB Serial (115200 baud)");
+  Serial.println("=== ESP32 RFID 결제 시스템 (WiFi) 시작 ===");
+  Serial.println("📶 통신 방식: WiFi UDP");
   Serial.println("🌐 ROS2 Domain ID: 26");
   
   // 핀 초기화
   pinMode(SUCCESS_LED_PIN, OUTPUT);
   digitalWrite(SUCCESS_LED_PIN, LOW);
+  
+  // WiFi 연결
+  if (!connectWiFi()) {
+    Serial.println("❌ WiFi 연결 실패로 인해 종료합니다.");
+    Serial.println("💡 WiFi 설정을 확인하고 ESP32를 재시작하세요.");
+    while(1) {
+      // WiFi 연결 실패 LED 표시
+      digitalWrite(SUCCESS_LED_PIN, HIGH);
+      delay(100);
+      digitalWrite(SUCCESS_LED_PIN, LOW);
+      delay(100);
+    }
+  }
   
   // RFID 초기화
   initRFID();
@@ -424,14 +469,13 @@ void setup() {
   // micro-ROS Agent 연결 대기
   Serial.println("🔗 micro-ROS agent 연결 대기 중...");
   Serial.println("💡 다음 명령어로 agent를 실행하세요:");
-  Serial.println("   ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200 -v6");
-  Serial.println("   (포트는 실제 ESP32 연결 포트로 변경)");
+  Serial.printf("   ros2 run micro_ros_agent micro_ros_agent udp4 --port %d -v6\n", agent_port);
   Serial.println("📋 연결 체크리스트:");
-  Serial.println("   1. USB 케이블 연결 확인");
-  Serial.println("   2. Agent 실행 확인");
-  Serial.println("   3. 포트 번호 확인 (/dev/ttyUSB0, /dev/ttyACM0 등)");
+  Serial.println("   1. WiFi 연결 확인");
+  Serial.println("   2. PC와 같은 네트워크 확인");
+  Serial.println("   3. Agent 실행 확인");
   Serial.println("   4. ROS2 환경 설정 확인 (jazzy 명령어)");
-  Serial.println("   5. ESP32 RST 핀이 GPIO 21에 연결되었는지 확인");
+  Serial.printf("   5. Agent IP 설정: %s\n", agent_ip);
   
   delay(3000);  // Agent 시작 대기
   microros_connected = connectMicroROS();
@@ -461,10 +505,25 @@ void setup() {
 void loop() {
   static unsigned long last_reconnect_attempt = 0;
   
+  // WiFi 연결 상태 확인
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("⚠️  WiFi 연결 끊김. 재연결 시도...");
+    wifi_connected = false;
+    microros_connected = false;
+    
+    WiFi.disconnect();
+    delay(1000);
+    if (connectWiFi()) {
+      delay(3000);
+      connectMicroROS();
+    }
+    return;
+  }
+  
   // micro-ROS 연결 상태 확인 및 재시도
   if (!microros_connected) {
     if (millis() - last_reconnect_attempt > 5000) {  // 5초마다 재시도
-      Serial.println("🔄 micro-ROS Serial 재연결 시도...");
+      Serial.println("🔄 micro-ROS WiFi 재연결 시도...");
       microros_connected = connectMicroROS();
       last_reconnect_attempt = millis();
       
@@ -472,10 +531,10 @@ void loop() {
         consecutive_failures++;
         Serial.printf("❌ micro-ROS 재연결 실패 (%d회)\n", consecutive_failures);
         Serial.println("💡 Agent 연결 상태를 확인하세요:");
-        Serial.println("   ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200 -v6");
+        Serial.printf("   ros2 run micro_ros_agent micro_ros_agent udp4 --port %d -v6\n", agent_port);
       } else {
         consecutive_failures = 0;
-        Serial.println("✅ micro-ROS Serial 재연결 성공!");
+        Serial.println("✅ micro-ROS WiFi 재연결 성공!");
         last_heartbeat = millis();
       }
     }
@@ -529,6 +588,7 @@ void loop() {
   // 하트비트 (15초마다 상태 출력 + 연결 테스트)
   if (millis() - last_heartbeat > 15000) {
     Serial.println("💓 RFID 결제 시스템 정상 작동 중...");
+    Serial.printf("📶 WiFi 신호 강도: %d dBm\n", WiFi.RSSI());
     
     // micro-ROS 연결 상태 테스트 (간단한 ping)
     if (microros_connected) {
@@ -564,11 +624,14 @@ void loop() {
     
     if (inByte == 'w') {
       Serial.println("=== 시스템 상태 ===");
+      Serial.printf("📶 WiFi: %s", WiFi.status() == WL_CONNECTED ? "연결됨" : "연결 끊김");
+      if (WiFi.status() == WL_CONNECTED) {
+        Serial.printf(" (%s)", WiFi.localIP().toString().c_str());
+      }
+      Serial.println();
       Serial.printf("🤖 micro-ROS: %s\n", microros_connected ? "연결됨" : "연결 끊김");
       Serial.printf("💳 결제 진행 중: %s\n", payment_in_progress ? "예" : "아니오");
       Serial.printf("❌ 연속 실패 횟수: %d\n", consecutive_failures);
-      Serial.println("🌐 도메인 ID: 26");
-      Serial.println("🔌 통신: USB Serial (115200)");
       Serial.println("==================");
     }
     else if (inByte == 'm') {
