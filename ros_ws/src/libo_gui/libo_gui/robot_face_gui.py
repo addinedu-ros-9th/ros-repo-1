@@ -448,15 +448,11 @@ class RobotFaceGUI(QMainWindow):
         return emojis.get(state, "🟢")
     
     def handle_face_expression_message(self, msg):
-<<<<<<< HEAD
-        """외부에서 받은 FaceExpression 메시지 처리"""
-=======
         """외부에서 받은 FaceExpression 메시지 처리 - 우선순위 높음"""
         # 디버깅 로그 추가
         print(f"🎭 FaceExpression 메시지 수신됨: robot_id={msg.robot_id}, expression_type={msg.expression_type}")
         print(f"🎭 현재 GUI robot_id: {self.current_robot_id}")
         
->>>>>>> 4d635f5bdb763380f74dc0d4cb6c23a0590ab66a
         if msg.robot_id == self.current_robot_id:
             print(f"✅ robot_id 매칭됨! 표정 변경: {msg.expression_type}")
             self.current_state = msg.expression_type
@@ -467,23 +463,8 @@ class RobotFaceGUI(QMainWindow):
                 self.ros_node.get_logger().info(
                     f"🎭 FaceExpression 수신: {msg.robot_id} -> {msg.expression_type} ({msg.description})"
                 )
-<<<<<<< HEAD
-=======
         else:
             print(f"❌ robot_id 불일치: 수신={msg.robot_id}, GUI={self.current_robot_id}")
-    
-    def handle_voice_expression_message(self, msg):
-        """외부에서 받은 VoiceExpression 메시지 처리 - 독립적인 상태"""
-        if msg.robot_id == self.current_robot_id:
-            self.current_state = msg.voice_state
-            self.face_widget.set_voice_state(msg.voice_state, msg.robot_id)
-            self.update_status_display()
-            
-            if self.ros_node:
-                self.ros_node.get_logger().info(
-                    f"🎤 VoiceExpression 수신: {msg.robot_id} -> {msg.voice_state} (독립적인 상태)"
-                )
->>>>>>> 4d635f5bdb763380f74dc0d4cb6c23a0590ab66a
 
 
 class RobotFaceNode(Node):
@@ -496,52 +477,25 @@ class RobotFaceNode(Node):
         if FaceExpression:
             self.face_expression_sub = self.create_subscription(
                 FaceExpression,
-                '/face_expression',  # 이미 변경됨
+                '/face_expression',  # 통일된 토픽
                 self.face_expression_callback,
                 10
             )
         
-<<<<<<< HEAD
         # 발행자 (테스트용 메시지 발행)
-=======
-        if VoiceExpression:
-            self.voice_expression_sub = self.create_subscription(
-                VoiceExpression,
-                '/voice_expression',  # libo_voice_expression에서 변경
-                self.voice_expression_callback,
-                10
-            )
-        
-        # 발행자들 (테스트용 메시지 발행)
->>>>>>> 4d635f5bdb763380f74dc0d4cb6c23a0590ab66a
         if FaceExpression:
-            self.face_expression_pub = self.create_publisher(FaceExpression, '/face_expression', 10)  # 이미 변경됨
+            self.face_expression_pub = self.create_publisher(FaceExpression, '/face_expression', 10)  # 통일된 토픽
         
-<<<<<<< HEAD
         self.gui = None  # GUI 인스턴스 저장용
         
         self.get_logger().info('🤖 Libo Robot Face GUI Node started - 통합된 FaceExpression 시스템!')
-        self.get_logger().info(f'   📥 구독 토픽: libo_face_expression')
-        self.get_logger().info(f'   📤 발행 토픽: libo_face_expression')
+        self.get_logger().info(f'   📥 구독 토픽: /face_expression (FaceExpression으로 통일)')
+        self.get_logger().info(f'   📤 발행 토픽: /face_expression')
         self.get_logger().info(f'   🎯 상태 시스템: 모든 상태가 FaceExpression으로 통일')
-    
-    def face_expression_callback(self, msg):
-        """FaceExpression 메시지 수신 콜백"""
-=======
-        if VoiceExpression:
-            self.voice_expression_pub = self.create_publisher(VoiceExpression, '/voice_expression', 10)  # libo_voice_expression에서 변경
-        
-        self.gui = None  # GUI 인스턴스 저장용
-        
-        self.get_logger().info('🤖 Libo Robot Face GUI Node started - 통합된 상태 시스템!')
-        self.get_logger().info(f'   📥 구독 토픽: /face_expression, /voice_expression (모두 독립적인 상태)')  # 로그 업데이트
-        self.get_logger().info(f'   📤 발행 토픽: /face_expression, /voice_expression')  # 로그 업데이트
-        self.get_logger().info(f'   🎯 상태 시스템: FaceExpression과 VoiceExpression 모두 독립적인 상태')
     
     def face_expression_callback(self, msg):
         """FaceExpression 메시지 수신 콜백 - 우선순위 높음"""
         print(f"📥 FaceExpression 콜백 호출됨: robot_id={msg.robot_id}, expression_type={msg.expression_type}")
->>>>>>> 4d635f5bdb763380f74dc0d4cb6c23a0590ab66a
         if self.gui:
             print(f"✅ GUI 인스턴스 존재, handle_face_expression_message 호출")
             self.gui.handle_face_expression_message(msg)
@@ -582,16 +536,9 @@ def main(args=None):
     
     # 애플리케이션 시작 로그
     print("🚀 Libo Robot Face GUI 시작!")
-<<<<<<< HEAD
     print("   🎭 지원 표정: normal, focused, charging, heavy, happy, sad, listening, speaking")
-    print("   🔗 ROS2 토픽: libo_face_expression (통일된 시스템)")
+    print("   🔗 ROS2 토픽: /face_expression (FaceExpression으로 통일)")
     print("   🎯 상태 시스템: 모든 상태가 FaceExpression으로 통일")
-=======
-    print("   🎭 지원 표정: normal, focused, charging, heavy, happy, sad")
-    print("   🎤 지원 음성: listening, speaking (독립적인 상태)")
-    print("   🔗 ROS2 토픽: /face_expression, /voice_expression (모두 독립적인 상태)")  # 로그 업데이트
-    print("   🎯 상태 시스템: FaceExpression과 VoiceExpression 모두 독립적인 상태")
->>>>>>> 4d635f5bdb763380f74dc0d4cb6c23a0590ab66a
     
     # 애플리케이션 실행
     try:
