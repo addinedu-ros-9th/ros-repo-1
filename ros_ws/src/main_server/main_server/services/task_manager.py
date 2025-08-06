@@ -754,7 +754,7 @@ class TaskManager(Node):
             if not available_robots:
                 self.get_logger().error(f'❌ 사용 가능한 로봇이 없음 - Escort/Assist task 거절')
                 response.success = False
-                response.message = "사용 가능한 로봇이 없어서 Escort/Assist task를 수행할 수 없습니다."
+                response.message = "사용 가능한 로봇이 없습니다."
                 return response
             
             # 사용 가능한 로봇 중 하나를 임의로 선택
@@ -775,7 +775,7 @@ class TaskManager(Node):
                 if not available_robots:
                     self.get_logger().error(f'❌ 사용 가능한 로봇이 없음 - Delivery task 거절')
                     response.success = False
-                    response.message = "사용 가능한 로봇이 없어서 Delivery task를 수행할 수 없습니다."
+                    response.message = "사용 가능한 로봇이 없습니다."
                     return response
                 
                 # 사용 가능한 로봇 중 하나를 임의로 선택
