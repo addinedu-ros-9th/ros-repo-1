@@ -13,10 +13,11 @@ def main(args=None):
     UDP_PORT_MONITORING = 7001
 
     # AI 서비스(수신자 2)의 IP 주소입니다.
-    # UDP_IP_FOLLOWING = "127.0.0.1"
-    UDP_IP_FOLLOWING = "192.168.1.7"
+    UDP_IP_FOLLOWING = "127.0.0.1"
+    # UDP_IP_FOLLOWING = "192.168.1.7"
     # AI 서비스가 수신 대기하고 있는 포트 번호입니다.
-    UDP_PORT_FOLLOWING = 7003
+    # UDP_PORT_FOLLOWING = 7003
+    UDP_PORT_FOLLOWING = 7020
 
     # 모니터링 서비스로 영상을 전송할지 여부를 결정하는 플래그(True: 전송, False: 전송 안 함)
     SEND_TO_MONITORING = True
