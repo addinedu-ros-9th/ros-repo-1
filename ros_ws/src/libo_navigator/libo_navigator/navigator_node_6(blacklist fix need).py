@@ -620,11 +620,6 @@ class LiboNavigator(Node):
         self.get_logger().info(f"{len(waypoint_poses)}개의 지점으로 단계별 주행을 시작합니다...")
         self.current_state = NavigatorState.NAVIGATING
         
-        # 🔥 새로운 경로로 주행 시작! 이전 블랙리스트 해제 (유연성 확보)
-        if hasattr(self, 'blocked_waypoints') and self.blocked_waypoints:
-            self.get_logger().info(f"🔄 새로운 경로 주행 시작! 기존 블랙리스트 해제: {list(self.blocked_waypoints)}")
-            self.blocked_waypoints.clear()
-        
         # 웨이포인트 추적을 위한 변수 설정
         self.current_waypoint_poses = waypoint_poses
         self.current_waypoint_index = 0

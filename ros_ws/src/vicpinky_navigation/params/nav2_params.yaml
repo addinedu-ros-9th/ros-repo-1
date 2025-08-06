@@ -95,7 +95,7 @@ controller_server:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      yaw_goal_tolerance: 0.2 #헤딩목표 라디안값 0.25->0.2로 변경 
     # DWB parameters
     FollowPath:
       plugin: "dwb_core::DWBLocalPlanner"
@@ -104,16 +104,16 @@ controller_server:
       min_vel_y: 0.0
       max_vel_x: 0.25
       max_vel_y: 0.0
-      max_vel_theta: 0.5
+      max_vel_theta: 0.3 # 원래 0.4
       min_speed_xy: 0.0
       max_speed_xy: 0.25
       min_speed_theta: 0.0
       acc_lim_x: 0.8
       acc_lim_y: 0.0
-      acc_lim_theta: 2.0
-      decel_lim_x: -0.5
+      acc_lim_theta: 1.5 # 원래 2.0
+      decel_lim_x: -0.35 # 원래 -0.5
       decel_lim_y: 0.0
-      decel_lim_theta: -2.0
+      decel_lim_theta: -1.5 # 원래 -2.0
       vx_samples: 20
       vy_samples: 5
       vtheta_samples: 20
@@ -134,7 +134,7 @@ controller_server:
       PathDist.scale: 32.0
       GoalDist.scale: 24.0
       RotateToGoal.scale: 32.0
-      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.slowing_factor: 6.5 # 🔸 5.0에서 6.5로 변경
       RotateToGoal.lookahead_time: -1.0
 
 
