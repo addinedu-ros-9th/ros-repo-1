@@ -854,13 +854,8 @@ class TalkerNode(Node):
         category = msg.category
         action = msg.action
         
-        log("COMMAND", f"{'=' * 30} VoiceCommand 수신 (speaker_node2로 전달됨) {'=' * 30}")
+        log("COMMAND", f"\n{'=' * 10} VoiceCommand 수신 (speaker_node2로 전달됨) {'=' * 10}")
         self.get_logger().info(f'VoiceCommand 수신 기록: 로봇={robot_id}, 카테고리={category}, 액션={action}')
-        
-        if success:
-            self.get_logger().info(f"음성 명령 '{category}.{action}' 성공적으로 실행됨")
-        else:
-            self.get_logger().warning(f"음성 명령 '{category}.{action}' 실행 실패")
     
     def publish_face_expression(self, robot_id, expression_type):
         """
