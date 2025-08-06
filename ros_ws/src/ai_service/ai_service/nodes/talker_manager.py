@@ -542,11 +542,6 @@ class CommunicationManager:
             log("ERROR", f"MP3 파일을 찾을 수 없습니다: {file_path}")
             return False
         
-        # 로봇이 말하기 시작할 때 얼굴 표정을 'speaking'으로 변경
-        if self.talker_node:
-            robot_id = self.current_robot_id if self.current_robot_id != "unknown" else "libo_a"
-            self.talker_node.publish_face_expression(robot_id, "speaking")
-            
         log("MP3", f"파일 로드 중: {file_name}")
         
         try:
@@ -588,11 +583,6 @@ class CommunicationManager:
         """텍스트를 TTS로 변환하여 TCP로 전송"""
         try:
             log("TTS", f"음성 응답 생성 중: {text}")
-            
-            # 로봇이 말하기 시작할 때 얼굴 표정을 'speaking'으로 변경
-            if self.talker_node:
-                robot_id = self.current_robot_id if self.current_robot_id != "unknown" else "libo_a"
-                self.talker_node.publish_face_expression(robot_id, "speaking")
                 
             synthesis_input = texttospeech.SynthesisInput(text=text)
             
@@ -626,11 +616,6 @@ class CommunicationManager:
             else:
                 log("AUDIO", "❌ TTS 전송 실패")
                 
-            # 발화가 끝났으므로 얼굴 표정을 다시 'normal'로 변경
-            if self.talker_node:
-                robot_id = self.current_robot_id if self.current_robot_id != "unknown" else "libo_a"
-                self.talker_node.publish_face_expression(robot_id, "normal")
-            
             return success
         except Exception as e:
             log("ERROR", f"TTS 생성/전송 오류: {str(e)}")
@@ -774,14 +759,10 @@ class TalkerNode(Node):
         """EndTask 서비스 응답 처리"""
         try:
             response = future.result()
-            robot_id = self.comm_manager.current_robot_id if self.comm_manager.current_robot_id != "unknown" else "libo_a"
             
             if response.success:
                 self.get_logger().info(f"EndTask 서비스 성공: {response.message if response.message else 'No message'}")
                 log("SERVICE", "✅ EndTask 서비스 호출 성공")
-                
-                # 얼굴 표정을 normal로 변경
-                self.publish_face_expression(robot_id, "normal")
                 
             else:
                 self.get_logger().warning(f"EndTask 서비스 실패: {response.message if response.message else 'No message'}")
@@ -983,7 +964,10 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
     
     # STT 실패 시 사용자에게 알림
     if transcript is None:
-        # 음성이 감지되지 않았을 때 사용자에게 TTS로 알림
+        # 음성이 감지되지 않았을 때 얼굴 표정을 'speaking'으로 변경
+        talker_node.publish_face_expression(robot_id, "speaking")
+        
+        # 사용자에게 TTS로 알림
         comm_manager.play_tts_response("음성이 감지되지 않았습니다. 다시 불러주세요.")
         log("TTS", "음성 감지 실패 안내 메시지 재생")
         
@@ -992,6 +976,9 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
             os.remove(tmp_wav)
         except Exception:
             pass
+            
+        # 표정을 normal로 돌려놓음
+        talker_node.publish_face_expression(robot_id, "normal")
         return
 
     # 임시 파일 삭제
@@ -1033,8 +1020,6 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
             # EndTask 서비스 호출 - 유일하게 여기서만 EndTask 호출
             talker_node.call_end_task(robot_id)
             log("SYSTEM", "EndTask 서비스 호출 후 현재 음성 처리 로직 종료")
-            # 얼굴 표정을 normal로 변경
-            talker_node.publish_face_expression(robot_id, "normal")
             # 함수 종료
             return
     
@@ -1045,6 +1030,7 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
         log("AUDIO", "❌ 음성 응답 전송 실패")
         
     log("SYSTEM", "'리보야' 이후 명령 처리 완료, 다시 웨이크워드 대기 중...")
+    talker_node.publish_face_expression(robot_id, "normal")
 
 
 def init_tcp_server():
