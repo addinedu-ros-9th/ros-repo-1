@@ -55,7 +55,6 @@ class HeartbeatSender(Node):  # Heartbeat 발행 노드
             # Heartbeat 메시지 생성
             heartbeat_msg = Heartbeat()  # Heartbeat 메시지 객체 생성
             heartbeat_msg.sender_id = self.sender_id  # 발신자 ID 설정
-            heartbeat_msg.timestamp = self.get_clock().now().to_msg()  # 현재 시간을 타임스탬프로 설정
             
             # 메시지 발행
             self.heartbeat_publisher.publish(heartbeat_msg)  # 토픽으로 메시지 발행
@@ -64,7 +63,7 @@ class HeartbeatSender(Node):  # Heartbeat 발행 노드
             current_time = time.strftime('%H:%M:%S', time.localtime())  # 현재 시간 포맷 변환
             
             # 자세한 로그 출력 (info 레벨로 변경)
-            self.get_logger().info(f'💓 Heartbeat 전송됨 | Sender: {self.sender_id} | Time: {current_time} | Timestamp: {heartbeat_msg.timestamp.sec}.{heartbeat_msg.timestamp.nanosec}')  # 상세 로그 출력
+            self.get_logger().info(f'💓 Heartbeat 전송됨 | Sender: {self.sender_id} | Time: {current_time}')  # 상세 로그 출력
             
         except Exception as e:  # 예외 발생 시 처리
             self.get_logger().error(f'❌ Heartbeat 발행 중 오류: {e}')  # 에러 로그

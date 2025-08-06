@@ -358,8 +358,7 @@ class MainControlTab(QWidget):
         
         # 새 행에 데이터를 채움
         elapsed_time = timestamp - self.heartbeat_start_time
-        timestamp_msg = msg.timestamp
-        timestamp_str = f"{timestamp_msg.sec}.{timestamp_msg.nanosec:09d}"
+        timestamp_str = time.strftime('%H:%M:%S', time.localtime(timestamp))
         
         self.heartbeat_table.setItem(row_position, 0, QTableWidgetItem(msg.sender_id))
         self.heartbeat_table.setItem(row_position, 1, QTableWidgetItem(f"{elapsed_time:.2f}"))

@@ -146,7 +146,7 @@ class BarcodeScannerThread(QThread):
             os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)
             
             # OpenCV VideoCapture 초기화 (imutils 대신)
-            self.cap = cv2.VideoCapture(0)
+            self.cap = cv2.VideoCapture(2)
             if not self.cap.isOpened():
                 self.status_update.emit("❌ 카메라를 열 수 없습니다.")
                 return

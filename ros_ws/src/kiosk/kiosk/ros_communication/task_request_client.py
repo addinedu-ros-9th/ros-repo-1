@@ -135,17 +135,23 @@ class TaskRequestClient(QThread):
             # 서비스 호출 (타임아웃 설정)
             future = self.client.call_async(request)
             
-            # 타임아웃 설정으로 spin_until_future_complete 호출
-            try:
-                rclpy.spin_until_future_complete(
-                    self.node, 
-                    future, 
-                    timeout_sec=30.0  # 30초 타임아웃
-                )
-            except Exception as spin_error:
-                print(f"❌ spin_until_future_complete 오류: {spin_error}")
-                self.task_request_completed.emit(False, f"서비스 호출 타임아웃: {str(spin_error)}")
-                return
+            # 안전한 타임아웃 처리
+            timeout_seconds = 30.0  # 30초 타임아웃
+            start_time = time.time()
+            
+            while not future.done():
+                if time.time() - start_time > timeout_seconds:
+                    print("❌ TaskRequest 서비스 호출 타임아웃")
+                    self.task_request_completed.emit(False, "서비스 호출 타임아웃")
+                    return
+                
+                # 짧은 간격으로 스핀
+                try:
+                    rclpy.spin_once(self.node, timeout_sec=0.1)
+                except Exception as spin_error:
+                    print(f"⚠️ spin_once 오류 (무시): {spin_error}")
+                    time.sleep(0.1)  # 잠시 대기
+                    continue
             
             if future.done():
                 if future.result() is not None:
