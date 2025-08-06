@@ -2,13 +2,12 @@
 # -*- coding: utf-8 -*-
 
 import rclpy
-import time  # [추가] 점진적 감속을 위한 time 모듈
+import time
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
 from libo_interfaces.msg import HumanInfo, DetectionStatus
 from libo_interfaces.srv import ActivateTracker, DeactivateTracker
-from libo_interfaces.msg import TalkCommand
-from libo_interfaces.msg import VoiceCommand
+from libo_interfaces.msg import TalkCommand, VoiceCommand
 from std_srvs.srv import Trigger
 
 class PIDController:
@@ -32,31 +31,28 @@ class PIDController:
     def reset(self):
         self.previous_error, self.integral = 0.0, 0.0
     
-    # [추가] PID 출력 제한을 동적으로 변경하는 메서드
     def set_output_limits(self, min_output, max_output):
-        """PID 제어기의 최대/최소 출력값을 동적으로 설정합니다."""
         self.min_output = min_output
         self.max_output = max_output
 
 class AdvancedAssistFollowFSM(Node):
     """
-    [최종 수정] 점진적 감속 및 상황별 회전 속도 분리 기능이 적용된 FSM 노드.
+    [최종 수정] 로봇 특성을 고려한 '후진 선회' 회피 로직 적용 FSM 노드.
     """
     def __init__(self):
-        super().__init__('advanced_assist_follow_fsm')
+        super().__init__('advanced_assist_follow_fsm_revised')
 
         # --- 1. ROS 파라미터 선언 ---
-        # [수정] 사람 추종 시와 장애물 회피 시의 최대 각속도를 분리
         self.declare_parameter('target_distance', 1.2)
         self.declare_parameter('safe_distance_min', 1.0)
         self.declare_parameter('max_linear_vel', 0.2)
-        self.declare_parameter('avoidance_max_angular_vel', 0.1) # 회피 시 최대 각속도
-        self.declare_parameter('following_max_angular_vel', 0.3) # 추종 시 최대 각속도
+        self.declare_parameter('avoidance_max_angular_vel', 0.1)
+        self.declare_parameter('following_max_angular_vel', 0.3)
         self.declare_parameter('avoidance_linear_vel', 0.1)
         self.declare_parameter('avoidance_angular_vel', 0.2)
         self.declare_parameter('avoidance_backup_vel', -0.1)
-        self.declare_parameter('avoidance_backup_duration_s', 1.5)
-        self.declare_parameter('avoidance_turn_duration_s', 1.0)
+        # [수정] 회피 기동 시간을 단일 파라미터로 통합
+        self.declare_parameter('avoidance_reverse_turn_duration_s', 1.5) 
         self.declare_parameter('avoidance_straight_duration_s', 1.5)
         self.declare_parameter('dist_kp', 1.0); self.declare_parameter('dist_ki', 0.0); self.declare_parameter('dist_kd', 0.1)
         self.declare_parameter('angle_kp', 1.5); self.declare_parameter('angle_ki', 0.0); self.declare_parameter('angle_kd', 0.2)
@@ -67,8 +63,8 @@ class AdvancedAssistFollowFSM(Node):
         self.avoidance_linear_vel = self.get_parameter('avoidance_linear_vel').value
         self.avoidance_angular_vel = self.get_parameter('avoidance_angular_vel').value
         self.avoidance_backup_vel = self.get_parameter('avoidance_backup_vel').value
-        self.avoidance_backup_duration = self.get_parameter('avoidance_backup_duration_s').value
-        self.avoidance_turn_duration = self.get_parameter('avoidance_turn_duration_s').value
+        # [수정] 새로운 시간 파라미터 사용
+        self.avoidance_reverse_turn_duration = self.get_parameter('avoidance_reverse_turn_duration_s').value
         self.avoidance_straight_duration = self.get_parameter('avoidance_straight_duration_s').value
         self.following_max_angular_vel = self.get_parameter('following_max_angular_vel').value
         self.avoidance_max_angular_vel = self.get_parameter('avoidance_max_angular_vel').value
@@ -77,7 +73,6 @@ class AdvancedAssistFollowFSM(Node):
         self.distance_pid = PIDController(
             kp=self.get_parameter('dist_kp').value, ki=self.get_parameter('dist_ki').value, kd=self.get_parameter('dist_kd').value,
             max_output=self.get_parameter('max_linear_vel').value, min_output=-self.get_parameter('max_linear_vel').value)
-        # 초기 각속도 제한은 안전한 회피 기준으로 설정
         self.angle_pid = PIDController(
             kp=self.get_parameter('angle_kp').value, ki=self.get_parameter('angle_ki').value, kd=self.get_parameter('angle_kd').value,
             max_output=self.avoidance_max_angular_vel, min_output=-self.avoidance_max_angular_vel)
@@ -91,7 +86,7 @@ class AdvancedAssistFollowFSM(Node):
         self.avoidance_timer = None
         self.avoidance_turn_direction = None
         self.honk_played = False
-        self.last_cmd_vel = Twist() # [추가] 마지막 속도 명령 저장 변수
+        self.last_cmd_vel = Twist()
 
         self.cmd_vel_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.voice_cmd_pub = self.create_publisher(VoiceCommand, '/voice_command', 10)
@@ -104,11 +99,9 @@ class AdvancedAssistFollowFSM(Node):
         self.deactivate_srv = self.create_service(DeactivateTracker, '/deactivate_tracker', self.handle_deactivate_tracker)
         self.arrived_srv = self.create_service(Trigger, '/trigger_arrival', self.handle_arrival_trigger)
 
-        self.get_logger().info('✅ Advanced Assist Follow FSM 노드 시작 완료 (기능 개선됨)')
+        self.get_logger().info('✅ Advanced Assist Follow FSM 노드 시작 완료 (후진 선회 로직 적용됨)')
 
-    # [추가] 점진적 감속 기능
     def gradual_stop(self, duration=0.5, steps=20):
-        """지정된 시간 동안 속도를 서서히 0으로 줄여 부드럽게 정지합니다."""
         initial_vel = self.last_cmd_vel
         self.get_logger().info('...부드럽게 감속합니다...')
         for i in range(steps + 1):
@@ -118,10 +111,9 @@ class AdvancedAssistFollowFSM(Node):
             cmd_msg.angular.z = initial_vel.angular.z * ratio
             self.cmd_vel_pub.publish(cmd_msg)
             time.sleep(duration / steps)
-        self.last_cmd_vel = Twist() # 정지 후 마지막 속도 초기화
+        self.last_cmd_vel = Twist()
 
     def send_voice_command(self, category, action):
-        """지정된 카테고리와 액션으로 VoiceCommand 메시지를 전송합니다."""
         msg = VoiceCommand()
         msg.robot_id = "libo_a"
         msg.category = category
@@ -130,7 +122,6 @@ class AdvancedAssistFollowFSM(Node):
         self.get_logger().info(f'📢 음성 명령 전송: category="{category}", action="{action}"')
 
     def handle_arrival_trigger(self, request, response):
-        """'/trigger_arrival' 서비스 호출 시 도착 안내 음성을 송출하고 로봇을 정지시킵니다."""
         self.get_logger().info('📍 목적지 도착! 안내 음성을 송출하고 모든 동작을 중지합니다.')
         self.send_voice_command("escort", "arrived")
         self.qr_authenticated = False
@@ -185,40 +176,43 @@ class AdvancedAssistFollowFSM(Node):
             self.stop_robot()
             return
 
+        # --- [수정] 회피 로직 전체 수정 ---
         if self.state == "FOLLOWING":
-            # [수정] 회피 상태 진입 전, PID 각속도 제한을 '회피용'으로 변경
             if self.obstacle_status.left_detected or self.obstacle_status.right_detected:
-                self.get_logger().info("장애물 감지! 회피 기동을 위해 회전 속도를 안전 모드로 변경합니다.")
+                self.get_logger().info("장애물 감지! 회전 속도를 안전 모드로 변경합니다.")
                 self.angle_pid.set_output_limits(-self.avoidance_max_angular_vel, self.avoidance_max_angular_vel)
                 
                 if self.obstacle_status.left_detected:
                     if not self.honk_played: self.send_voice_command("common", "obstacle_detected"); self.honk_played = True
-                    self.get_logger().info("좌측 장애물 감지. 회피 기동(후진->우회전) 시작.")
-                    self.state = "AVOIDING_BACKUP"; self.avoidance_turn_direction = 'RIGHT'
+                    self.get_logger().info("좌측 장애물 감지. 후진 선회 기동(우회전) 시작.")
+                    self.state = "AVOIDING_REVERSE_TURN"
+                    self.avoidance_turn_direction = 'RIGHT'
                 else: # self.obstacle_status.right_detected
                     if not self.honk_played: self.send_voice_command("common", "obstacle_detected"); self.honk_played = True
-                    self.get_logger().info("우측 장애물 감지. 회피 기동(후진->좌회전) 시작.")
-                    self.state = "AVOIDING_BACKUP"; self.avoidance_turn_direction = 'LEFT'
+                    self.get_logger().info("우측 장애물 감지. 후진 선회 기동(좌회전) 시작.")
+                    self.state = "AVOIDING_REVERSE_TURN"
+                    self.avoidance_turn_direction = 'LEFT'
             else:
                 self.perform_following_with_pid(msg)
             return
 
-        # --- 회피 상태 로직 (AVOIDING_BACKUP, AVOIDING_TURN, AVOIDING_STRAIGHT) ---
         cmd_msg = Twist()
-        if self.state == "AVOIDING_BACKUP":
-            cmd_msg.linear.x = self.avoidance_backup_vel
-            if self.avoidance_timer is None: self.avoidance_timer = self.create_timer(self.avoidance_backup_duration, self.transition_to_avoid_turn)
-        
-        elif self.state == "AVOIDING_TURN":
-            cmd_msg.angular.z = self.avoidance_angular_vel if self.avoidance_turn_direction == 'LEFT' else -self.avoidance_angular_vel
-            if self.avoidance_timer is None: self.avoidance_timer = self.create_timer(self.avoidance_turn_duration, self.transition_to_avoid_straight)
+        # [신규] 후진과 회전을 동시에 수행하는 상태
+        if self.state == "AVOIDING_REVERSE_TURN":
+            cmd_msg.linear.x = self.avoidance_backup_vel # 후진
+            cmd_msg.angular.z = self.avoidance_angular_vel if self.avoidance_turn_direction == 'LEFT' else -self.avoidance_angular_vel # 회전
+            
+            if self.avoidance_timer is None:
+                self.avoidance_timer = self.create_timer(self.avoidance_reverse_turn_duration, self.transition_to_avoid_straight)
 
+        # [유지] 회피 기동 후 직진 상태
         elif self.state == "AVOIDING_STRAIGHT":
             cmd_msg.linear.x = self.avoidance_linear_vel
-            if self.avoidance_timer is None: self.avoidance_timer = self.create_timer(self.avoidance_straight_duration, self.transition_to_following)
+            if self.avoidance_timer is None: 
+                self.avoidance_timer = self.create_timer(self.avoidance_straight_duration, self.transition_to_following)
         
         self.cmd_vel_pub.publish(cmd_msg)
-        self.last_cmd_vel = cmd_msg # [추가] 회피 기동 중 속도 저장
+        self.last_cmd_vel = cmd_msg
 
     def perform_following_with_pid(self, msg: HumanInfo):
         if self.honk_played:
@@ -237,7 +231,6 @@ class AdvancedAssistFollowFSM(Node):
             self.stop_robot()
             return
 
-        # [수정] 추종 상태일 때, PID 각속도 제한을 '추종용'으로 민첩하게 변경
         self.angle_pid.set_output_limits(-self.following_max_angular_vel, self.following_max_angular_vel)
         
         distance_error = msg.distance - self.target_distance
@@ -248,43 +241,42 @@ class AdvancedAssistFollowFSM(Node):
         cmd_msg.angular.z = -self.angle_pid.update(angle_error)
         
         self.cmd_vel_pub.publish(cmd_msg)
-        self.last_cmd_vel = cmd_msg # [추가] 추종 중 속도 저장
+        self.last_cmd_vel = cmd_msg
     
-    def transition_to_avoid_turn(self):
-        self.get_logger().info("후진 완료. 회전 시작.")
-        self.state = "AVOIDING_TURN"
-        if self.avoidance_timer: self.avoidance_timer.cancel(); self.avoidance_timer = None
+    # [삭제] 불필요해진 상태 전환 함수
+    # def transition_to_avoid_turn(self):
+    #     ...
 
     def transition_to_avoid_straight(self):
-        self.get_logger().info("회전 완료. 회피 직진 시작.")
+        self.get_logger().info("후진 선회 완료. 회피 직진 시작.")
         self.state = "AVOIDING_STRAIGHT"
         if self.avoidance_timer: self.avoidance_timer.cancel(); self.avoidance_timer = None
 
     def transition_to_following(self):
         self.get_logger().info("회피 기동 완료. 추종 모드로 복귀.")
-        self.stop_robot()
+        self.stop_robot() # 추종 모드 복귀 전 부드럽게 정지
         self.state = "FOLLOWING"
         self.distance_pid.reset()
         self.angle_pid.reset()
 
     def stop_robot(self):
-        """[수정] 점진적 감속 기능이 적용된 로봇 정지 함수."""
         self.get_logger().info('🛑 로봇 정지 절차 시작.')
         self.is_following = False
         if self.avoidance_timer:
             self.avoidance_timer.cancel()
             self.avoidance_timer = None
         
-        # 현재 속도가 0이 아니면 부드럽게 정지
         if abs(self.last_cmd_vel.linear.x) > 0.01 or abs(self.last_cmd_vel.angular.z) > 0.01:
             self.gradual_stop()
         else:
-            self.cmd_vel_pub.publish(Twist()) # 이미 멈춰있으면 즉시 0 명령
+            self.cmd_vel_pub.publish(Twist())
         
-        self.state = "FOLLOWING"
-        self.avoidance_turn_direction = None
-        self.distance_pid.reset()
-        self.angle_pid.reset()
+        # [수정] 정지 시 상태는 FOLLOWING으로 초기화하되, PID 리셋은 복귀 시에만 수행하도록 변경
+        # self.state = "FOLLOWING" # 이 부분은 transition_to_following에서 관리하는 것이 더 명확함
+        # self.avoidance_turn_direction = None
+        # self.distance_pid.reset()
+        # self.angle_pid.reset()
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -296,8 +288,9 @@ def main(args=None):
         if node: node.get_logger().info('키보드 인터럽트로 노드를 종료합니다.')
     finally:
         if node and rclpy.ok():
+            # stop_robot()은 마지막 속도를 기반으로 감속하므로, destroy 전에 호출
             node.get_logger().info('안전한 종료를 위해 로봇을 정지합니다.')
-            node.stop_robot()
+            node.stop_robot() 
             node.destroy_node()
         rclpy.shutdown()
 
