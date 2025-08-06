@@ -12,10 +12,16 @@ import rclpy
 from rclpy.node import Node
 from google.cloud import texttospeech
 from libo_interfaces.msg import VoiceCommand
+try:
+    from pydub import AudioSegment
+    PYDUB_AVAILABLE = True
+except ImportError:
+    print("pydub 라이브러리를 찾을 수 없습니다. MP3 재생이 제한될 수 있습니다.")
+    PYDUB_AVAILABLE = False
 
 # ======================== 상수 정의 =========================
-# AI_SERVICE_IP = "192.168.1.7"            # AI Service IP (TCP 서버)
-AI_SERVICE_IP = "127.0.0.1"            # AI Service IP (TCP 서버)
+AI_SERVICE_IP = "192.168.1.7"            # AI Service IP (TCP 서버)
+# AI_SERVICE_IP = "127.0.0.1"            # AI Service IP (TCP 서버)
 SPEAKER_PORT = 7002                     # 스피커 출력용 포트 (TCP)
 
 CHANNELS = 1                           # 모노 채널
@@ -38,12 +44,51 @@ if ros_ws_index != -1:
 else:
     # 백업 방법: 현재 위치에서 상위로 올라가며 찾기
     PROJECT_ROOT = os.path.abspath(os.path.join(current_path, '../../../../../../'))
-    
-# MP3 효과음 디렉토리 설정
-MP3_EFFECTS_DIR = os.path.join(PROJECT_ROOT, "data", "mp3_effect_files")
 
-# Google Cloud 인증 파일 경로 설정
-GOOGLE_CREDS_PATH = os.path.join(PROJECT_ROOT, "data", "fleet-unison-452704-j5-31aaeff5ac33.json")
+# MP3 효과음 디렉토리 설정 (여러 가능성 검사)
+possible_mp3_paths = [
+    os.path.join(PROJECT_ROOT, "data", "mp3_effect_files"),  # 표준 경로
+    os.path.join(PROJECT_ROOT, "ros_ws", "data", "mp3_effect_files"),  # ros_ws 내부 경로
+    os.path.join(current_path, "../../../..", "data", "mp3_effect_files"),  # 상대 경로
+    "/home/addinedu/Github_Repository/ros-repo-1/data/mp3_effect_files"  # 절대 경로
+]
+
+# 존재하는 첫 번째 경로 사용
+MP3_EFFECTS_DIR = None
+for path in possible_mp3_paths:
+    if os.path.exists(path):
+        MP3_EFFECTS_DIR = path
+        print(f"MP3 효과음 디렉토리 발견: {MP3_EFFECTS_DIR}")
+        break
+
+if MP3_EFFECTS_DIR is None:
+    print(f"[ERROR] MP3 효과음 디렉토리를 찾을 수 없습니다. 기본 경로 사용.")
+    MP3_EFFECTS_DIR = os.path.join(PROJECT_ROOT, "data", "mp3_effect_files")
+    # 디렉토리가 없으면 생성
+    try:
+        os.makedirs(MP3_EFFECTS_DIR, exist_ok=True)
+        print(f"MP3 효과음 디렉토리 생성: {MP3_EFFECTS_DIR}")
+    except Exception as e:
+        print(f"MP3 효과음 디렉토리 생성 실패: {str(e)}")
+
+# Google Cloud 인증 파일 경로 설정 (여러 가능성 검사)
+possible_creds_paths = [
+    os.path.join(PROJECT_ROOT, "data", "fleet-unison-452704-j5-31aaeff5ac33.json"),
+    os.path.join(PROJECT_ROOT, "ros_ws", "data", "fleet-unison-452704-j5-31aaeff5ac33.json"),
+    "/home/addinedu/Github_Repository/ros-repo-1/data/fleet-unison-452704-j5-31aaeff5ac33.json"
+]
+
+# 존재하는 첫 번째 경로 사용
+GOOGLE_CREDS_PATH = None
+for path in possible_creds_paths:
+    if os.path.exists(path):
+        GOOGLE_CREDS_PATH = path
+        print(f"Google Cloud 인증 파일 발견: {GOOGLE_CREDS_PATH}")
+        break
+
+if GOOGLE_CREDS_PATH is None:
+    print(f"[ERROR] Google Cloud 인증 파일을 찾을 수 없습니다.")
+    GOOGLE_CREDS_PATH = os.path.join(PROJECT_ROOT, "data", "fleet-unison-452704-j5-31aaeff5ac33.json")
 # ===========================================================
 
 def get_kr_time():
@@ -369,15 +414,62 @@ class SpeakerNode(Node):
             # MP3 파일 경로 구성
             file_path = os.path.join(MP3_EFFECTS_DIR, file_name)
             
+            # 파일이 존재하는지 확인
             if not os.path.exists(file_path):
                 print(f"[{get_kr_time()}][ERROR] MP3 파일이 존재하지 않습니다: {file_path}")
-                return False
+                
+                # 파일이 없는 경우 가능한 전체 경로 목록 출력
+                print(f"[{get_kr_time()}][DEBUG] MP3_EFFECTS_DIR: {MP3_EFFECTS_DIR}")
+                if os.path.exists(MP3_EFFECTS_DIR):
+                    files = os.listdir(MP3_EFFECTS_DIR)
+                    print(f"[{get_kr_time()}][DEBUG] 디렉토리 내 파일 목록: {files}")
+                
+                # TTS로 대체
+                return self.play_tts_response(f"효과음 {file_name}을 찾을 수 없습니다.")
                 
             print(f"[{get_kr_time()}][AUDIO] MP3 효과음 재생 시작: {file_name}")
             
-            # TODO: MP3 파일을 오디오 데이터로 변환하여 스피커에 출력하는 코드 구현
-            # 현재는 구현되지 않았으므로 TTS로 대체
-            return self.play_tts_response(f"효과음 {file_name}을 재생하려 했으나 기능이 구현되지 않았습니다.")
+            # pydub 라이브러리가 있으면 MP3 재생
+            if PYDUB_AVAILABLE:
+                try:
+                    # MP3 파일 로드
+                    sound = AudioSegment.from_mp3(file_path)
+                    
+                    # 24kHz로 리샘플링 (RATE와 일치하도록)
+                    if sound.frame_rate != RATE:
+                        sound = sound.set_frame_rate(RATE)
+                    
+                    # 모노로 변환 (채널 수가 다른 경우)
+                    if sound.channels != CHANNELS:
+                        sound = sound.set_channels(CHANNELS)
+                        
+                    # 볼륨 약간 증가 (3dB)
+                    sound = sound + 3
+                    
+                    # float32 데이터로 변환
+                    samples = np.array(sound.get_array_of_samples())
+                    audio_float32 = samples.astype(np.float32) / 32768.0
+                    
+                    # 클리핑 방지
+                    audio_float32 = np.clip(audio_float32, -1.0, 1.0)
+                    
+                    # 오디오 큐에 추가하여 재생
+                    for i in range(0, len(audio_float32), CHUNK):
+                        chunk = audio_float32[i:i + CHUNK]
+                        if len(chunk) < CHUNK:
+                            chunk = np.pad(chunk, (0, CHUNK - len(chunk)))
+                        self.audio_queue.put(chunk.tobytes())
+                    
+                    print(f"[{get_kr_time()}][AUDIO] MP3 효과음 '{file_name}' 큐에 추가 완료 (길이: {len(audio_float32)} 샘플)")
+                    return True
+                except Exception as e:
+                    print(f"[{get_kr_time()}][ERROR] MP3 처리 중 오류 발생: {str(e)}")
+                    # 오류 발생 시 TTS로 대체
+                    return self.play_tts_response(f"효과음 재생 중 오류가 발생했습니다.")
+            else:
+                # pydub이 없으면 TTS로 대체
+                print(f"[{get_kr_time()}][WARNING] pydub 라이브러리 없음, TTS로 대체합니다.")
+                return self.play_tts_response(f"효과음 {file_name}을 재생하려 했으나 pydub 라이브러리가 없습니다.")
             
         except Exception as e:
             print(f"[{get_kr_time()}][WARNING] MP3 파일 로드 실패, TTS로 대체: {str(e)}")

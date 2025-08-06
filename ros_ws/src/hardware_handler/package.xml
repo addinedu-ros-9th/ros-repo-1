@@ -24,6 +24,7 @@
   <exec_depend>google-cloud-texttospeech</exec_depend>
   <exec_depend>pytz</exec_depend>
   <exec_depend>python3-pyaudio</exec_depend>
+  <exec_depend>python3-pydub</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>
