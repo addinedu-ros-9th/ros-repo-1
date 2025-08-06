@@ -144,8 +144,8 @@ VOICE_COMMANDS = {
     # 도움 관련 음성 명령
     "assist": {
         "depart_base": {"type": "tts", "value": "출발합니다~"},
-        "arrived_kiosk": {"type": "tts", "value": "어시스트를 시작하시면 QR 코드를 카메라 앞에 대주세요"},
-        "qr_authenticated": {"type": "tts", "value": "QR 인증 완료! 어시스트를 시작하면 카메라 앞에서 대기 해주시길 바랍니다."},
+        "arrived_kiosk": {"type": "tts", "value": "어시스트를 시작하시려면 QR 코드를 카메라 앞에 대주세요"},
+        "qr_authenticated": {"type": "tts", "value": "QR 인증 완료! 어시스트를 시작하기 위해 카메라 앞에 서주세요."},
         "no_person_5s": {"type": "tts", "value": "감지 실패!"},
         "person_detected": {"type": "tts", "value": "감지 성공!"},
         "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},       # 네? / (삐빅)
@@ -258,7 +258,7 @@ def analyze_intent(client, transcript):
         "사용자의 발화를 듣고, 아래 4가지 의도 중 하나로 분류하세요.\n\n"
         "- pause_follow: '잠깐 멈춰', '멈춰봐' 등 일시정지 명령\n"
         "- resume_follow: '다시 따라와', '다시 시작해' 등 팔로윙 재개 명령\n"
-        "- stop_follow: '어시스트 그만하고 복귀해', '그만' 등 어시스트 종료 명령\n"
+        "- task_end: '어시스트 종료', '그만', '복귀' 등 작업 종료 명령\n"
         "- ignore: '고마워', '아니야' 등 기타 대화나 무시해도 되는 표현\n\n"
         "결과는 반드시 다음 JSON 형식으로만 출력해야 합니다:\n"
         '{"intent": "..."}'
@@ -1012,10 +1012,10 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
         if success:
             talker_node.publish_talk_command(robot_id, "stop")
             
-    elif intent == "stop_follow":
-        # 어시스트 종료: EndTask 서비스 호출
-        log("RESPONSE", "'어시스트 종료' 명령 처리")
-        success = comm_manager.play_tts_response("네, 어시스트를 종료하고 복귀하겠습니다.")
+    elif intent == "task_end":
+        # 작업 종료: EndTask 서비스 호출
+        log("RESPONSE", "'작업 종료' 명령 처리")
+        success = comm_manager.play_tts_response("네, 작업을 종료하고 복귀하겠습니다.")
         if success:
             # EndTask 서비스 호출 - 유일하게 여기서만 EndTask 호출
             talker_node.call_end_task(robot_id)
