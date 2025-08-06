@@ -421,7 +421,7 @@ class RobotFaceGUI(QMainWindow):
         
         # ROS 노드를 통해 FaceExpression 메시지 발행 (테스트용)
         if self.ros_node and hasattr(self.ros_node, 'publish_face_expression'):
-            self.ros_node.publish_face_expression(self.current_robot_id, state, f"Manual change to {state}")
+            self.ros_node.publish_face_expression(self.current_robot_id, state)
     
     def update_status_display(self):
         """상태 표시 업데이트"""
@@ -461,7 +461,7 @@ class RobotFaceGUI(QMainWindow):
             
             if self.ros_node:
                 self.ros_node.get_logger().info(
-                    f"🎭 FaceExpression 수신: {msg.robot_id} -> {msg.expression_type} ({msg.description})"
+                    f"🎭 FaceExpression 수신: {msg.robot_id} -> {msg.expression_type}"
                 )
         else:
             print(f"❌ robot_id 불일치: 수신={msg.robot_id}, GUI={self.current_robot_id}")
@@ -502,13 +502,12 @@ class RobotFaceNode(Node):
         else:
             print(f"❌ GUI 인스턴스가 없음")
     
-    def publish_face_expression(self, robot_id, expression_type, description=""):
+    def publish_face_expression(self, robot_id, expression_type):
         """FaceExpression 메시지 발행 (테스트용)"""
         if FaceExpression and hasattr(self, 'face_expression_pub'):
             msg = FaceExpression()
             msg.robot_id = robot_id
             msg.expression_type = expression_type
-            msg.description = description
             self.face_expression_pub.publish(msg)
             self.get_logger().info(f"📤 FaceExpression 발행: {robot_id} -> {expression_type}")
 
