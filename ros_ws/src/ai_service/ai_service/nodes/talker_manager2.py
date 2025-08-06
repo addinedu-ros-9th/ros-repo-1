@@ -784,7 +784,7 @@ class TalkerNode(Node):
             response: 성공 여부와 메시지가 포함된 응답
         """
         robot_id = request.robot_id
-        self.get_logger().info(f'ActivateTalker 서비스 호출됨 (robot_id: {robot_id})')
+        self.get_logger().info(f'\nActivateTalker 서비스 호출됨 (robot_id: {robot_id})')
         log("SERVICE", f"🔊 토커매니저 활성화 요청 수신 (robot_id: {robot_id})")
         
         try:
@@ -844,8 +844,17 @@ class TalkerNode(Node):
         msg.robot_id = robot_id
         msg.expression_type = expression_type
         
+        # 표정 타입에 맞는 이모지 선택
+        emoji = "😐"  # 기본 이모지
+        if expression_type == "normal":
+            emoji = "😊"
+        elif expression_type == "listening":
+            emoji = "👂"
+        elif expression_type == "speaking":
+            emoji = "🗣️"
+            
         self.get_logger().info(f"FaceExpression 발행: robot_id={robot_id}, expression_type={expression_type}")
-        log("FACE", f"😀 얼굴 표정 변경: {robot_id} → {expression_type}")
+        log("FACE", f"{emoji} 얼굴 표정 변경: {robot_id} → {expression_type}")
         self.face_expr_pub.publish(msg)
 
 
@@ -916,7 +925,7 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
         comm_manager, 
         max_time=15.0,
         silence_threshold=300,
-        silence_duration=1.5
+        silence_duration=2.5
     )
     
     log("RECORD", f"음성 수집 완료. 총 {len(collected)} bytes, 소요 시간: {duration:.1f}초")
