@@ -76,8 +76,7 @@ class HeartbeatMonitorTab(QWidget): # 하트비트 모니터링 탭을 정의하
 
         # 새 행에 데이터를 채움
         elapsed_time = log_entry['received_time'] - self.start_time # 경과 시간 계산
-        timestamp = log_entry['msg'].timestamp # 메시지의 타임스탬프
-        timestamp_str = f"{timestamp.sec}.{timestamp.nanosec:09d}" # 타임스탬프를 문자열로 변환
+        timestamp_str = time.strftime('%H:%M:%S', time.localtime(log_entry['received_time'])) # 현재 시간을 문자열로 변환
 
         self.heartbeat_table.setItem(row_position, 0, QTableWidgetItem(log_entry['msg'].sender_id)) # 0번 열: Sender ID
         self.heartbeat_table.setItem(row_position, 1, QTableWidgetItem(f"{elapsed_time:.2f}")) # 1번 열: 경과 시간 (소수점 둘째자리까지)
