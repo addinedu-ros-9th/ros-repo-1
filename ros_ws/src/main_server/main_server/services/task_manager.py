@@ -755,11 +755,7 @@ class TaskManager(Node):
             if not available_robots:
                 self.get_logger().error(f'❌ 사용 가능한 로봇이 없음 - {task_type_display} 거절')
                 response.success = False
-<<<<<<< HEAD
-                response.message = f"사용 가능한 로봇이 없어서 {request.task_type} task를 수행할 수 없습니다."
-=======
                 response.message = "사용 가능한 로봇이 없습니다."
->>>>>>> d99b9366cb750603d30d31b37e655b0fe42b4396
                 return response
             
             # 사용 가능한 로봇 중 하나를 임의로 선택
