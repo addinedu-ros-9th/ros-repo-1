@@ -61,50 +61,20 @@ ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200 -> 
 ros2 run kiosk main_ui
 
 
+
+
+
+
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 
-1. 터미널 1: 메인 서버(책찾기 기능) 실행
-ros2 run main_server book_search_service
-
-2. 터미널 2: 키오스크 GUI 실행
-ros2 run kiosk main_ui
-
-3. 입고 gui 실행
-ros2 run stock stock_gui
-
-4. admin gui 실행
-
-5. libo_gui 실행
-ros2 run libo_gui robot_face_gui 
-
-
-6. Libo navigator 실행
-빅핑키 가제보  브링업   런치
-ros2 launch vicpinky_bringup gazebo_bringup.launch.xml 
-
-빅핑키 네비게이션 브링업 (심타임 조심) 런치
-ros2 launch vicpinky_navigation bringup_launch.xml use_sim_time:=true
-
-빅핑키 네비게이션 시각화 riviz(심타임조심 런치
-ros2 launch vicpinky_navigation nav2_view.launch.xml use_sim_time:=true
-리보 네비게이터 노드 런
- ros2 run libo_navigator navigator_node 
 
 
 
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < Libo Gazebo navigator 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 
-ros2 run main_server task_manager
-
-ros2 run admin admin_gui 
-
-
-
-ros2 run hardware_handler heartbeat_sender
-
-빅핑키 ai_service escort
-ros2 run ai_service ros2_bridege_node.py
-
-python310
-python ros-repo-1/ros_ws/src/ai_service/ai_service/nodes/strongsort_client.py
+ros2 launch vicpinky_bringup gazebo_bringup.launch.xml                      빅핑키 가제보  브링업   런치
+ros2 launch vicpinky_navigation bringup_launch.xml use_sim_time:=true       빅핑키 네비게이션 브링업 (심타임 조심) 런치
+ros2 launch vicpinky_navigation nav2_view.launch.xml use_sim_time:=true     빅핑키 네비게이션 시각화 riviz(심타임조심) 런치
+ros2 run libo_navigator navigator_node                                      리보 네비게이터 노드 런
