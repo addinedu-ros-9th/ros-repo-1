@@ -41,6 +41,9 @@ def main(args=None):
     # 이렇게 하면 드라이버 충돌을 피하고 안정성이 크게 향상됩니다.
     cap = cv2.VideoCapture(WEBCAM_PATH, cv2.CAP_V4L2)
 
+    # 👉 버퍼 사이즈 설정 (지연 최소화)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
     # 카메라가 성공적으로 열렸는지 확인하고, 실패 시 에러를 발생시켜 프로그램을 중단합니다.
     if not cap.isOpened():
         # 에러 메시지도 경로를 사용하도록 수정하여 어떤 카메라 문제인지 명확히 합니다.
@@ -65,8 +68,8 @@ def main(args=None):
             frame = cv2.resize(frame, (640, 480))
 
             # 이미지를 JPEG 형식으로 압축합니다.
-            # 압축 품질을 40으로 설정 (0~100, 값이 낮을수록 압축률이 높아지고 화질은 낮아짐)
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 40]
+            # 압축 품질을 40->30으로 설정 (0~100, 값이 낮을수록 압축률이 높아지고 화질은 낮아짐)
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 30]
             # 설정된 품질로 프레임을 JPEG으로 인코딩합니다.
             ret, jpeg = cv2.imencode('.jpg', frame, encode_param)
             # 인코딩에 실패하면 경고 메시지를 출력하고 다음 루프로 넘어갑니다.
@@ -99,8 +102,8 @@ def main(args=None):
 
             # 다음 프레임을 위해 ID를 1 증가시킵니다.
             frame_id += 1
-            # 0.1초간 대기하여 전송률을 약 10fps로 조절합니다. (CPU 부하 감소 효과)
-            time.sleep(0.1)
+            # 0.1->0.07초간 대기하여 전송률을 약 30fps로 조절합니다. (CPU 부하 감소 효과)
+            time.sleep(0.07)
 
     # 사용자가 Ctrl+C를 눌러 프로그램을 중단하려고 할 때 발생하는 예외 처리
     except KeyboardInterrupt:

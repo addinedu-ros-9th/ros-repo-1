@@ -18,7 +18,7 @@ import math  # 수학 계산을 위한 라이브러리
 # 딥러닝 연산을 수행할 장치를 설정합니다. NVIDIA GPU(cuda)가 있으면 사용하고, 없으면 CPU를 사용합니다.
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 # 사용할 YOLO(You Only Look Once) 객체 탐지 모델의 버전을 지정합니다. 'm'은 medium 모델을 의미합니다.
-YOLO_MODEL_NAME = 'yolov5m'
+YOLO_MODEL_NAME = 'yolov5n'
 # 재식별(Re-identification) 모델의 가중치 파일 경로입니다. StrongSORT가 객체의 외모 특징을 추출하는 데 사용합니다.
 REID_WEIGHT_PATH = Path('./osnet_x1_0_msmt17.pt')
 # 이미지(비디오 프레임)를 수신할 UDP 포트 번호입니다.
@@ -38,7 +38,7 @@ last_status_send_time = 0  # 루프 밖에 정의
 # ===== 모델 로드 (Model Loading) =====
 print("🤖 모델을 로딩합니다...")
 # YOLOv5 모델을 PyTorch Hub를 통해 로드하고, 지정된 장치(DEVICE)로 보냅니다.
-yolo_model = torch.hub.load('ultralytics/yolov5', YOLO_MODEL_NAME, pretrained=True).to(DEVICE)
+yolo_model = torch.hub.load('ultralytics/yolov5n', YOLO_MODEL_NAME, pretrained=True).to(DEVICE)
 # StrongSORT 추적기를 초기화합니다.
 tracker = StrongSORT(
     model_weights=REID_WEIGHT_PATH,  # 재식별 모델 가중치
@@ -113,7 +113,9 @@ try:
         if frame is None: continue  # 디코딩 실패 시 다음 루프로 넘어갑니다.
 
         # 2. 객체 탐지 및 추적
+        start_time = time.time()
         results = yolo_model(frame)  # YOLO 모델로 현재 프레임의 모든 객체를 탐지합니다.
+        print(f"🕒 YOLO Inference Time: {time.time() - start_time:.3f}s") #yolo처리 디버깅
         detections = results.xyxy[0]  # 탐지 결과를 [x1, y1, x2, y2, conf, class] 형식으로 가져옵니다.
         person_detections = detections[detections[:, 5] == 0]  # 클래스 ID가 0인 '사람'만 필터링합니다.
         # 필터링된 사람 정보를 StrongSORT 추적기에 전달하여 ID가 포함된 추적 결과를 받습니다.
