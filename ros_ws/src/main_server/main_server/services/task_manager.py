@@ -1192,6 +1192,30 @@ class TaskManager(Node):
             response = future.result()
             if response.success:
                 self.get_logger().info(f'✅ 네비게이션 취소 성공: {response.message}')
+                
+                # 네비게이션 취소 성공 시 모든 부가 기능 비활성화 및 stage 변경
+                if self.tasks and len(self.tasks) > 0:
+                    current_task = self.tasks[0]  # 첫 번째 활성 task
+                    robot_id = current_task.robot_id
+                    
+                    self.get_logger().info(f'🔄 [{current_task.task_type}] 네비게이션 취소 - 모든 부가 기능 비활성화 시작')
+                    
+                    # 1. Vision Manager 관련 기능들 비활성화
+                    self.deactivate_detector(robot_id)  # 감지기 비활성화
+                    self.deactivate_qr_scanner(robot_id)  # QR 스캐너 비활성화
+                    
+                    # 2. Talker/Tracker 비활성화
+                    self.deactivate_talker(robot_id)  # Talker 비활성화
+                    self.deactivate_tracker(robot_id)  # Tracker 비활성화
+                    
+                    # 3. Stage를 3으로 변경
+                    current_task.stage = 3  # stage를 3으로 변경
+                    self.get_logger().info(f'🔄 [{current_task.task_type}] 네비게이션 취소로 인한 stage 변경: 3')
+                    
+                    # 4. stage 3의 stage_start 이벤트 처리
+                    self.process_task_stage_logic(current_task, 3, 'stage_start')
+                    
+                    self.get_logger().info(f'✅ [{current_task.task_type}] 네비게이션 취소 및 정리 완료')
             else:
                 self.get_logger().warning(f'⚠️ 네비게이션 취소 실패: {response.message}')
         except Exception as e:
