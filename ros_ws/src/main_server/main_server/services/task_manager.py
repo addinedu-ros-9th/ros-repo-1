@@ -141,8 +141,14 @@ class Robot:  # 로봇 정보를 담는 클래스
         """하트비트를 받았을 때 호출되는 메서드"""
         self.last_heartbeat_time = time.time()  # 마지막 하트비트 시간 업데이트
 
-    def check_timeout(self, timeout_seconds=3):  # 타임아웃 체크
-        """지정된 시간(기본 3초) 이내에 하트비트가 수신되었는지 확인하는 메서드"""
+    def check_timeout(self, timeout_seconds=5):  # 타임아웃 체크 (5초: 적절한 안전 마진, 7초: 더 안전함)
+        """지정된 시간(기본 5초) 이내에 하트비트가 수신되었는지 확인하는 메서드
+        
+        Timeout 설정 가이드:
+        - 3초: 빠른 감지, 하지만 네트워크 지연 시 불안정
+        - 5초: 적절한 균형 (권장) - 4초 안전 마진
+        - 7초: 더 안전하지만 장애 감지가 느림
+        """
         current_time = time.time()  # 현재 시간을 가져옴
         time_since_last_heartbeat = current_time - self.last_heartbeat_time  # 마지막 하트비트를 받은 후 얼마나 시간이 지났는지 계산
         return time_since_last_heartbeat <= timeout_seconds  # 타임아웃 여부를 직접 반환 (True: 정상, False: 타임아웃)
