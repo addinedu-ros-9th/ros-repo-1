@@ -22,7 +22,7 @@ from google.cloud import texttospeech
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.service import Service
-from libo_interfaces.msg import VoiceCommand, TalkCommand, FaceExpression
+from libo_interfaces.msg import TalkCommand, FaceExpression
 from libo_interfaces.srv import EndTask, ActivateTalker, DeactivateTalker
 
 
@@ -680,14 +680,6 @@ class TalkerNode(Node):
         # 콜백 그룹 생성 - 동시에 여러 콜백을 처리하기 위함
         self.callback_group = ReentrantCallbackGroup()
         
-        # VoiceCommand 토픽 구독
-        self.voice_cmd_sub = self.create_subscription(
-            VoiceCommand,
-            '/voice_command',
-            self.voice_command_callback,
-            10
-        )
-        
         # TalkCommand 토픽 발행자
         self.talk_cmd_pub = self.create_publisher(
             TalkCommand,
@@ -839,28 +831,6 @@ class TalkerNode(Node):
             response.message = f"토커매니저 비활성화 중 오류 발생: {str(e)}"
             log("SERVICE", f"❌ 토커매니저 비활성화 실패: {str(e)}")
             return response
-        
-    def voice_command_callback(self, msg):
-        """
-        VoiceCommand 메시지 처리 콜백 - 이제는 speaker_node2에서 직접 처리함
-        로그 기록만 하고, 실제 음성 생성 및 재생은 더 이상 수행하지 않음
-        
-        Args:
-            msg.robot_id: 로봇 ID (예: "libo_a", "libo_b")
-            msg.category: 명령 카테고리 (예: "escort", "delivery")
-            msg.action: 명령 액션 (예: "arrived", "return")
-        """
-        robot_id = msg.robot_id
-        category = msg.category
-        action = msg.action
-        
-        log("COMMAND", f"{'=' * 30} VoiceCommand 수신 (speaker_node2로 전달됨) {'=' * 30}")
-        self.get_logger().info(f'VoiceCommand 수신 기록: 로봇={robot_id}, 카테고리={category}, 액션={action}')
-        
-        if success:
-            self.get_logger().info(f"음성 명령 '{category}.{action}' 성공적으로 실행됨")
-        else:
-            self.get_logger().warning(f"음성 명령 '{category}.{action}' 실행 실패")
     
     def publish_face_expression(self, robot_id, expression_type):
         """
@@ -1062,7 +1032,7 @@ def main(args=None):
     udp_thread = comm_manager.start_udp_receiver()
     tcp_thread = comm_manager.start_tcp_server()
 
-    # ========== 2. ROS2 노드 생성 (VoiceCommand 메시지 구독용) ==========
+    # ========== 2. ROS2 노드 생성 (FaceExpression 메시지 발행용) ==========
     log("INIT", "ROS2 노드 생성 중...")
     talker_node = TalkerNode(comm_manager)
     

@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>hardware_handler</name>
+    <name>hardware_handler</name>
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="ajferhcz153@gmail.com">addinedu</maintainer>
@@ -19,7 +19,11 @@
   <test_depend>python3-pytest</test_depend>
 
   <exec_depend>python3-opencv</exec_depend>
-  <exec_depend>python3-numpy</exec_depend> 
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>libo_interfaces</exec_depend>
+  <exec_depend>google-cloud-texttospeech</exec_depend>
+  <exec_depend>pytz</exec_depend>
+  <exec_depend>python3-pyaudio</exec_depend>
 
   <export>
     <build_type>ament_python</build_type>

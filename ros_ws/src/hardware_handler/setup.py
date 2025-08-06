@@ -24,6 +24,7 @@ setup(
             'cam_sender = hardware_handler.nodes.cam_sender:main',
             'mic_streamer = hardware_handler.nodes.mic_streamer:main',
             'speaker_node = hardware_handler.nodes.speaker_node:main',
+            'speaker_node2 = hardware_handler.nodes.speaker_node2:main',
             'heartbeat_sender = hardware_handler.nodes.heartbeat_sender:main',
             'joystick_control = hardware_handler.nodes.joystick_control:main',
         ],
