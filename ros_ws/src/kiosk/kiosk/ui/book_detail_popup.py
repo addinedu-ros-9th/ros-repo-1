@@ -257,10 +257,6 @@ class BookDetailPopup(QDialog):
                 """)
             self.bookStockLabel.setText(stock_text)
             
-            # ISBN
-            isbn = self.book_info.get('isbn', 'ISBN 정보 없음')
-            self.bookIsbnLabel.setText(f"ISBN: {isbn}")
-            
             print("✅ 책 정보 표시 완료")
             
         except Exception as e:

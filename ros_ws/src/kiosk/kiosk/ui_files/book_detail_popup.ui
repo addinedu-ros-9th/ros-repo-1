@@ -314,6 +314,7 @@
        </property>
       </widget>
      </item>
+
      <item>
       <widget class="QPushButton" name="escortRequestButton">
        <property name="minimumSize">
