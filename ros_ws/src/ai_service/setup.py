@@ -24,6 +24,7 @@ setup(
             'follower = ai_service.nodes.follower:main',
             'vision_manager = ai_service.nodes.vision_manager:main',
             'talker_manager = ai_service.nodes.talker_manager:main',
+            'talker_manager2 = ai_service.nodes.talker_manager2:main',
             'test_voice_command_maker = ai_service.nodes.test_voice_command_maker:main', 
             'qr_scanner_node = ai_service.nodes.qr_scanner_node:main',
             'human_detector_node = ai_service.nodes.human_detector_node:main',
