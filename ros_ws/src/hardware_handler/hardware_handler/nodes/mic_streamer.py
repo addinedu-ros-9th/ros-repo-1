@@ -9,7 +9,8 @@ AI_SERVICE = "192.168.1.7"                # 추후 AI 서비스 서버 IP
 MIC_STREAM_PORT = 7010           
 
 MIC_INDEX = None                        # 자동 선택
-NATIVE_RATE = 48000                    
+NATIVE_RATE = 44100                     # 44100 Hz 웹캠 마이크 
+# NATIVE_RATE = 48000                     # 48000 Hz 마이크
 CHANNELS = 1                            # 모노 채널
 CHUNK = 2048                            
 

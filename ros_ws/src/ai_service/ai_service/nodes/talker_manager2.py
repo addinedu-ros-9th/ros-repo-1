@@ -33,7 +33,8 @@ MIC_STREAM_PORT = 7010                 # 🎤 마이크 스트림 포트 (UDP �
 SPEAKER_PORT = 7002                    # 🔊 스피커 출력 포트 (TCP 서버)
 
 # 오디오 설정
-NATIVE_RATE = 48000                    # 🎵 원본 샘플링 레이트 (mic_streamer와 동일 int16)
+# NATIVE_RATE = 48000                    # 🎵 원본 샘플링 레이트 (mic_streamer와 동일 int16)
+NATIVE_RATE = 44100                    # 🎵 원본 샘플링 레이트 (mic_streamer와 동일 int16, 웹캠 마이크 버전)
 TARGET_RATE = 16000                    # 🎯 웨이크워드 처리용 레이트
 TTS_RATE = 24000                       # 🗣️ TTS 출력 레이트
 
