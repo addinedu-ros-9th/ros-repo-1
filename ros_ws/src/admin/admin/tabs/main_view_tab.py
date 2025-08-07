@@ -16,6 +16,7 @@ from PyQt5 import uic
 from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 import math
+from geometry_msgs.msg import PoseWithCovarianceStamped
 
 # TaskStatus 메시지 import
 from libo_interfaces.msg import TaskStatus, OverallStatus
@@ -131,6 +132,22 @@ class MainViewTab(QWidget):
         self.keys_pressed = set()  # 현재 눌린 키들 저장
         self.animation_timer = None  # 애니메이션 타이머
         
+        # 실제 로봇 좌표 저장 변수들
+        self.real_robot_x = 0.0  # 실제 로봇 X 좌표
+        self.real_robot_y = 0.0  # 실제 로봇 Y 좌표
+        self.real_robot_yaw = 0.0  # 실제 로봇 Yaw 각도
+        self.real_robot_received = False  # 실제 로봇 좌표 수신 여부
+        
+        # 캘리브레이션을 위한 오프셋 변수들 (로봇 아이콘 중앙 기준)
+        self.offset_x = 569.24 - 5 - 10  # X축 오프셋 (실제 0,0과 UI 0,0의 차이) - 5만큼 왼쪽 - 20픽셀 중앙 조정
+        self.offset_y = 385.48 - 10 - 10  # Y축 오프셋 - 10만큼 위로 - 20픽셀 중앙 조정
+        
+        # 부드러운 움직임을 위한 보간 변수들
+        self.target_ui_x = 0.0  # 목표 UI X 좌표
+        self.target_ui_y = 0.0  # 목표 UI Y 좌표
+        self.target_ui_rotation = 0.0  # 목표 UI 회전
+        self.interpolation_factor = 0.8  # 보간 계수 (0.8로 높여서 더 빠르게)
+        
         self.init_ui()  # UI 초기화
         self.init_ros_connections()  # ROS 연결 초기화
         self.init_timers()  # 타이머 초기화
@@ -207,6 +224,15 @@ class MainViewTab(QWidget):
             OverallStatus, 'robot_status', self.robot_status_callback, 10
         )
         self.get_logger().info("✅ OverallStatus 구독자 초기화 완료")
+
+        # AMCL pose 구독자 추가
+        self.amcl_pose_subscription = self.ros_node.create_subscription(
+            PoseWithCovarianceStamped, '/amcl_pose', self.amcl_pose_callback, 10
+        )
+        self.get_logger().info("✅ AMCL pose 구독자 초기화 완료")
+        
+        # 구독 확인을 위한 디버그 로그 추가
+        self.get_logger().info("🔍 AMCL pose 구독 시작 - /amcl_pose 토픽 대기 중...")
     
     def init_timers(self):
         """타이머 초기화"""
@@ -353,6 +379,9 @@ class MainViewTab(QWidget):
                     rect = pixmap.rect()
                     scene.setSceneRect(QRectF(rect))
                     
+                    # 지도 크기와 위치 정보 로그 출력
+                    self.get_logger().info(f"🗺️ 지도 정보: 크기={pixmap.width()}x{pixmap.height()}, 씬크기={scene.sceneRect().width()}x{scene.sceneRect().height()}")
+                    
                     # 로봇 아이콘 추가 (지도 한가운데)
                     robot_icon_path = os.path.join(get_package_share_directory('admin'), 'resource', 'libo_full.png')
                     if os.path.exists(robot_icon_path):
@@ -375,7 +404,7 @@ class MainViewTab(QWidget):
                             
                             scene.addItem(self.robot_item)
                             
-                            self.get_logger().info("✅ 로봇 아이콘 추가 완료 (지도 중앙)")
+                            self.get_logger().info(f"✅ 로봇 아이콘 추가 완료 (지도 중앙: {center_x:.1f}, {center_y:.1f})")
                         else:
                             self.get_logger().error("❌ 로봇 아이콘 파일 로드 실패")
                     else:
@@ -562,16 +591,22 @@ class MainViewTab(QWidget):
         # WASD 키를 keys_pressed에 추가
         if event.key() == Qt.Key_W:
             self.keys_pressed.add('W')
+            self.get_logger().info("⌨️ W 키 누름")
         elif event.key() == Qt.Key_S:
             self.keys_pressed.add('S')
+            self.get_logger().info("⌨️ S 키 누름")
         elif event.key() == Qt.Key_A:
             self.keys_pressed.add('A')
+            self.get_logger().info("⌨️ A 키 누름")
         elif event.key() == Qt.Key_D:
             self.keys_pressed.add('D')
+            self.get_logger().info("⌨️ D 키 누름")
         elif event.key() == Qt.Key_Q:  # 왼쪽 회전
             self.keys_pressed.add('Q')
+            self.get_logger().info("⌨️ Q 키 누름")
         elif event.key() == Qt.Key_E:  # 오른쪽 회전
             self.keys_pressed.add('E')
+            self.get_logger().info("⌨️ E 키 누름")
         else:
             return
             
@@ -600,49 +635,131 @@ class MainViewTab(QWidget):
         event.accept()
     
     def update_robot_animation(self):
-        """로봇 애니메이션 업데이트 (60 FPS)"""
-        if self.robot_item is None or not self.keys_pressed:
+        """로봇 애니메이션 업데이트 (60 FPS) - 실제 로봇 좌표 우선"""
+        if self.robot_item is None:
             return
             
-        current_pos = self.robot_item.pos()
-        new_x = current_pos.x()
-        new_y = current_pos.y()
-        moved = False
-        rotated = False
+        # 키보드 입력이 있으면 키보드 우선 (장난용)
+        if self.keys_pressed:
+            current_pos = self.robot_item.pos()
+            new_x = current_pos.x()
+            new_y = current_pos.y()
+            moved = False
+            rotated = False
+            
+            # 로봇의 현재 회전 각도 (라디안)
+            current_rotation_rad = math.radians(self.robot_item.rotation())
+            
+            # 눌린 키에 따라 로봇 이동 (회전 방향 고려)
+            if 'W' in self.keys_pressed:  # 앞으로 이동 (회전 방향 기준)
+                # 회전된 방향으로 앞으로 이동
+                new_x += self.robot_speed * math.sin(current_rotation_rad)
+                new_y -= self.robot_speed * math.cos(current_rotation_rad)
+                moved = True
+            if 'S' in self.keys_pressed:  # 뒤로 이동 (회전 방향 기준)
+                # 회전된 방향으로 뒤로 이동
+                new_x -= self.robot_speed * math.sin(current_rotation_rad)
+                new_y += self.robot_speed * math.cos(current_rotation_rad)
+                moved = True
+            if 'A' in self.keys_pressed:  # 왼쪽으로 이동 (항상 수평)
+                new_x -= self.robot_speed
+                moved = True
+            if 'D' in self.keys_pressed:  # 오른쪽으로 이동 (항상 수평)
+                new_x += self.robot_speed
+                moved = True
+            
+            # 눌린 키에 따라 로봇 회전
+            if 'Q' in self.keys_pressed:  # 왼쪽 회전
+                current_rotation = self.robot_item.rotation()
+                new_rotation = current_rotation - self.robot_rotation_speed
+                self.robot_item.setRotation(new_rotation)
+                rotated = True
+            if 'E' in self.keys_pressed:  # 오른쪽 회전
+                current_rotation = self.robot_item.rotation()
+                new_rotation = current_rotation + self.robot_rotation_speed
+                self.robot_item.setRotation(new_rotation)
+                rotated = True
+            
+            # 새로운 위치 설정
+            if moved:
+                self.robot_item.setPos(new_x, new_y)
+                
+                # 키보드 이동 시에도 위치 로그 출력
+                current_ui_pos = self.robot_item.pos()
+                robot_center_x = current_ui_pos.x() + 20
+                robot_center_y = current_ui_pos.y() + 20
+                self.get_logger().info(f"⌨️ 키보드 이동: 모서리({current_ui_pos.x():.1f}, {current_ui_pos.y():.1f}), 중심점({robot_center_x:.1f}, {robot_center_y:.1f})")
+            
+            return
         
-        # 로봇의 현재 회전 각도 (라디안)
-        current_rotation_rad = math.radians(self.robot_item.rotation())
-        
-        # 눌린 키에 따라 로봇 이동 (회전 방향 고려)
-        if 'W' in self.keys_pressed:  # 앞으로 이동 (회전 방향 기준)
-            # 회전된 방향으로 앞으로 이동
-            new_x += self.robot_speed * math.sin(current_rotation_rad)
-            new_y -= self.robot_speed * math.cos(current_rotation_rad)
-            moved = True
-        if 'S' in self.keys_pressed:  # 뒤로 이동 (회전 방향 기준)
-            # 회전된 방향으로 뒤로 이동
-            new_x -= self.robot_speed * math.sin(current_rotation_rad)
-            new_y += self.robot_speed * math.cos(current_rotation_rad)
-            moved = True
-        if 'A' in self.keys_pressed:  # 왼쪽으로 이동 (항상 수평)
-            new_x -= self.robot_speed
-            moved = True
-        if 'D' in self.keys_pressed:  # 오른쪽으로 이동 (항상 수평)
-            new_x += self.robot_speed
-            moved = True
-        
-        # 눌린 키에 따라 로봇 회전
-        if 'Q' in self.keys_pressed:  # 왼쪽 회전
+        # 실제 로봇 좌표가 수신되었으면 실제 좌표 사용
+        if self.real_robot_received:
+            # 스케일 팩터 (미터 → 픽셀 변환)
+            # 실제 맵 크기: 19.69m x 7.95m
+            # UI 맵 크기: 1170px x 480px
+            # 비율: 가로 59.42, 세로 60.38 → 평균 60 픽셀/미터 사용
+            scale_factor = 60  # 1미터 = 60픽셀 (정확한 비율)
+            
+            # 실제 로봇 좌표를 UI 좌표로 변환 (단순 테스트: 실제 X → UI X, 실제 Y → UI Y, X는 정방향, Y는 반대 방향)
+            ui_x = self.real_robot_x * scale_factor + self.offset_x  # 실제 X를 UI X로 (양수로 정방향)
+            ui_y = -self.real_robot_y * scale_factor + self.offset_y  # 실제 Y를 UI Y로 (음수로 반대 방향)
+            
+            # 실제 로봇 회전을 UI 회전으로 변환 (90도 회전, 방향 반대)
+            ui_rotation = -math.degrees(self.real_robot_yaw) + 90
+            
+            # 목표 위치 업데이트 (부드러운 보간을 위해)
+            self.target_ui_x = ui_x
+            self.target_ui_y = ui_y
+            self.target_ui_rotation = ui_rotation
+            
+            # 로봇 아이콘 위치와 회전 업데이트 (보간 적용)
+            current_pos = self.robot_item.pos()
             current_rotation = self.robot_item.rotation()
-            new_rotation = current_rotation - self.robot_rotation_speed
+            
+            # 부드러운 보간 적용
+            new_x = current_pos.x() + (self.target_ui_x - current_pos.x()) * self.interpolation_factor
+            new_y = current_pos.y() + (self.target_ui_y - current_pos.y()) * self.interpolation_factor
+            new_rotation = current_rotation + (self.target_ui_rotation - current_rotation) * self.interpolation_factor
+            
+            self.robot_item.setPos(new_x, new_y)
             self.robot_item.setRotation(new_rotation)
-            rotated = True
-        if 'E' in self.keys_pressed:  # 오른쪽 회전
-            current_rotation = self.robot_item.rotation()
-            new_rotation = current_rotation + self.robot_rotation_speed
-            self.robot_item.setRotation(new_rotation)
-            rotated = True
-        
-        # 새로운 위치 설정
-        if moved:
-            self.robot_item.setPos(new_x, new_y) 
+            
+            # 현재 UI 좌표 확인 (캘리브레이션용)
+            current_ui_pos = self.robot_item.pos()
+            
+            # 로봇 아이콘의 중심점 계산 (아이콘 크기: 40x40)
+            robot_center_x = current_ui_pos.x() + 20  # 왼쪽 모서리 + 아이콘 반지름
+            robot_center_y = current_ui_pos.y() + 20  # 위쪽 모서리 + 아이콘 반지름
+            
+            self.get_logger().debug(f"📍 현재 UI 좌표: 모서리({current_ui_pos.x():.1f}, {current_ui_pos.y():.1f}), 중심점({robot_center_x:.1f}, {robot_center_y:.1f})")
+            
+            return
+    
+    def amcl_pose_callback(self, msg):
+        """AMCL로부터 로봇의 실제 위치를 받아서 UI 업데이트"""
+        try:
+            # AMCL에서 받은 실제 로봇 좌표
+            real_x = msg.pose.pose.position.x
+            real_y = msg.pose.pose.position.y
+            
+            # 쿼터니언에서 Yaw 각도 추출 (회전 방향)
+            orientation = msg.pose.pose.orientation
+            yaw = self.quaternion_to_yaw(orientation.x, orientation.y, orientation.z, orientation.w)
+            
+            # 실제 로봇 좌표 저장
+            self.real_robot_x = real_x
+            self.real_robot_y = real_y
+            self.real_robot_yaw = yaw
+            self.real_robot_received = True
+            
+            # 로그로 출력 (첫 번째 단계) - debug 레벨로 변경
+            self.get_logger().debug(f"🤖 AMCL 좌표 수신: X={real_x:.2f}, Y={real_y:.2f}, Yaw={math.degrees(yaw):.1f}°")
+            
+        except Exception as e:
+            self.get_logger().error(f"AMCL 좌표 처리 중 오류: {e}")
+    
+    def quaternion_to_yaw(self, x, y, z, w):
+        """쿼터니언을 Yaw 각도(라디안)로 변환"""
+        # Z축 회전 (Yaw) 계산
+        yaw = math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+        return yaw
