@@ -437,7 +437,150 @@ class DatabaseManager:
             return False
 
 
-    
+    def log_robot_status(self, robot_data: Dict) -> bool:
+        """로봇 상태 로그 저장 (10초마다)"""
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다.")
+            return False
+        
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO robot_status_log 
+                    (robot_id, robot_state, is_available, battery, book_weight, 
+                        position_x, position_y, position_yaw)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    robot_data.get('robot_id'),
+                    robot_data.get('robot_state'),
+                    robot_data.get('is_available'),
+                    robot_data.get('battery'),
+                    robot_data.get('book_weight', 0.0),
+                    robot_data.get('position_x', 0.0),
+                    robot_data.get('position_y', 0.0),
+                    robot_data.get('position_yaw', 0.0)
+                ))
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ 로봇 상태 로그 저장 실패: {e}")
+            return False
+
+    def log_task_start(self, task_data: Dict) -> bool:
+        """Task 시작 로그 저장"""
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다.")
+            return False
+        
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO task_log 
+                    (task_id, robot_id, task_type, task_stage, call_location, 
+                        goal_location, start_time, log_type)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'START')
+                """, (
+                    task_data.get('task_id'),
+                    task_data.get('robot_id'),
+                    task_data.get('task_type'),
+                    task_data.get('task_stage'),
+                    task_data.get('call_location'),
+                    task_data.get('goal_location'),
+                    task_data.get('start_time')
+                ))
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Task 시작 로그 저장 실패: {e}")
+            return False
+
+    def log_task_complete(self, task_data: Dict) -> bool:
+        """Task 완료 로그 저장"""
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다.")
+            return False
+        
+        try:
+            with self.connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO task_log 
+                    (task_id, robot_id, task_type, task_stage, call_location, 
+                        goal_location, end_time, log_type)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'COMPLETE')
+                """, (
+                    task_data.get('task_id'),
+                    task_data.get('robot_id'),
+                    task_data.get('task_type'),
+                    task_data.get('task_stage'),
+                    task_data.get('call_location'),
+                    task_data.get('goal_location'),
+                    task_data.get('end_time')
+                ))
+            
+            return True
+            
+        except Exception as e:
+            print(f"❌ Task 완료 로그 저장 실패: {e}")
+            return False
+
+    def get_robot_status_history(self, robot_id: str = None, hours: int = 24) -> List[Dict]:
+        """로봇 상태 히스토리 조회"""
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다.")
+            return []
+        
+        try:
+            with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                if robot_id:
+                    cursor.execute("""
+                        SELECT * FROM robot_status_log 
+                        WHERE robot_id = %s AND timestamp >= NOW() - INTERVAL %s HOUR
+                        ORDER BY timestamp DESC
+                    """, (robot_id, hours))
+                else:
+                    cursor.execute("""
+                        SELECT * FROM robot_status_log 
+                        WHERE timestamp >= NOW() - INTERVAL %s HOUR
+                        ORDER BY timestamp DESC
+                    """, (hours,))
+                
+                results = cursor.fetchall()
+                return results
+                
+        except Exception as e:
+            print(f"❌ 로봇 상태 히스토리 조회 실패: {e}")
+            return []
+
+    def get_task_history(self, robot_id: str = None, hours: int = 24) -> List[Dict]:
+        """Task 히스토리 조회"""
+        if not self.connection:
+            print("❌ 데이터베이스 연결이 없습니다.")
+            return []
+        
+        try:
+            with self.connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                if robot_id:
+                    cursor.execute("""
+                        SELECT * FROM task_log 
+                        WHERE robot_id = %s AND timestamp >= NOW() - INTERVAL %s HOUR
+                        ORDER BY timestamp DESC
+                    """, (robot_id, hours))
+                else:
+                    cursor.execute("""
+                        SELECT * FROM task_log 
+                        WHERE timestamp >= NOW() - INTERVAL %s HOUR
+                        ORDER BY timestamp DESC
+                    """, (hours,))
+                
+                results = cursor.fetchall()
+                return results
+                
+        except Exception as e:
+            print(f"❌ Task 히스토리 조회 실패: {e}")
+            return []
+
     def close(self):  # DB 연결 끊는 함수
         """데이터베이스 연결 종료"""
         if self.connection:
