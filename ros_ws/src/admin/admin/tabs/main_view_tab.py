@@ -113,6 +113,10 @@ class MainViewTab(QWidget):
         self.video_receiver = None  # 영상 수신 스레드
         self.current_frame = None  # 현재 프레임
         
+        # Back camera 수신 관련 변수들
+        self.video_receiver_back = None  # Back camera 수신 스레드
+        self.current_frame_back = None  # Back camera 현재 프레임
+        
         self.init_ui()  # UI 초기화
         self.init_ros_connections()  # ROS 연결 초기화
         self.init_timers()  # 타이머 초기화
@@ -149,6 +153,14 @@ class MainViewTab(QWidget):
                 self.video_front.setText("영상 대기 중...")
             else:
                 self.get_logger().error("❌ video_front 위젯을 찾을 수 없음")
+            
+            # video_back 위젯 확인
+            if hasattr(self, 'video_back'):
+                self.get_logger().info("✅ video_back 위젯 확인됨")
+                # 초기 텍스트 설정
+                self.video_back.setText("영상 대기 중...")
+            else:
+                self.get_logger().error("❌ video_back 위젯을 찾을 수 없음")
             
             # 맵 뷰에 배경 이미지 로드
             self.load_map_background()
@@ -197,13 +209,20 @@ class MainViewTab(QWidget):
         try:
             print("🎥 영상 수신 초기화 시작...")
             
-            # 영상 수신 스레드 생성
+            # Front camera 수신 스레드 생성 (포트 7021)
             self.video_receiver = VideoReceiverThread(port=7021)
             self.video_receiver.frame_received.connect(self.on_frame_received)
             self.video_receiver.start()
             
-            print("✅ 영상 수신 스레드 시작됨 (포트: 7021)")
-            self.get_logger().info("✅ 영상 수신 스레드 시작됨 (포트: 7021)")
+            # Back camera 수신 스레드 생성 (포트 7020)
+            self.video_receiver_back = VideoReceiverThread(port=7020)
+            self.video_receiver_back.frame_received.connect(self.on_frame_received_back)
+            self.video_receiver_back.start()
+            
+            print("✅ Front camera 수신 스레드 시작됨 (포트: 7021)")
+            print("✅ Back camera 수신 스레드 시작됨 (포트: 7020)")
+            self.get_logger().info("✅ Front camera 수신 스레드 시작됨 (포트: 7021)")
+            self.get_logger().info("✅ Back camera 수신 스레드 시작됨 (포트: 7020)")
             
         except Exception as e:
             print(f"❌ 영상 수신 초기화 실패: {e}")
@@ -238,6 +257,36 @@ class MainViewTab(QWidget):
         except Exception as e:
             print(f"❌ 프레임 처리 중 오류: {e}")
             self.get_logger().error(f"❌ 프레임 처리 중 오류: {e}")
+    
+    def on_frame_received_back(self, frame):
+        """Back camera 프레임 수신 처리"""
+        try:
+            self.current_frame_back = frame
+            
+            # QImage로 변환
+            height, width, channel = frame.shape
+            bytes_per_line = 3 * width
+            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            
+            # QPixmap으로 변환
+            pixmap = QPixmap.fromImage(q_image)
+            
+            # video_back 위젯에 표시
+            if hasattr(self, 'video_back'):
+                # 위젯 크기에 맞게 스케일링
+                scaled_pixmap = pixmap.scaled(
+                    self.video_back.size(), 
+                    Qt.KeepAspectRatio, 
+                    Qt.SmoothTransformation
+                )
+                self.video_back.setPixmap(scaled_pixmap)
+                print(f"🎬 Back camera 영상 표시 완료: {width}x{height} -> {scaled_pixmap.width()}x{scaled_pixmap.height()}")
+            else:
+                print("❌ video_back 위젯을 찾을 수 없음")
+                
+        except Exception as e:
+            print(f"❌ Back camera 프레임 처리 중 오류: {e}")
+            self.get_logger().error(f"❌ Back camera 프레임 처리 중 오류: {e}")
     
     def load_map_background(self):
         """맵 뷰에 배경 이미지 로드"""
@@ -402,7 +451,11 @@ class MainViewTab(QWidget):
         # 영상 수신 스레드 정리
         if hasattr(self, 'video_receiver') and self.video_receiver:
             self.video_receiver.stop()
-            self.get_logger().info("✅ 영상 수신 스레드 정지됨")
+            self.get_logger().info("✅ Front camera 수신 스레드 정지됨")
+        
+        if hasattr(self, 'video_receiver_back') and self.video_receiver_back:
+            self.video_receiver_back.stop()
+            self.get_logger().info("✅ Back camera 수신 스레드 정지됨")
     
     def get_logger(self):
         """ROS 로거 반환"""

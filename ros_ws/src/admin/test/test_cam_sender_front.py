@@ -4,8 +4,26 @@ import socket  # 소켓: 네트워크 통신(UDP)을 위해 사용
 import time  # 시간 관련 함수: 전송 간격 조절(딜레이)을 위해 사용
 import json  # JSON: 데이터 구조를 만들기 위해 사용 (헤더 생성)
 from datetime import datetime, timezone  # 날짜 및 시간: 타임스탬프 생성을 위해 사용
+import threading  # 스레드: 키보드 입력 감지를 위해 사용
+import sys  # 시스템: 프로그램 종료를 위해 사용
+
+def check_keyboard_input():
+    """키보드 입력을 감지하는 함수"""
+    global running
+    while running:
+        try:
+            key = input().strip().lower()
+            if key == 'q':
+                print("\n🛑 'q' 키가 눌렸습니다. 프로그램을 종료합니다...")
+                running = False
+                break
+        except (EOFError, KeyboardInterrupt):
+            break
 
 def main(args=None):
+    global running
+    running = True
+    
     # ===== 전송 대상 설정 =====
     # 모니터링 서비스 (옵션)
     UDP_IP_MONITORING = "127.0.0.1"
@@ -21,7 +39,7 @@ def main(args=None):
     # Linux: 0, 1, 2... 또는 /dev/video0, /dev/video1...
     # Windows: 0, 1, 2...
     # macOS: 0, 1, 2...
-    WEBCAM_PATH = '/dev/video1'  # 로컬 테스트용으로 video1 사용
+    WEBCAM_PATH = '/dev/video2'  # 로컬 테스트용으로 video1 사용
     
     # udev 규칙으로 고정된 경로 (실제 로봇 환경용)
     # WEBCAM_PATH = '/dev/my_webcam_2'
@@ -62,10 +80,14 @@ def main(args=None):
         print(f"✅ 카메라 스트리밍 시작...")
         print(f"📡 전송 대상: {ADMIN_PC_IP}:{ADMIN_PC_PORT}")
         print(f"⏱️  전송 간격: 0.07초 (약 30fps)")
-        print("🛑 중단하려면 Ctrl+C를 누르세요")
+        print("🛑 중단하려면 Ctrl+C를 누르거나 'q'를 입력하세요")
         print("-" * 50)
         
-        while True:
+        # 키보드 입력 감지 스레드 시작
+        keyboard_thread = threading.Thread(target=check_keyboard_input, daemon=True)
+        keyboard_thread.start()
+        
+        while running:
             ret, frame = cap.read()
             if not ret:
                 print("⚠️  프레임 캡처 실패.")
@@ -107,9 +129,25 @@ def main(args=None):
 
     finally:
         print("Releasing camera and closing sockets...")
-        cap.release()
-        sock_monitoring.close()
-        sock_admin.close()
+        
+        # 카메라 해제
+        if 'cap' in locals() and cap is not None:
+            cap.release()
+            print("✅ 카메라 해제 완료")
+        
+        # 소켓 정리
+        if 'sock_monitoring' in locals():
+            sock_monitoring.close()
+            print("✅ 모니터링 소켓 정리 완료")
+        if 'sock_admin' in locals():
+            sock_admin.close()
+            print("✅ Admin 소켓 정리 완료")
+        
+        # OpenCV 윈도우 정리 (있다면)
+        cv2.destroyAllWindows()
+        print("✅ OpenCV 윈도우 정리 완료")
+        
+        print("🛑 모든 리소스 정리 완료")
 
 if __name__ == '__main__':
     main()
