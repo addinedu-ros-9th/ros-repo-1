@@ -35,22 +35,30 @@ class PIDController:
 class AdvancedAssistFollowFSM(Node):
     """
     [최종 수정] 전륜 구동 특성을 반영한 회피 로직 적용 FSM 노드.
+    [v4] 후진 속도 증가 및 3차 회전 시간 증대를 통해 회피 기동을 조정한 버전.
     """
     def __init__(self):
-        super().__init__('advanced_assist_follow_fsm_final_fwd')
+        super().__init__('advanced_assist_follow_fsm_final_fwd_v4')
 
         # --- 1. ROS 파라미터 선언 ---
         self.declare_parameter('avoidance_turn_first_duration_s', 1.0)
-        self.declare_parameter('avoidance_backup_duration_s', 1.2)
-        self.declare_parameter('search_turn_duration_s', 0.5)
+        self.declare_parameter('avoidance_backup_duration_s', 1.5)
+        self.declare_parameter('avoidance_forward_duration_s', 1.2)
+        self.declare_parameter('avoidance_counter_turn_duration_s', 1.0)
+        # [수정] 3차 회전 시간을 2차 회전보다 길게 설정
+        self.declare_parameter('avoidance_realign_turn_duration_s', 2.0) 
+
+        self.declare_parameter('avoidance_forward_vel', 0.15)
+        self.declare_parameter('search_turn_duration_s', 0.7)
         self.declare_parameter('search_pause_duration_s', 0.5)
         self.declare_parameter('search_timeout_s', 8.0)
         self.declare_parameter('avoidance_turn_vel', 0.3)
-        self.declare_parameter('avoidance_backup_vel', -0.1)
+        # [수정] 후진 속도 증가
+        self.declare_parameter('avoidance_backup_vel', -0.15)
         self.declare_parameter('search_angular_vel', 0.4)
         self.declare_parameter('target_distance', 1.2)
         self.declare_parameter('safe_distance_min', 1.0)
-        self.declare_parameter('max_linear_vel', 0.2)
+        self.declare_parameter('max_linear_vel', 0.25)
         self.declare_parameter('following_max_angular_vel', 0.35)
         self.declare_parameter('dist_kp', 1.0); self.declare_parameter('dist_ki', 0.0); self.declare_parameter('dist_kd', 0.1)
         self.declare_parameter('angle_kp', 1.5); self.declare_parameter('angle_ki', 0.0); self.declare_parameter('angle_kd', 0.2)
@@ -58,6 +66,11 @@ class AdvancedAssistFollowFSM(Node):
         # 파라미터 값 가져오기
         self.avoidance_turn_first_duration = self.get_parameter('avoidance_turn_first_duration_s').value
         self.avoidance_backup_duration = self.get_parameter('avoidance_backup_duration_s').value
+        self.avoidance_forward_duration = self.get_parameter('avoidance_forward_duration_s').value
+        self.avoidance_counter_turn_duration = self.get_parameter('avoidance_counter_turn_duration_s').value
+        self.avoidance_realign_turn_duration = self.get_parameter('avoidance_realign_turn_duration_s').value
+        
+        self.avoidance_forward_vel = self.get_parameter('avoidance_forward_vel').value
         self.search_turn_duration = self.get_parameter('search_turn_duration_s').value
         self.search_pause_duration = self.get_parameter('search_pause_duration_s').value
         self.search_timeout = self.get_parameter('search_timeout_s').value
@@ -82,9 +95,10 @@ class AdvancedAssistFollowFSM(Node):
         self.is_paused_by_voice = False
         self.obstacle_status = None
         self.state = "FOLLOWING"
+        self.is_following = False
         self.state_timer = None
         self.search_timeout_timer = None 
-        self.avoidance_turn_direction = 1 # 1: 좌회전(양수), -1: 우회전(음수)
+        self.avoidance_turn_direction = 1 
         self.last_known_angle_error = 0.0
         self.honk_played = False
         self.last_cmd_vel = Twist()
@@ -99,7 +113,7 @@ class AdvancedAssistFollowFSM(Node):
         self.deactivate_srv = self.create_service(DeactivateTracker, '/deactivate_tracker', self.handle_deactivate_tracker)
         self.arrived_srv = self.create_service(Trigger, '/trigger_arrival', self.handle_arrival_trigger)
 
-        self.get_logger().info('✅ Advanced Assist Follow FSM 노드 시작 완료 (전륜 구동 로직 적용)')
+        self.get_logger().info('✅ Advanced Assist Follow FSM 노드 시작 완료 (v4: 회피 기동 조정)')
 
 
     def human_info_callback(self, msg: HumanInfo):
@@ -108,7 +122,6 @@ class AdvancedAssistFollowFSM(Node):
             self.get_logger().info('장애물 감지 정보 수신 대기 중...', once=True)
             return
 
-        # [최우선 순위] 모든 상태에 앞서 비상 정지 조건을 먼저 확인
         if self.obstacle_status.center_detected or \
            (self.obstacle_status.left_detected and self.obstacle_status.right_detected) or \
            (msg.is_detected and msg.distance < self.safe_distance_min):
@@ -117,18 +130,13 @@ class AdvancedAssistFollowFSM(Node):
                  self.transition_to_following(stop_first=True)
             return
 
-        # --- 상태 머신 기반 동작 분기 ---
         cmd_msg = Twist()
         
         if self.state == "FOLLOWING":
             if self.obstacle_status.left_detected or self.obstacle_status.right_detected:
                 if not self.honk_played: self.send_voice_command("common", "obstacle_detected"); self.honk_played = True
                 self.last_known_angle_error = msg.horizontal_offset
-                
-                # [핵심 수정] 전륜구동 특성 반영: 장애물 방향으로 머리를 돌려야 후면이 안전하게 빠져나감
-                # 좌측 장애물 -> 좌회전(1) 필요, 우측 장애물 -> 우회전(-1) 필요
                 self.avoidance_turn_direction = 1 if self.obstacle_status.left_detected else -1
-                
                 self.transition_to_state("AVOIDING_TURN_FIRST")
             else:
                 self.perform_following_with_pid(msg)
@@ -139,7 +147,16 @@ class AdvancedAssistFollowFSM(Node):
         
         elif self.state == "AVOIDING_BACKUP":
             cmd_msg.linear.x = self.avoidance_backup_vel
+
+        elif self.state == "AVOIDING_COUNTER_TURN":
+            cmd_msg.angular.z = self.avoidance_turn_vel * -self.avoidance_turn_direction
+
+        elif self.state == "AVOIDING_FORWARD":
+            cmd_msg.linear.x = self.avoidance_forward_vel
         
+        elif self.state == "AVOIDING_REALIGN_TURN":
+            cmd_msg.angular.z = self.avoidance_turn_vel * self.avoidance_turn_direction
+
         elif self.state == "SEARCHING_TURN":
             turn_dir = 1 if self.last_known_angle_error < 0 else -1
             cmd_msg.angular.z = self.search_angular_vel * turn_dir
@@ -191,11 +208,23 @@ class AdvancedAssistFollowFSM(Node):
         
         elif new_state == "AVOIDING_BACKUP":
             self.stop_robot(gradual=False)
-            self.state_timer = self.create_timer(self.avoidance_backup_duration, lambda: self.transition_to_state("SEARCHING_TURN"))
+            self.state_timer = self.create_timer(self.avoidance_backup_duration, lambda: self.transition_to_state("AVOIDING_COUNTER_TURN"))
+        
+        elif new_state == "AVOIDING_COUNTER_TURN":
+            self.stop_robot(gradual=False)
+            self.state_timer = self.create_timer(self.avoidance_counter_turn_duration, lambda: self.transition_to_state("AVOIDING_FORWARD"))
+
+        elif new_state == "AVOIDING_FORWARD":
+            self.stop_robot(gradual=False)
+            self.state_timer = self.create_timer(self.avoidance_forward_duration, lambda: self.transition_to_state("AVOIDING_REALIGN_TURN"))
+        
+        elif new_state == "AVOIDING_REALIGN_TURN":
+            self.stop_robot(gradual=False)
+            self.state_timer = self.create_timer(self.avoidance_realign_turn_duration, lambda: self.transition_to_state("SEARCHING_TURN"))
 
         elif new_state == "SEARCHING_TURN":
             self.stop_robot(gradual=False)
-            if not self.search_timeout_timer or self.search_timeout_timer.cancelled():
+            if not self.search_timeout_timer or self.search_timeout_timer.is_canceled():
                  self.search_timeout_timer = self.create_timer(self.search_timeout, self.handle_search_timeout)
             self.state_timer = self.create_timer(self.search_turn_duration, lambda: self.transition_to_state("SEARCHING_PAUSE"))
 
@@ -248,7 +277,7 @@ class AdvancedAssistFollowFSM(Node):
         if not self.qr_authenticated or msg.robot_id != "libo_a": return
         if msg.action == "stop":
             if not self.is_paused_by_voice: self.is_paused_by_voice = True; self.transition_to_following(stop_first=True)
-        elif msg.action == "follow":
+        elif msg.action == "activate":
             if self.is_paused_by_voice: self.is_paused_by_voice = False
     def handle_activate_tracker(self, request, response): self.qr_authenticated = True; response.success = True; return response
     def handle_deactivate_tracker(self, request, response): self.qr_authenticated = False; self.transition_to_following(stop_first=True); response.success = True; return response

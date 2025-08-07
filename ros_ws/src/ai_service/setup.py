@@ -34,6 +34,9 @@ setup(
             'vision_manager_assist2 = ai_service.nodes.vision_manager_assist2:main', 
             'hand_gesture_detector = ai_service.nodes.hand_gesture_detector:main', 
             'hand_gesture_detector_ros2_bridge = ai_service.nodes.hand_gesture_detector_ros2_bridge:main', 
+            'vision_manager_assist3 = ai_service.nodes.vision_manager_assist3:main',
+            'vision_manager_assist4 = ai_service.nodes.vision_manager_assist4:main',  
+            'gesture_control_node = ai_service.nodes.gesture_control_node:main',
 
         ],
     },
