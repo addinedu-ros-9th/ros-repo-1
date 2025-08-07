@@ -38,17 +38,17 @@ class AdminWindow(QMainWindow):
 
     def init_tabs(self):
         """탭 초기화 및 추가"""
+        # Main View 탭 (가장 좌측)
+        self.main_view_tab = MainViewTab(self.ros_node)
+        self.tabWidget.widget(0).layout().addWidget(self.main_view_tab)
+        
         # 메인 컨트롤 탭
         self.main_control_tab = MainControlTab(self.ros_node)
-        self.tabWidget.widget(0).layout().addWidget(self.main_control_tab)
+        self.tabWidget.widget(1).layout().addWidget(self.main_control_tab)
         
         # AI 서버 컨트롤 탭
         self.ai_server_control_tab = AiServerControlTab(self.ros_node)
-        self.tabWidget.widget(1).layout().addWidget(self.ai_server_control_tab)
-        
-        # Main View 탭 추가
-        self.main_view_tab = MainViewTab(self.ros_node)
-        self.tabWidget.widget(2).layout().addWidget(self.main_view_tab)
+        self.tabWidget.widget(2).layout().addWidget(self.ai_server_control_tab)
         
         # System Logs 탭은 나중에 구현 예정
         self.get_logger().info("✅ 탭 초기화 완료")
