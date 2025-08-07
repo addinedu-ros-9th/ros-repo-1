@@ -978,7 +978,7 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
         success = comm_manager.play_tts_response("네, 다시 따라가겠습니다.")
         if success:
             # Talk Command 발행
-            talker_node.publish_talk_command(robot_id, "follow")
+            talker_node.publish_talk_command(robot_id, "activate")
             
     elif intent == "pause_follow" or intent == "ignore":
         # 멈춰 또는 무시: TalkCommand 메시지 발행 (robot_id, "stop")
