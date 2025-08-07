@@ -27,6 +27,8 @@ setup(
             'debug_tool = admin.debug_tool:main',
             'debug_tool_qt = admin.debug_tool_qt:main',
             'admin_gui = admin.main_app:main',  # admin_gui 라는 이름으로 실행할 수 있도록 추가
+            'cam_sender_front = admin.test_cam_sender_front:main',  # Front camera 전송
+            'cam_sender_back = admin.test_cam_sender:main',  # Back camera 전송
         ],
     },
 )

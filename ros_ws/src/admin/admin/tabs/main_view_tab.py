@@ -15,6 +15,7 @@ from PyQt5.QtGui import QPixmap, QPainter, QImage
 from PyQt5 import uic
 from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
+import math
 
 # TaskStatus 메시지 import
 from libo_interfaces.msg import TaskStatus, OverallStatus
@@ -74,6 +75,12 @@ class VideoReceiverThread(QThread):
                                     
                                     if frame_count % 30 == 0:  # 30프레임마다 로그
                                         print(f"✅ 프레임 처리 완료: {frame_count}개")
+                                    
+                                    # 100프레임마다 메모리 정리
+                                    if frame_count % 100 == 0:
+                                        import gc
+                                        gc.collect()
+                                        print(f"🧹 메모리 정리 완료 (프레임: {frame_count})")
                                 else:
                                     print("❌ 프레임 디코딩 실패")
                                     
@@ -117,11 +124,22 @@ class MainViewTab(QWidget):
         self.video_receiver_back = None  # Back camera 수신 스레드
         self.current_frame_back = None  # Back camera 현재 프레임
         
+        # 로봇 아이콘 관련 변수들
+        self.robot_item = None  # 로봇 아이콘 아이템
+        self.robot_speed = 2  # 로봇 이동 속도 (픽셀) - 더 부드럽게 하기 위해 줄임
+        self.robot_rotation_speed = 2  # 로봇 회전 속도 (도)
+        self.keys_pressed = set()  # 현재 눌린 키들 저장
+        self.animation_timer = None  # 애니메이션 타이머
+        
         self.init_ui()  # UI 초기화
         self.init_ros_connections()  # ROS 연결 초기화
         self.init_timers()  # 타이머 초기화
         self.init_video_receiver()  # 영상 수신 초기화
         
+        # 키보드 이벤트 활성화
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.map_view.setFocusPolicy(Qt.StrongFocus)
+    
     def init_ui(self):
         """UI 초기화"""
         try:
@@ -203,6 +221,12 @@ class MainViewTab(QWidget):
         self.robot_status_timer.timeout.connect(self.update_robot_status_display)
         self.robot_status_timer.start(1000)  # 1초마다
         self.get_logger().info("✅ 로봇 상태 업데이트 타이머 시작됨")
+        
+        # 로봇 애니메이션 타이머 (부드러운 움직임용)
+        self.animation_timer = QTimer()
+        self.animation_timer.timeout.connect(self.update_robot_animation)
+        self.animation_timer.start(16)  # 약 60 FPS (1000ms / 60 ≈ 16ms)
+        self.get_logger().info("✅ 로봇 애니메이션 타이머 시작됨 (60 FPS)")
     
     def init_video_receiver(self):
         """영상 수신 초기화"""
@@ -231,20 +255,26 @@ class MainViewTab(QWidget):
     def on_frame_received(self, frame):
         """프레임 수신 처리"""
         try:
+            # 이전 프레임 메모리 해제
+            if hasattr(self, 'current_qimage'):
+                del self.current_qimage
+            if hasattr(self, 'current_pixmap'):
+                del self.current_pixmap
+            
             self.current_frame = frame
             
             # QImage로 변환
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
-            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            self.current_qimage = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
             
             # QPixmap으로 변환
-            pixmap = QPixmap.fromImage(q_image)
+            self.current_pixmap = QPixmap.fromImage(self.current_qimage)
             
             # video_front 위젯에 표시
             if hasattr(self, 'video_front'):
                 # 위젯 크기에 맞게 스케일링
-                scaled_pixmap = pixmap.scaled(
+                scaled_pixmap = self.current_pixmap.scaled(
                     self.video_front.size(), 
                     Qt.KeepAspectRatio, 
                     Qt.SmoothTransformation
@@ -257,24 +287,34 @@ class MainViewTab(QWidget):
         except Exception as e:
             print(f"❌ 프레임 처리 중 오류: {e}")
             self.get_logger().error(f"❌ 프레임 처리 중 오류: {e}")
+        finally:
+            # 메모리 정리
+            import gc
+            gc.collect()
     
     def on_frame_received_back(self, frame):
         """Back camera 프레임 수신 처리"""
         try:
+            # 이전 프레임 메모리 해제
+            if hasattr(self, 'current_qimage_back'):
+                del self.current_qimage_back
+            if hasattr(self, 'current_pixmap_back'):
+                del self.current_pixmap_back
+            
             self.current_frame_back = frame
             
             # QImage로 변환
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
-            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            self.current_qimage_back = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
             
             # QPixmap으로 변환
-            pixmap = QPixmap.fromImage(q_image)
+            self.current_pixmap_back = QPixmap.fromImage(self.current_qimage_back)
             
             # video_back 위젯에 표시
             if hasattr(self, 'video_back'):
                 # 위젯 크기에 맞게 스케일링
-                scaled_pixmap = pixmap.scaled(
+                scaled_pixmap = self.current_pixmap_back.scaled(
                     self.video_back.size(), 
                     Qt.KeepAspectRatio, 
                     Qt.SmoothTransformation
@@ -287,12 +327,16 @@ class MainViewTab(QWidget):
         except Exception as e:
             print(f"❌ Back camera 프레임 처리 중 오류: {e}")
             self.get_logger().error(f"❌ Back camera 프레임 처리 중 오류: {e}")
+        finally:
+            # 메모리 정리
+            import gc
+            gc.collect()
     
     def load_map_background(self):
         """맵 뷰에 배경 이미지 로드"""
         try:
             # 이미지 파일 경로
-            image_path = os.path.join(get_package_share_directory('admin'), 'resource', 'map_background_landscape_1170.png')
+            image_path = os.path.join(get_package_share_directory('admin'), 'resource', 'map_background_landscape_1170_white.png')
             
             if os.path.exists(image_path):
                 # QGraphicsScene 생성
@@ -308,6 +352,34 @@ class MainViewTab(QWidget):
                     # 씬 크기를 이미지 크기에 맞춤 (QRect를 QRectF로 변환)
                     rect = pixmap.rect()
                     scene.setSceneRect(QRectF(rect))
+                    
+                    # 로봇 아이콘 추가 (지도 한가운데)
+                    robot_icon_path = os.path.join(get_package_share_directory('admin'), 'resource', 'libo_full.png')
+                    if os.path.exists(robot_icon_path):
+                        robot_pixmap = QPixmap(robot_icon_path)
+                        if not robot_pixmap.isNull():
+                            # 로봇 아이콘 크기 조정 (너무 크지 않게)
+                            robot_pixmap = robot_pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                            
+                            # 지도 한가운데 위치 계산
+                            center_x = pixmap.width() / 2 - robot_pixmap.width() / 2
+                            center_y = pixmap.height() / 2 - robot_pixmap.height() / 2
+                            
+                            # 로봇 아이콘 생성 및 위치 설정
+                            self.robot_item = QGraphicsPixmapItem(robot_pixmap)
+                            self.robot_item.setPos(center_x, center_y)
+                            
+                            # 로봇 아이콘의 중심점 설정 (회전 기준점)
+                            # 아이콘 크기가 40x40이므로 중심점은 (20, 20)
+                            self.robot_item.setTransformOriginPoint(20, 20)
+                            
+                            scene.addItem(self.robot_item)
+                            
+                            self.get_logger().info("✅ 로봇 아이콘 추가 완료 (지도 중앙)")
+                        else:
+                            self.get_logger().error("❌ 로봇 아이콘 파일 로드 실패")
+                    else:
+                        self.get_logger().warning(f"⚠️ 로봇 아이콘 파일을 찾을 수 없음: {robot_icon_path}")
                     
                     # map_view에 씬 설정
                     self.map_view.setScene(scene)
@@ -448,6 +520,11 @@ class MainViewTab(QWidget):
             self.robot_status_timer.stop()
             self.get_logger().info("✅ 로봇 상태 업데이트 타이머 정지됨")
         
+        # 로봇 애니메이션 타이머 정리
+        if hasattr(self, 'animation_timer') and self.animation_timer:
+            self.animation_timer.stop()
+            self.get_logger().info("✅ 로봇 애니메이션 타이머 정지됨")
+        
         # 영상 수신 스레드 정리
         if hasattr(self, 'video_receiver') and self.video_receiver:
             self.video_receiver.stop()
@@ -456,7 +533,116 @@ class MainViewTab(QWidget):
         if hasattr(self, 'video_receiver_back') and self.video_receiver_back:
             self.video_receiver_back.stop()
             self.get_logger().info("✅ Back camera 수신 스레드 정지됨")
+        
+        # 메모리 정리
+        if hasattr(self, 'current_frame'):
+            del self.current_frame
+        if hasattr(self, 'current_frame_back'):
+            del self.current_frame_back
+        if hasattr(self, 'current_qimage'):
+            del self.current_qimage
+        if hasattr(self, 'current_qimage_back'):
+            del self.current_qimage_back
+        if hasattr(self, 'current_pixmap'):
+            del self.current_pixmap
+        if hasattr(self, 'current_pixmap_back'):
+            del self.current_pixmap_back
+        
+        # 가비지 컬렉션 실행
+        import gc
+        gc.collect()
+        self.get_logger().info("✅ 메모리 정리 완료")
     
     def get_logger(self):
         """ROS 로거 반환"""
         return self.ros_node.get_logger() 
+    
+    def keyPressEvent(self, event):
+        """키보드 이벤트 처리 - 키를 누를 때"""
+        # WASD 키를 keys_pressed에 추가
+        if event.key() == Qt.Key_W:
+            self.keys_pressed.add('W')
+        elif event.key() == Qt.Key_S:
+            self.keys_pressed.add('S')
+        elif event.key() == Qt.Key_A:
+            self.keys_pressed.add('A')
+        elif event.key() == Qt.Key_D:
+            self.keys_pressed.add('D')
+        elif event.key() == Qt.Key_Q:  # 왼쪽 회전
+            self.keys_pressed.add('Q')
+        elif event.key() == Qt.Key_E:  # 오른쪽 회전
+            self.keys_pressed.add('E')
+        else:
+            return
+            
+        # 이벤트 처리 완료
+        event.accept()
+    
+    def keyReleaseEvent(self, event):
+        """키보드 이벤트 처리 - 키를 뗄 때"""
+        # WASD 키를 keys_pressed에서 제거
+        if event.key() == Qt.Key_W:
+            self.keys_pressed.discard('W')
+        elif event.key() == Qt.Key_S:
+            self.keys_pressed.discard('S')
+        elif event.key() == Qt.Key_A:
+            self.keys_pressed.discard('A')
+        elif event.key() == Qt.Key_D:
+            self.keys_pressed.discard('D')
+        elif event.key() == Qt.Key_Q:  # 왼쪽 회전
+            self.keys_pressed.discard('Q')
+        elif event.key() == Qt.Key_E:  # 오른쪽 회전
+            self.keys_pressed.discard('E')
+        else:
+            return
+            
+        # 이벤트 처리 완료
+        event.accept()
+    
+    def update_robot_animation(self):
+        """로봇 애니메이션 업데이트 (60 FPS)"""
+        if self.robot_item is None or not self.keys_pressed:
+            return
+            
+        current_pos = self.robot_item.pos()
+        new_x = current_pos.x()
+        new_y = current_pos.y()
+        moved = False
+        rotated = False
+        
+        # 로봇의 현재 회전 각도 (라디안)
+        current_rotation_rad = math.radians(self.robot_item.rotation())
+        
+        # 눌린 키에 따라 로봇 이동 (회전 방향 고려)
+        if 'W' in self.keys_pressed:  # 앞으로 이동 (회전 방향 기준)
+            # 회전된 방향으로 앞으로 이동
+            new_x += self.robot_speed * math.sin(current_rotation_rad)
+            new_y -= self.robot_speed * math.cos(current_rotation_rad)
+            moved = True
+        if 'S' in self.keys_pressed:  # 뒤로 이동 (회전 방향 기준)
+            # 회전된 방향으로 뒤로 이동
+            new_x -= self.robot_speed * math.sin(current_rotation_rad)
+            new_y += self.robot_speed * math.cos(current_rotation_rad)
+            moved = True
+        if 'A' in self.keys_pressed:  # 왼쪽으로 이동 (항상 수평)
+            new_x -= self.robot_speed
+            moved = True
+        if 'D' in self.keys_pressed:  # 오른쪽으로 이동 (항상 수평)
+            new_x += self.robot_speed
+            moved = True
+        
+        # 눌린 키에 따라 로봇 회전
+        if 'Q' in self.keys_pressed:  # 왼쪽 회전
+            current_rotation = self.robot_item.rotation()
+            new_rotation = current_rotation - self.robot_rotation_speed
+            self.robot_item.setRotation(new_rotation)
+            rotated = True
+        if 'E' in self.keys_pressed:  # 오른쪽 회전
+            current_rotation = self.robot_item.rotation()
+            new_rotation = current_rotation + self.robot_rotation_speed
+            self.robot_item.setRotation(new_rotation)
+            rotated = True
+        
+        # 새로운 위치 설정
+        if moved:
+            self.robot_item.setPos(new_x, new_y) 
