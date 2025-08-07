@@ -452,15 +452,15 @@ class MainViewTab(QWidget):
             self.video_receiver.frame_received.connect(self.on_frame_received)
             self.video_receiver.start()
             
-            # Back camera 수신 스레드 생성 (포트 7020)
-            self.video_receiver_back = VideoReceiverThread(port=7020)
+            # Back camera 수신 스레드 생성 (포트 7101)
+            self.video_receiver_back = VideoReceiverThread(port=7101)
             self.video_receiver_back.frame_received.connect(self.on_frame_received_back)
             self.video_receiver_back.start()
             
             print("✅ Front camera 수신 스레드 시작됨 (포트: 7021)")
-            print("✅ Back camera 수신 스레드 시작됨 (포트: 7020)")
+            print("✅ Back camera 수신 스레드 시작됨 (포트: 7101)")
             self.get_logger().info("✅ Front camera 수신 스레드 시작됨 (포트: 7021)")
-            self.get_logger().info("✅ Back camera 수신 스레드 시작됨 (포트: 7020)")
+            self.get_logger().info("✅ Back camera 수신 스레드 시작됨 (포트: 7101)")
             
         except Exception as e:
             print(f"❌ 영상 수신 초기화 실패: {e}")
