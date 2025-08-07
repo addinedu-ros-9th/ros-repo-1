@@ -20,6 +20,8 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 
 # TaskStatus 메시지 import
 from libo_interfaces.msg import TaskStatus, OverallStatus
+# AddGoalLocation 서비스 import
+from libo_interfaces.srv import AddGoalLocation
 
 class VideoReceiverThread(QThread):
     """UDP 영상 수신 스레드"""
@@ -109,9 +111,10 @@ class VideoReceiverThread(QThread):
 class MapButton(QGraphicsItem):
     """맵 위의 클릭 가능한 버튼 아이템"""
     
-    def __init__(self, button_id, x, y, width=40, height=40, parent=None):
+    def __init__(self, button_id, x, y, width=40, height=40, parent=None, service_client=None):
         super().__init__(parent)
         self.button_id = button_id  # 버튼 ID 저장
+        self.service_client = service_client  # 서비스 클라이언트 저장
         # 중심점 기준으로 좌상단 좌표 계산
         self.button_rect = QRectF(x - width/2, y - height/2, width, height)
         # 마우스 이벤트 허용
@@ -139,11 +142,60 @@ class MapButton(QGraphicsItem):
         """버튼 클릭 이벤트 처리"""
         print(f"🗺️ 맵 버튼 클릭: {self.button_id} (좌표: {self.button_rect.center().x():.1f}, {self.button_rect.center().y():.1f})")
         
+        # AddGoalLocation 서비스 호출
+        self.call_add_goal_service()
+        
         # 빨간색 동그라미 애니메이션 생성
         self.create_click_animation()
         
         # 이벤트 처리 완료 (전파 방지)
         event.accept()
+    
+    def call_add_goal_service(self):
+        """AddGoalLocation 서비스 호출"""
+        try:
+            if self.service_client:
+                # 서비스 서버가 사용 가능한지 확인
+                if not self.service_client.service_is_ready():
+                    print(f"⚠️ 서비스 서버가 준비되지 않음: add_goal_location")
+                    return
+                
+                # 서비스 요청 생성
+                request = AddGoalLocation.Request()
+                request.robot_id = "libo_a"  # 기본 로봇 ID (나중에 선택 가능하게 변경)
+                
+                # 중복된 버튼 ID들을 원래 이름으로 변환
+                goal_location = self.button_id
+                if self.button_id == 'D52':
+                    goal_location = 'D5'  # D52 → D5로 변환
+                elif self.button_id == 'D72':
+                    goal_location = 'D7'  # D72 → D7로 변환
+                
+                request.goal_location = goal_location
+                
+                # 서비스 호출
+                future = self.service_client.call_async(request)
+                print(f"🎯 AddGoalLocation 서비스 호출: 로봇={request.robot_id}, 목표={request.goal_location} (원본 버튼: {self.button_id})")
+                
+                # 비동기 응답 처리 (간단한 로그만)
+                future.add_done_callback(self.service_callback)
+            else:
+                print("❌ 서비스 클라이언트가 초기화되지 않음")
+                print(f"🔍 디버그: service_client = {self.service_client}")
+                
+        except Exception as e:
+            print(f"❌ 서비스 호출 실패: {e}")
+    
+    def service_callback(self, future):
+        """서비스 응답 처리"""
+        try:
+            response = future.result()
+            if response.success:
+                print(f"✅ 서비스 성공: {response.message}")
+            else:
+                print(f"❌ 서비스 실패: {response.message}")
+        except Exception as e:
+            print(f"❌ 서비스 응답 처리 실패: {e}")
     
     def mouseDoubleClickEvent(self, event):
         """더블클릭 이벤트 무시 (한번 클릭만 작동하도록)"""
@@ -258,10 +310,16 @@ class MainViewTab(QWidget):
         self.target_ui_rotation = 0.0  # 목표 UI 회전
         self.interpolation_factor = 0.8  # 보간 계수 (0.8로 높여서 더 빠르게)
         
+        # AddGoalLocation 서비스 클라이언트
+        self.add_goal_client = None
+        
         self.init_ui()  # UI 초기화
         self.init_ros_connections()  # ROS 연결 초기화
         self.init_timers()  # 타이머 초기화
         self.init_video_receiver()  # 영상 수신 초기화
+        
+        # 맵 뷰에 배경 이미지 로드 (ROS 연결 초기화 후에 실행)
+        self.load_map_background()
         
         # 키보드 이벤트 활성화
         self.setFocusPolicy(Qt.StrongFocus)
@@ -307,9 +365,6 @@ class MainViewTab(QWidget):
             else:
                 self.get_logger().error("❌ video_back 위젯을 찾을 수 없음")
             
-            # 맵 뷰에 배경 이미지 로드
-            self.load_map_background()
-            
             # map_view에 마우스 클릭 이벤트 연결
             if hasattr(self, 'map_view'):
                 self.map_view.mousePressEvent = self.map_view_mouse_press_event
@@ -330,23 +385,39 @@ class MainViewTab(QWidget):
     
     def init_ros_connections(self):
         """ROS 연결 초기화"""
-        # TaskStatus 구독자
-        self.task_status_subscription = self.ros_node.create_subscription(
-            TaskStatus, 'task_status', self.task_status_callback, 10
-        )
-        self.get_logger().info("✅ TaskStatus 구독자 초기화 완료")
-        
-        # OverallStatus 구독자
-        self.robot_status_subscription = self.ros_node.create_subscription(
-            OverallStatus, 'robot_status', self.robot_status_callback, 10
-        )
-        self.get_logger().info("✅ OverallStatus 구독자 초기화 완료")
+        try:
+            # TaskStatus 구독자
+            self.task_status_subscription = self.ros_node.create_subscription(
+                TaskStatus, 'task_status', self.task_status_callback, 10
+            )
+            self.get_logger().info("✅ TaskStatus 구독자 초기화 완료")
+            
+            # OverallStatus 구독자
+            self.robot_status_subscription = self.ros_node.create_subscription(
+                OverallStatus, 'robot_status', self.robot_status_callback, 10
+            )
+            self.get_logger().info("✅ OverallStatus 구독자 초기화 완료")
 
-        # AMCL pose 구독자 추가
-        self.amcl_pose_subscription = self.ros_node.create_subscription(
-            PoseWithCovarianceStamped, '/amcl_pose', self.amcl_pose_callback, 10
-        )
-        self.get_logger().info("✅ AMCL pose 구독자 초기화 완료")
+            # AMCL pose 구독자 추가
+            self.amcl_pose_subscription = self.ros_node.create_subscription(
+                PoseWithCovarianceStamped, '/amcl_pose', self.amcl_pose_callback, 10
+            )
+            self.get_logger().info("✅ AMCL pose 구독자 초기화 완료")
+            
+            # AddGoalLocation 서비스 클라이언트
+            self.get_logger().info("🔍 AddGoalLocation 서비스 클라이언트 생성 시도...")
+            self.add_goal_client = self.ros_node.create_client(AddGoalLocation, 'add_goal_location')
+            
+            if self.add_goal_client:
+                self.get_logger().info("✅ AddGoalLocation 서비스 클라이언트 초기화 완료")
+                self.get_logger().info(f"🔍 서비스 클라이언트 생성됨: {self.add_goal_client}")
+            else:
+                self.get_logger().error("❌ 서비스 클라이언트 생성 실패 - None 반환")
+                
+        except Exception as e:
+            self.get_logger().error(f"❌ ROS 연결 초기화 중 오류: {e}")
+            import traceback
+            self.get_logger().error(f"🔍 상세 오류: {traceback.format_exc()}")
         
         # 구독 확인을 위한 디버그 로그 추가
         self.get_logger().info("🔍 AMCL pose 구독 시작 - /amcl_pose 토픽 대기 중...")
@@ -553,9 +624,13 @@ class MainViewTab(QWidget):
     def add_map_buttons(self, scene):
         """맵에 버튼들을 배치"""
         try:
+            # 서비스 클라이언트 상태 확인
+            if not self.add_goal_client:
+                self.get_logger().warning("⚠️ 서비스 클라이언트가 None입니다. 버튼은 생성되지만 서비스 호출이 불가능합니다.")
+            
             # 각 버튼 생성 및 씬에 추가
             for button_id, (x, y) in self.MAP_BUTTON_POSITIONS.items():
-                button = MapButton(button_id, x, y, 40, 40)
+                button = MapButton(button_id, x, y, 40, 40, service_client=self.add_goal_client)
                 scene.addItem(button)
                 self.get_logger().debug(f"✅ 맵 버튼 추가: {button_id} ({x:.1f}, {y:.1f})")
             
