@@ -20,6 +20,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/DetectionStatus.msg"      # 장애물감지상태
   "msg/DetectionTimer.msg"       # 감지 타이머 메시지 추가
   "msg/FaceExpression.msg"       # 표정 메시지 추가
+  "msg/GestureResult.msg"        # 제스처 결과 메시지 추가
   "msg/GoalPose.msg"             # 이름 중복을 피하기 위해 GoalPose.msg로 변경
   "msg/Heartbeat.msg"            # 하트비트 메시지
   "msg/HumanInfo.msg"            # 휴먼타입지정
@@ -30,6 +31,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Waypoint.msg"             # 지도 만든 위치들이 포함된 메시지 추가
   # === 서비스 파일 ===
   "srv/ActivateDetector.srv"     # OR 스캐너 활성화 서비스
+  "srv/ActivateGesture.srv"      # 제스처 인식 활성화 서비스
   "srv/ActivateQRScanner.srv"    # QR 스캐너 활성화 서비스
   "srv/ActivateTalker.srv"       # 토커 활성화 서비스
   "srv/ActivateTracker.srv"      # Tracker 활성화 서비스
@@ -37,6 +39,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/BookSearch.srv"           # 도서 검색 서비스
   "srv/CancelNavigation.srv"     # 네비게이션 취소 서비스
   "srv/DeactivateDetector.srv"   # OR 스캐너 비활성화 서비스
+  "srv/DeactivateGesture.srv"    # 제스처 인식 비활성화 서비스
   "srv/DeactivateQRScanner.srv"  # QR 스캐너 비활성화 서비스
   "srv/DeactivateTalker.srv"     # 토커 비활성화 서비스
   "srv/DeactivateTracker.srv"    # Tracker 비활성화 서비스
