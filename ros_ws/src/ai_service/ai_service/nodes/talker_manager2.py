@@ -33,7 +33,7 @@ MIC_STREAM_PORT = 7010                 # 🎤 마이크 스트림 포트 (UDP �
 SPEAKER_PORT = 7002                    # 🔊 스피커 출력 포트 (TCP 서버)
 
 # 오디오 설정
-NATIVE_RATE = 44800                    # 🎵 원본 샘플링 레이트 (마이크용)
+NATIVE_RATE = 48000                    # 🎵 원본 샘플링 레이트 (마이크용)
 # NATIVE_RATE = 44100                    # 🎵 원본 샘플링 레이트 (웹캠 마이크용)
 TARGET_RATE = 16000                    # 🎯 웨이크워드 처리용 레이트
 TTS_RATE = 24000                       # 🗣️ TTS 출력 레이트
@@ -1067,10 +1067,15 @@ def main(args=None):
     
     # ========== 3. Porcupine 웨이크워드 엔진 ==========
     log("INIT", "Porcupine 웨이크워드 엔진 초기화 중...")
+    # 민감도 높게 설정 (0.0~1.0 사이, 기본값 0.5, 높을수록 더 민감함)
+    SENSITIVITY = 0.7  # 민감도 증가
+    log("CONFIG", f"웨이크워드 감지 민감도: {SENSITIVITY} (0.0~1.0, 높을수록 더 민감)")
+    
     porcupine = pvporcupine.create(
         access_key=PICOVOICE_ACCESS_KEY,
         keyword_paths=[PORCUPINE_KEYWORD_PATH],
-        model_path=PORCUPINE_MODEL_PATH
+        model_path=PORCUPINE_MODEL_PATH,
+        sensitivities=[SENSITIVITY]  # 키워드 감지 민감도 설정
     )
     mic_frame_length = int(porcupine.frame_length * (NATIVE_RATE / TARGET_RATE))
     log("CONFIG", f"프레임 길이: {mic_frame_length}, 원본 레이트: {NATIVE_RATE}Hz, 타겟 레이트: {TARGET_RATE}Hz")
