@@ -4,25 +4,61 @@ import socket  # 소켓: 네트워크 통신(UDP)을 위해 사용
 import time  # 시간 관련 함수: 전송 간격 조절(딜레이)을 위해 사용
 import json  # JSON: 데이터 구조를 만들기 위해 사용 (헤더 생성)
 from datetime import datetime, timezone  # 날짜 및 시간: 타임스탬프 생성을 위해 사용
+import threading  # 스레딩: 동시 실행을 위해 추가
+import queue      # 큐: 스레드 간 안전한 데이터 교환을 위해 추가
+
+def udp_sender(sock, data_queue, destination_address, name):
+    """
+    큐에서 메시지를 가져와 지정된 주소로 UDP 패킷을 전송하는 스레드 함수.
+    """
+    print(f"✅ Starting sender thread for {name} -> {destination_address}")
+    while True:
+        try:
+            # 큐에서 보낼 메시지를 가져옴. 큐가 비어있으면 메시지가 들어올 때까지 대기.
+            message = data_queue.get()
+            sock.sendto(message, destination_address)
+        except Exception as e:
+            print(f"⚠️ Error in {name} sender thread: {e}")
+            time.sleep(1) # 오류 발생 시 잠시 대기
 
 def main(args=None):
-    # ===== 전송 대상 설정 =====
-    # 모니터링 서비스 (옵션)
+    # ===== 전송 대상 설정 (이제 모두 필수) =====
+    # 모니터링 서비스
     UDP_IP_MONITORING = "127.0.0.1"
-    UDP_PORT_MONITORING = 7001
-    SEND_TO_MONITORING = False
+    UDP_PORT_MONITORING = 7022
 
     # ADMIN_PC로 영상 전송
     ADMIN_PC_IP = "192.168.1.7"
     ADMIN_PC_PORT = 7021
-    SEND_TO_ADMIN_PC = True
 
     # 사용할 카메라 경로 (udev 규칙으로 고정된 경로)
     WEBCAM_PATH = '/dev/my_webcam_2'
+    
+    # ===== 스레드 간 데이터 전송을 위한 큐 생성 =====
+    # maxsize를 지정하여 한쪽 스레드가 멈췄을 때 메모리가 무한정 쌓이는 것을 방지
+    q_monitoring = queue.Queue(maxsize=10)
+    q_admin = queue.Queue(maxsize=10)
+
 
     # ===== 소켓 설정 =====
     sock_monitoring = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock_admin = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    # ===== 전송 스레드 생성 및 시작 =====
+    # daemon=True: 메인 프로그램이 종료되면 스레드도 함께 종료됨
+    thread_monitoring = threading.Thread(
+        target=udp_sender,
+        args=(sock_monitoring, q_monitoring, (UDP_IP_MONITORING, UDP_PORT_MONITORING), "Monitoring"),
+        daemon=True
+    )
+    thread_admin = threading.Thread(
+        target=udp_sender,
+        args=(sock_admin, q_admin, (ADMIN_PC_IP, ADMIN_PC_PORT), "AdminPC"),
+        daemon=True
+    )
+    thread_monitoring.start()
+    thread_admin.start()
+
 
     # ===== 카메라 초기화 =====
     cap = cv2.VideoCapture(WEBCAM_PATH, cv2.CAP_V4L2)
@@ -51,6 +87,7 @@ def main(args=None):
 
             jpeg_bytes = jpeg.tobytes()
 
+            # 헤더 생성
             header = {
                 "direction": "rear",
                 "frame_id": frame_id,
@@ -59,13 +96,20 @@ def main(args=None):
             header_str = json.dumps(header)
             message = header_str.encode() + b'|' + jpeg_bytes + b'\n'
 
-            if SEND_TO_MONITORING:
-                sock_monitoring.sendto(message, (UDP_IP_MONITORING, UDP_PORT_MONITORING))
-            if SEND_TO_ADMIN_PC:
-                sock_admin.sendto(message, (ADMIN_PC_IP, ADMIN_PC_PORT))
+            # ===== 생성된 메시지를 각 큐에 넣기 =====
+            # 큐가 가득 차 있으면 오래된 프레임은 버리고 계속 진행 (put_nowait)
+            try:
+                q_monitoring.put_nowait(message)
+            except queue.Full:
+                print("⚠️ Monitoring queue is full, dropping a frame.")
+            
+            try:
+                q_admin.put_nowait(message)
+            except queue.Full:
+                print("⚠️ Admin PC queue is full, dropping a frame.")
 
             frame_id += 1
-            time.sleep(0.07)  # 약 30fps로 조절
+            time.sleep(0.033)  # 약 30fps로 조절 (기존 0.07 -> 약 14fps)
 
     except KeyboardInterrupt:
         print("\n[종료] cam_sender stopped by user.")
