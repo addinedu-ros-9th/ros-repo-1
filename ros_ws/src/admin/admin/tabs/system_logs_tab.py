@@ -12,7 +12,7 @@ from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 
 # OverallStatus 메시지 import
-from libo_interfaces.msg import OverallStatus
+from libo_interfaces.msg import OverallStatus, TaskStatus
 
 class SystemLogsTab(QWidget):
     def __init__(self, ros_node, parent=None):
@@ -21,6 +21,10 @@ class SystemLogsTab(QWidget):
         
         # OverallStatus 관련 변수들
         self.overall_status_data = {}  # 로봇 상태 데이터 저장
+        
+        # TaskStatus 관련 변수들
+        self.task_status_data = {}  # 작업 상태 데이터 저장
+        self.previous_task_stages = {}  # 이전 작업 단계 저장 (변화 감지용)
         
         self.init_ui()  # UI 초기화
         self.init_ros_connections()  # ROS 연결 초기화
@@ -64,6 +68,16 @@ class SystemLogsTab(QWidget):
             )
             self.get_logger().info("✅ OverallStatus 구독자 초기화 완료")
             
+            # TaskStatus 구독자
+            try:
+                self.task_status_subscription = self.ros_node.create_subscription(
+                    TaskStatus, 'task_status', self.task_status_callback, 10
+                )
+                self.get_logger().info("✅ TaskStatus 구독자 초기화 완료 (system_logs_tab)")
+            except Exception as e:
+                self.get_logger().error(f"❌ TaskStatus 구독자 생성 실패: {e}")
+                self.task_status_subscription = None
+            
         except Exception as e:
             self.get_logger().error(f"❌ ROS 연결 초기화 중 오류: {e}")
     
@@ -90,6 +104,62 @@ class SystemLogsTab(QWidget):
             'received_time': time.time()
         }
         self.get_logger().debug(f"📥 OverallStatus 수신: {robot_id}")
+    
+    def task_status_callback(self, msg):
+        """TaskStatus 메시지 수신 - task 생성/종료 감지"""
+        task_id = msg.task_id
+        current_stage = msg.task_stage
+        
+        # 디버깅을 위한 상세 로그
+        self.get_logger().info(f"📥 TaskStatus 수신됨: ID={task_id}, 로봇={msg.robot_id}, 타입={msg.task_type}, 단계={current_stage}")
+        
+        # 이전 단계 확인
+        previous_stage = self.previous_task_stages.get(task_id, None)
+        
+        # task 정보 저장
+        self.task_status_data[task_id] = {
+            'robot_id': msg.robot_id,
+            'task_type': msg.task_type,
+            'task_stage': msg.task_stage,
+            'call_location': msg.call_location,
+            'goal_location': msg.goal_location,
+            'start_time': msg.start_time,
+            'end_time': msg.end_time,
+            'received_time': time.time()
+        }
+        
+        # task 생성 감지 (새로운 task이거나 stage가 1로 시작)
+        if task_id not in self.previous_task_stages or (previous_stage is None and current_stage == 1):
+            time_str = time.strftime('%Y-%m-%d %H:%M:%S')
+            task_created_log = f"[{time_str}] 🆕 TASK 생성 | ID:{task_id} | 로봇:{msg.robot_id} | 타입:{msg.task_type} | 경로:{msg.call_location}→{msg.goal_location}"
+            self.overall_status_text.append(task_created_log)
+            
+            # 스크롤바를 맨 아래로 이동
+            scrollbar = self.overall_status_text.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+            
+            self.get_logger().info(f"🆕 Task 생성 감지: {task_id}")
+        
+        # task 종료 감지 (stage가 3이거나 end_time이 설정됨)
+        elif (previous_stage is not None and current_stage == 3) or (msg.end_time.sec != 0 or msg.end_time.nanosec != 0):
+            time_str = time.strftime('%Y-%m-%d %H:%M:%S')
+            task_completed_log = f"[{time_str}] ✅ TASK 완료 | ID:{task_id} | 로봇:{msg.robot_id} | 타입:{msg.task_type} | 경로:{msg.call_location}→{msg.goal_location}"
+            self.overall_status_text.append(task_completed_log)
+            
+            # 스크롤바를 맨 아래로 이동
+            scrollbar = self.overall_status_text.verticalScrollBar()
+            scrollbar.setValue(scrollbar.maximum())
+            
+            self.get_logger().info(f"✅ Task 완료 감지: {task_id}")
+            
+            # 완료된 task는 이전 단계 기록에서 제거
+            if task_id in self.previous_task_stages:
+                del self.previous_task_stages[task_id]
+        
+        # 이전 단계 업데이트
+        self.previous_task_stages[task_id] = current_stage
+        
+        self.get_logger().debug(f"📥 TaskStatus 수신: {task_id} (stage: {current_stage})")
     
     def update_overall_status_display(self):
         """OverallStatus 표시 업데이트 (10초마다) - 한 줄씩 누적되는 로그 방식"""
