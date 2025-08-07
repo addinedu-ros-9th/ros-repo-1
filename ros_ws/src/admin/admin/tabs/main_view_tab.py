@@ -15,6 +15,7 @@ from PyQt5.QtGui import QPixmap, QPainter, QImage
 from PyQt5 import uic
 from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
+import math
 
 # TaskStatus 메시지 import
 from libo_interfaces.msg import TaskStatus, OverallStatus
@@ -123,11 +124,22 @@ class MainViewTab(QWidget):
         self.video_receiver_back = None  # Back camera 수신 스레드
         self.current_frame_back = None  # Back camera 현재 프레임
         
+        # 로봇 아이콘 관련 변수들
+        self.robot_item = None  # 로봇 아이콘 아이템
+        self.robot_speed = 2  # 로봇 이동 속도 (픽셀) - 더 부드럽게 하기 위해 줄임
+        self.robot_rotation_speed = 2  # 로봇 회전 속도 (도)
+        self.keys_pressed = set()  # 현재 눌린 키들 저장
+        self.animation_timer = None  # 애니메이션 타이머
+        
         self.init_ui()  # UI 초기화
         self.init_ros_connections()  # ROS 연결 초기화
         self.init_timers()  # 타이머 초기화
         self.init_video_receiver()  # 영상 수신 초기화
         
+        # 키보드 이벤트 활성화
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.map_view.setFocusPolicy(Qt.StrongFocus)
+    
     def init_ui(self):
         """UI 초기화"""
         try:
@@ -209,6 +221,12 @@ class MainViewTab(QWidget):
         self.robot_status_timer.timeout.connect(self.update_robot_status_display)
         self.robot_status_timer.start(1000)  # 1초마다
         self.get_logger().info("✅ 로봇 상태 업데이트 타이머 시작됨")
+        
+        # 로봇 애니메이션 타이머 (부드러운 움직임용)
+        self.animation_timer = QTimer()
+        self.animation_timer.timeout.connect(self.update_robot_animation)
+        self.animation_timer.start(16)  # 약 60 FPS (1000ms / 60 ≈ 16ms)
+        self.get_logger().info("✅ 로봇 애니메이션 타이머 시작됨 (60 FPS)")
     
     def init_video_receiver(self):
         """영상 수신 초기화"""
@@ -336,7 +354,7 @@ class MainViewTab(QWidget):
                     scene.setSceneRect(QRectF(rect))
                     
                     # 로봇 아이콘 추가 (지도 한가운데)
-                    robot_icon_path = os.path.join(get_package_share_directory('admin'), 'resource', 'libo.png')
+                    robot_icon_path = os.path.join(get_package_share_directory('admin'), 'resource', 'libo_full.png')
                     if os.path.exists(robot_icon_path):
                         robot_pixmap = QPixmap(robot_icon_path)
                         if not robot_pixmap.isNull():
@@ -348,9 +366,14 @@ class MainViewTab(QWidget):
                             center_y = pixmap.height() / 2 - robot_pixmap.height() / 2
                             
                             # 로봇 아이콘 생성 및 위치 설정
-                            robot_item = QGraphicsPixmapItem(robot_pixmap)
-                            robot_item.setPos(center_x, center_y)
-                            scene.addItem(robot_item)
+                            self.robot_item = QGraphicsPixmapItem(robot_pixmap)
+                            self.robot_item.setPos(center_x, center_y)
+                            
+                            # 로봇 아이콘의 중심점 설정 (회전 기준점)
+                            # 아이콘 크기가 40x40이므로 중심점은 (20, 20)
+                            self.robot_item.setTransformOriginPoint(20, 20)
+                            
+                            scene.addItem(self.robot_item)
                             
                             self.get_logger().info("✅ 로봇 아이콘 추가 완료 (지도 중앙)")
                         else:
@@ -497,6 +520,11 @@ class MainViewTab(QWidget):
             self.robot_status_timer.stop()
             self.get_logger().info("✅ 로봇 상태 업데이트 타이머 정지됨")
         
+        # 로봇 애니메이션 타이머 정리
+        if hasattr(self, 'animation_timer') and self.animation_timer:
+            self.animation_timer.stop()
+            self.get_logger().info("✅ 로봇 애니메이션 타이머 정지됨")
+        
         # 영상 수신 스레드 정리
         if hasattr(self, 'video_receiver') and self.video_receiver:
             self.video_receiver.stop()
@@ -528,3 +556,93 @@ class MainViewTab(QWidget):
     def get_logger(self):
         """ROS 로거 반환"""
         return self.ros_node.get_logger() 
+    
+    def keyPressEvent(self, event):
+        """키보드 이벤트 처리 - 키를 누를 때"""
+        # WASD 키를 keys_pressed에 추가
+        if event.key() == Qt.Key_W:
+            self.keys_pressed.add('W')
+        elif event.key() == Qt.Key_S:
+            self.keys_pressed.add('S')
+        elif event.key() == Qt.Key_A:
+            self.keys_pressed.add('A')
+        elif event.key() == Qt.Key_D:
+            self.keys_pressed.add('D')
+        elif event.key() == Qt.Key_Q:  # 왼쪽 회전
+            self.keys_pressed.add('Q')
+        elif event.key() == Qt.Key_E:  # 오른쪽 회전
+            self.keys_pressed.add('E')
+        else:
+            return
+            
+        # 이벤트 처리 완료
+        event.accept()
+    
+    def keyReleaseEvent(self, event):
+        """키보드 이벤트 처리 - 키를 뗄 때"""
+        # WASD 키를 keys_pressed에서 제거
+        if event.key() == Qt.Key_W:
+            self.keys_pressed.discard('W')
+        elif event.key() == Qt.Key_S:
+            self.keys_pressed.discard('S')
+        elif event.key() == Qt.Key_A:
+            self.keys_pressed.discard('A')
+        elif event.key() == Qt.Key_D:
+            self.keys_pressed.discard('D')
+        elif event.key() == Qt.Key_Q:  # 왼쪽 회전
+            self.keys_pressed.discard('Q')
+        elif event.key() == Qt.Key_E:  # 오른쪽 회전
+            self.keys_pressed.discard('E')
+        else:
+            return
+            
+        # 이벤트 처리 완료
+        event.accept()
+    
+    def update_robot_animation(self):
+        """로봇 애니메이션 업데이트 (60 FPS)"""
+        if self.robot_item is None or not self.keys_pressed:
+            return
+            
+        current_pos = self.robot_item.pos()
+        new_x = current_pos.x()
+        new_y = current_pos.y()
+        moved = False
+        rotated = False
+        
+        # 로봇의 현재 회전 각도 (라디안)
+        current_rotation_rad = math.radians(self.robot_item.rotation())
+        
+        # 눌린 키에 따라 로봇 이동 (회전 방향 고려)
+        if 'W' in self.keys_pressed:  # 앞으로 이동 (회전 방향 기준)
+            # 회전된 방향으로 앞으로 이동
+            new_x += self.robot_speed * math.sin(current_rotation_rad)
+            new_y -= self.robot_speed * math.cos(current_rotation_rad)
+            moved = True
+        if 'S' in self.keys_pressed:  # 뒤로 이동 (회전 방향 기준)
+            # 회전된 방향으로 뒤로 이동
+            new_x -= self.robot_speed * math.sin(current_rotation_rad)
+            new_y += self.robot_speed * math.cos(current_rotation_rad)
+            moved = True
+        if 'A' in self.keys_pressed:  # 왼쪽으로 이동 (항상 수평)
+            new_x -= self.robot_speed
+            moved = True
+        if 'D' in self.keys_pressed:  # 오른쪽으로 이동 (항상 수평)
+            new_x += self.robot_speed
+            moved = True
+        
+        # 눌린 키에 따라 로봇 회전
+        if 'Q' in self.keys_pressed:  # 왼쪽 회전
+            current_rotation = self.robot_item.rotation()
+            new_rotation = current_rotation - self.robot_rotation_speed
+            self.robot_item.setRotation(new_rotation)
+            rotated = True
+        if 'E' in self.keys_pressed:  # 오른쪽 회전
+            current_rotation = self.robot_item.rotation()
+            new_rotation = current_rotation + self.robot_rotation_speed
+            self.robot_item.setRotation(new_rotation)
+            rotated = True
+        
+        # 새로운 위치 설정
+        if moved:
+            self.robot_item.setPos(new_x, new_y) 
