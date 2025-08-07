@@ -9,16 +9,16 @@ AI_SERVICE = "192.168.1.7"                # 추후 AI 서비스 서버 IP
 MIC_STREAM_PORT = 7010           
 
 MIC_INDEX = None                        # 자동 선택
-NATIVE_RATE = 48000                     # 48000 Hz 마이크
+NATIVE_RATE = 48000                     # 기본값: 필요시 자동 감지된 값으로 대체됨
 CHANNELS = 1                            # 모노 채널
 CHUNK = 2048                            
 
 # 선호하는 마이크 키워드 (우선순위 순)
 PREFERRED_MICS = [
+    "default"         # 기본 장치
     "USB Device",     # 웹캠 마이크 (로지텍 등)
     "MATA STUDIO",    # MATA STUDIO C10
     "pulse",          # PulseAudio
-    "default"         # 기본 장치
 ]
 # ===========================================================
 
@@ -34,20 +34,23 @@ def find_best_mic(pa):
     for i in range(pa.get_device_count()):
         dev_info = pa.get_device_info_by_index(i)
         if dev_info['maxInputChannels'] > 0:  # 입력 장치만 출력
-            print(f"[{get_kr_time()}][AUDIO] [{i}] {dev_info['name']}")
+            rate = int(dev_info.get('defaultSampleRate', 0))
+            print(f"[{get_kr_time()}][AUDIO] [{i}] {dev_info['name']} (샘플링 레이트: {rate}Hz, 채널: {int(dev_info['maxInputChannels'])})")
             available_mics.append((i, dev_info))
     
     # 선호하는 마이크 찾기
     for keyword in PREFERRED_MICS:
         for idx, dev_info in available_mics:
             if keyword.lower() in dev_info['name'].lower():
-                print(f"[{get_kr_time()}][AUDIO] 선택된 마이크: {dev_info['name']} (index: {idx})")
-                return idx
+                rate = int(dev_info.get('defaultSampleRate', NATIVE_RATE))
+                print(f"[{get_kr_time()}][AUDIO] 선택된 마이크: {dev_info['name']} (index: {idx}, 샘플링 레이트: {rate}Hz)")
+                return idx, rate
     
     # 선호 마이크를 찾지 못한 경우 기본 입력 장치 사용
     default_input = pa.get_default_input_device_info()
-    print(f"[{get_kr_time()}][AUDIO] 기본 마이크 사용: {default_input['name']} (index: {default_input['index']})")
-    return default_input['index']
+    rate = int(default_input.get('defaultSampleRate', NATIVE_RATE))
+    print(f"[{get_kr_time()}][AUDIO] 기본 마이크 사용: {default_input['name']} (index: {default_input['index']}, 샘플링 레이트: {rate}Hz)")
+    return default_input['index'], rate
 
 def main():
     print(f"[{get_kr_time()}][INIT] mic_streamer 초기화 중...")
@@ -55,7 +58,10 @@ def main():
     pa = pyaudio.PyAudio()
     
     # 최적의 마이크 찾기
-    mic_index = find_best_mic(pa)
+    mic_index, detected_rate = find_best_mic(pa)
+    
+    # 감지된 샘플링 레이트 사용
+    actual_rate = detected_rate
     
     try:
         # 선택된 마이크의 지원 포맷 확인
@@ -65,7 +71,7 @@ def main():
         stream = pa.open(
             format=pyaudio.paInt16,
             channels=supported_channels,
-            rate=NATIVE_RATE,
+            rate=actual_rate,
             input=True,
             frames_per_buffer=CHUNK,
             input_device_index=mic_index
@@ -73,7 +79,7 @@ def main():
         
         print(f"[{get_kr_time()}][INIT] 🚀 스트리밍 시작...")
         print(f"[{get_kr_time()}][CONFIG] 🎤 마이크: {device_info['name']}")
-        print(f"[{get_kr_time()}][CONFIG] ⚙️ 설정: {NATIVE_RATE}Hz, {supported_channels}채널, chunk={CHUNK}")
+        print(f"[{get_kr_time()}][CONFIG] ⚙️ 설정: {actual_rate}Hz, {supported_channels}채널, chunk={CHUNK}")
         print(f"[{get_kr_time()}][UDP] 📡 UDP 스트림 대상: {AI_SERVICE}:{MIC_STREAM_PORT}")
         
         # 성능 모니터링을 위한 변수들
