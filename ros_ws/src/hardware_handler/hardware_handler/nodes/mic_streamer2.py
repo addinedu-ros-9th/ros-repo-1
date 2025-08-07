@@ -6,6 +6,7 @@ import time
 
 # ======================== 상수 정의 =========================
 AI_SERVICE = "192.168.1.7"                # 추후 AI 서비스 서버 IP
+# AI_SERVICE = "127.0.0.1"                # 추후 AI 서비스 서버 IP
 MIC_STREAM_PORT = 7010           
 
 MIC_INDEX = None                        # 자동 선택
@@ -15,10 +16,11 @@ CHUNK = 2048
 
 # 선호하는 마이크 키워드 (우선순위 순)
 PREFERRED_MICS = [
-    "default"         # 기본 장치
+    "USB Condenser",  # USB Condenser Microphone
     "USB Device",     # 웹캠 마이크 (로지텍 등)
     "MATA STUDIO",    # MATA STUDIO C10
     "pulse",          # PulseAudio
+    "default"         # 기본 장치
 ]
 # ===========================================================
 

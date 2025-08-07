@@ -33,7 +33,8 @@ MIC_STREAM_PORT = 7010                 # 🎤 마이크 스트림 포트 (UDP �
 SPEAKER_PORT = 7002                    # 🔊 스피커 출력 포트 (TCP 서버)
 
 # 오디오 설정
-NATIVE_RATE = 48000                    # 🎵 원본 샘플링 레이트 (mic_streamer와 동일 int16)
+NATIVE_RATE = 44800                    # 🎵 원본 샘플링 레이트 (마이크용)
+# NATIVE_RATE = 44100                    # 🎵 원본 샘플링 레이트 (웹캠 마이크용)
 TARGET_RATE = 16000                    # 🎯 웨이크워드 처리용 레이트
 TTS_RATE = 24000                       # 🗣️ TTS 출력 레이트
 
@@ -1094,10 +1095,20 @@ def main(args=None):
                 frame_bytes = buffer[:mic_frame_length * 2]
                 buffer = buffer[mic_frame_length * 2:]
 
-                pcm_native = struct.unpack_from("h" * mic_frame_length, frame_bytes)
-                audio_np = np.array(pcm_native, dtype=np.float32)
-                audio_resampled = resampy.resample(audio_np, NATIVE_RATE, TARGET_RATE)
-                pcm_resampled = audio_resampled.astype(np.int16)
+                # 전체 프레임이 있는지 확인
+                if len(frame_bytes) >= mic_frame_length * 2:  # int16은 2bytes
+                    pcm_native = struct.unpack_from("h" * mic_frame_length, frame_bytes)
+                    audio_np = np.array(pcm_native, dtype=np.float32)
+                    audio_resampled = resampy.resample(audio_np, NATIVE_RATE, TARGET_RATE)
+                    # 길이가 512의 배수가 되도록 패딩 또는 잘라내기
+                    target_length = 512 * ((len(audio_resampled) + 511) // 512)
+                    if len(audio_resampled) < target_length:
+                        # 패딩: 부족한 샘플을 0으로 채우기
+                        audio_resampled = np.pad(audio_resampled, (0, target_length - len(audio_resampled)))
+                    elif len(audio_resampled) > target_length:
+                        # 잘라내기: 초과 샘플 제거
+                        audio_resampled = audio_resampled[:target_length]
+                    pcm_resampled = audio_resampled.astype(np.int16)
                 
                 # 상태가 변경되었을 때만 메시지 출력 (또는 60초마다 한 번)
                 current_time = time.time()
