@@ -318,7 +318,7 @@ class MainViewTab(QWidget):
         """맵 뷰에 배경 이미지 로드"""
         try:
             # 이미지 파일 경로
-            image_path = os.path.join(get_package_share_directory('admin'), 'resource', 'map_background_landscape_1170.png')
+            image_path = os.path.join(get_package_share_directory('admin'), 'resource', 'map_background_landscape_1170_white.png')
             
             if os.path.exists(image_path):
                 # QGraphicsScene 생성
@@ -334,6 +334,29 @@ class MainViewTab(QWidget):
                     # 씬 크기를 이미지 크기에 맞춤 (QRect를 QRectF로 변환)
                     rect = pixmap.rect()
                     scene.setSceneRect(QRectF(rect))
+                    
+                    # 로봇 아이콘 추가 (지도 한가운데)
+                    robot_icon_path = os.path.join(get_package_share_directory('admin'), 'resource', 'libo.png')
+                    if os.path.exists(robot_icon_path):
+                        robot_pixmap = QPixmap(robot_icon_path)
+                        if not robot_pixmap.isNull():
+                            # 로봇 아이콘 크기 조정 (너무 크지 않게)
+                            robot_pixmap = robot_pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                            
+                            # 지도 한가운데 위치 계산
+                            center_x = pixmap.width() / 2 - robot_pixmap.width() / 2
+                            center_y = pixmap.height() / 2 - robot_pixmap.height() / 2
+                            
+                            # 로봇 아이콘 생성 및 위치 설정
+                            robot_item = QGraphicsPixmapItem(robot_pixmap)
+                            robot_item.setPos(center_x, center_y)
+                            scene.addItem(robot_item)
+                            
+                            self.get_logger().info("✅ 로봇 아이콘 추가 완료 (지도 중앙)")
+                        else:
+                            self.get_logger().error("❌ 로봇 아이콘 파일 로드 실패")
+                    else:
+                        self.get_logger().warning(f"⚠️ 로봇 아이콘 파일을 찾을 수 없음: {robot_icon_path}")
                     
                     # map_view에 씬 설정
                     self.map_view.setScene(scene)

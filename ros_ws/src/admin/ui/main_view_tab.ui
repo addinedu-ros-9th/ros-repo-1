@@ -416,11 +416,7 @@ QLabel#robot_list_label {
       </size>
      </property>
      <property name="styleSheet">
-      <string notr="true">    QGraphicsView {
-        border: 2px solid gray;
-    }
-
-</string>
+      <string notr="true"/>
      </property>
     </widget>
    </item>
