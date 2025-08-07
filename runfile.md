@@ -51,6 +51,7 @@ ros2 run hardware_handler speaker_node2
 ros2 run hardware_handler heartbeat_sender
 ros2 run libo_gui robot_face_gui 
 ros2 run hardware_handler cam_sender
+ros2 run hardware_handler cam_sender_front
 
 ros2 launch ascamera nuwa.launch.py -> depth camera, depth_ws 워크스페이스
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200 ->  esp
