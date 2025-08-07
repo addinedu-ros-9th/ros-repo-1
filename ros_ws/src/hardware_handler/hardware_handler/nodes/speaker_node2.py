@@ -177,6 +177,19 @@ class SpeakerNode(Node):
                 "resume": {"type": "tts", "value": "어시스트를 재개합니다."},
                 "return": {"type": "mp3", "value": "complete.mp3"},                     # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
                 "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
+            },
+            
+            # 음성 명령 응답 (리보야 부른 후 처리)
+            "voice_command": {
+                "wake_response": {"type": "mp3", "value": "ribo_response.mp3"},
+                "pause_assist": {"type": "tts", "value": "네. 일시정지합니다."},
+                "resume_assist": {"type": "tts", "value": "네, 다시 작업 하겠습니다."},
+                "start_gesture": {"type": "tts", "value": "모션 제스쳐 모드를 시작합니다."},
+                "start_follow": {"type": "tts", "value": "Follow 모드를 시작합니다."},
+                "get_mode": {"type": "tts", "value": "현재 진행중인 모드를 알려드립니다."},
+                "get_weight": {"type": "tts", "value": "현재 책 무게를 알려드립니다."},
+                "stop_assist": {"type": "tts", "value": "네, 복귀합니다."},
+                "ignore": {"type": "tts", "value": "등록되지 않은 명령입니다."}
             }
         }
         
