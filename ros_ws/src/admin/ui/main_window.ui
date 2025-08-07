@@ -51,6 +51,13 @@
     <property name="usesScrollButtons">
      <bool>false</bool>
     </property>
+    <!-- Main View Tab -->
+    <widget class="QWidget" name="main_view_tab">
+     <attribute name="title">
+      <string>👀 Main View</string>
+     </attribute>
+     <layout class="QVBoxLayout" name="main_view_layout"/>
+    </widget>
     <!-- Main Control Tab -->
     <widget class="QWidget" name="main_control_tab">
      <attribute name="title">
@@ -64,13 +71,6 @@
       <string>👁️ AI Server Control</string>
      </attribute>
      <layout class="QVBoxLayout" name="ai_server_control_layout"/>
-    </widget>
-    <!-- Main View Tab -->
-    <widget class="QWidget" name="main_view_tab">
-     <attribute name="title">
-      <string>👀 Main View</string>
-     </attribute>
-     <layout class="QVBoxLayout" name="main_view_layout"/>
     </widget>
     <!-- System Logs Tab -->
     <widget class="QWidget" name="system_logs_tab">
