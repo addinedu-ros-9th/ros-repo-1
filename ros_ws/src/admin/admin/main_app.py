@@ -14,6 +14,7 @@ from rclpy.node import Node
 # 새로운 탭 클래스들 import
 from admin.tabs.main_control_tab import MainControlTab
 from admin.tabs.ai_server_control_tab import AiServerControlTab
+from admin.tabs.main_view_tab import MainViewTab  # 새로운 탭 import
 
 class AdminWindow(QMainWindow):
     def __init__(self, parent=None):
@@ -45,6 +46,10 @@ class AdminWindow(QMainWindow):
         self.ai_server_control_tab = AiServerControlTab(self.ros_node)
         self.tabWidget.widget(1).layout().addWidget(self.ai_server_control_tab)
         
+        # Main View 탭 추가
+        self.main_view_tab = MainViewTab(self.ros_node)
+        self.tabWidget.widget(2).layout().addWidget(self.main_view_tab)
+        
         # System Logs 탭은 나중에 구현 예정
         self.get_logger().info("✅ 탭 초기화 완료")
 
@@ -73,6 +78,8 @@ class AdminWindow(QMainWindow):
             self.main_control_tab.cleanup()
         if hasattr(self, 'ai_server_control_tab'):
             self.ai_server_control_tab.cleanup()
+        if hasattr(self, 'main_view_tab'):
+            self.main_view_tab.cleanup()
         
         # 타이머 정지
         if hasattr(self, 'ros_timer'):
