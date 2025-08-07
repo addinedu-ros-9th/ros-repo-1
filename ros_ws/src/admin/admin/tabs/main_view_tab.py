@@ -74,6 +74,12 @@ class VideoReceiverThread(QThread):
                                     
                                     if frame_count % 30 == 0:  # 30프레임마다 로그
                                         print(f"✅ 프레임 처리 완료: {frame_count}개")
+                                    
+                                    # 100프레임마다 메모리 정리
+                                    if frame_count % 100 == 0:
+                                        import gc
+                                        gc.collect()
+                                        print(f"🧹 메모리 정리 완료 (프레임: {frame_count})")
                                 else:
                                     print("❌ 프레임 디코딩 실패")
                                     
@@ -231,20 +237,26 @@ class MainViewTab(QWidget):
     def on_frame_received(self, frame):
         """프레임 수신 처리"""
         try:
+            # 이전 프레임 메모리 해제
+            if hasattr(self, 'current_qimage'):
+                del self.current_qimage
+            if hasattr(self, 'current_pixmap'):
+                del self.current_pixmap
+            
             self.current_frame = frame
             
             # QImage로 변환
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
-            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            self.current_qimage = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
             
             # QPixmap으로 변환
-            pixmap = QPixmap.fromImage(q_image)
+            self.current_pixmap = QPixmap.fromImage(self.current_qimage)
             
             # video_front 위젯에 표시
             if hasattr(self, 'video_front'):
                 # 위젯 크기에 맞게 스케일링
-                scaled_pixmap = pixmap.scaled(
+                scaled_pixmap = self.current_pixmap.scaled(
                     self.video_front.size(), 
                     Qt.KeepAspectRatio, 
                     Qt.SmoothTransformation
@@ -257,24 +269,34 @@ class MainViewTab(QWidget):
         except Exception as e:
             print(f"❌ 프레임 처리 중 오류: {e}")
             self.get_logger().error(f"❌ 프레임 처리 중 오류: {e}")
+        finally:
+            # 메모리 정리
+            import gc
+            gc.collect()
     
     def on_frame_received_back(self, frame):
         """Back camera 프레임 수신 처리"""
         try:
+            # 이전 프레임 메모리 해제
+            if hasattr(self, 'current_qimage_back'):
+                del self.current_qimage_back
+            if hasattr(self, 'current_pixmap_back'):
+                del self.current_pixmap_back
+            
             self.current_frame_back = frame
             
             # QImage로 변환
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
-            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
+            self.current_qimage_back = QImage(frame.data, width, height, bytes_per_line, QImage.Format_RGB888)
             
             # QPixmap으로 변환
-            pixmap = QPixmap.fromImage(q_image)
+            self.current_pixmap_back = QPixmap.fromImage(self.current_qimage_back)
             
             # video_back 위젯에 표시
             if hasattr(self, 'video_back'):
                 # 위젯 크기에 맞게 스케일링
-                scaled_pixmap = pixmap.scaled(
+                scaled_pixmap = self.current_pixmap_back.scaled(
                     self.video_back.size(), 
                     Qt.KeepAspectRatio, 
                     Qt.SmoothTransformation
@@ -287,6 +309,10 @@ class MainViewTab(QWidget):
         except Exception as e:
             print(f"❌ Back camera 프레임 처리 중 오류: {e}")
             self.get_logger().error(f"❌ Back camera 프레임 처리 중 오류: {e}")
+        finally:
+            # 메모리 정리
+            import gc
+            gc.collect()
     
     def load_map_background(self):
         """맵 뷰에 배경 이미지 로드"""
@@ -456,6 +482,25 @@ class MainViewTab(QWidget):
         if hasattr(self, 'video_receiver_back') and self.video_receiver_back:
             self.video_receiver_back.stop()
             self.get_logger().info("✅ Back camera 수신 스레드 정지됨")
+        
+        # 메모리 정리
+        if hasattr(self, 'current_frame'):
+            del self.current_frame
+        if hasattr(self, 'current_frame_back'):
+            del self.current_frame_back
+        if hasattr(self, 'current_qimage'):
+            del self.current_qimage
+        if hasattr(self, 'current_qimage_back'):
+            del self.current_qimage_back
+        if hasattr(self, 'current_pixmap'):
+            del self.current_pixmap
+        if hasattr(self, 'current_pixmap_back'):
+            del self.current_pixmap_back
+        
+        # 가비지 컬렉션 실행
+        import gc
+        gc.collect()
+        self.get_logger().info("✅ 메모리 정리 완료")
     
     def get_logger(self):
         """ROS 로거 반환"""
