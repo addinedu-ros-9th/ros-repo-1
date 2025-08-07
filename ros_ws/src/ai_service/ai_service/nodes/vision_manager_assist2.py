@@ -248,7 +248,7 @@ class AdvancedAssistFollowFSM(Node):
         if not self.qr_authenticated or msg.robot_id != "libo_a": return
         if msg.action == "stop":
             if not self.is_paused_by_voice: self.is_paused_by_voice = True; self.transition_to_following(stop_first=True)
-        elif msg.action == "follow":
+        elif msg.action == "activate":
             if self.is_paused_by_voice: self.is_paused_by_voice = False
     def handle_activate_tracker(self, request, response): self.qr_authenticated = True; response.success = True; return response
     def handle_deactivate_tracker(self, request, response): self.qr_authenticated = False; self.transition_to_following(stop_first=True); response.success = True; return response

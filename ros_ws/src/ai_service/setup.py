@@ -32,6 +32,8 @@ setup(
             'ros2_bridege_node = ai_service.nodes.ros2_bridege_node:main',
             'vision_manager_assist = ai_service.nodes.vision_manager_assist:main',  
             'vision_manager_assist2 = ai_service.nodes.vision_manager_assist2:main', 
+            'vision_manager_assist3 = ai_service.nodes.vision_manager_assist3:main', 
+            'gesture_control_node = ai_service.nodes.gesture_control_node:main',
 
         ],
     },

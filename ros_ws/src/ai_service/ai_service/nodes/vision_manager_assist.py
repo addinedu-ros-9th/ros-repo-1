@@ -156,7 +156,7 @@ class AdvancedAssistFollowFSM(Node):
                 self.get_logger().info("🎤 음성 명령으로 추종을 일시 중지합니다.")
                 self.is_paused_by_voice = True
                 self.stop_robot()
-        elif msg.action == "follow":
+        elif msg.action == "activate":
             if self.is_paused_by_voice:
                 self.get_logger().info("🎤 음성 명령으로 추종을 재개합니다.")
                 self.is_paused_by_voice = False
