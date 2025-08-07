@@ -8,7 +8,7 @@ Traceback (most recent call last):
 
 로봇 접속 
 빅핑키 핫스팟:ssh vic@192.168.5.1
-빅핑키 연결된 와이파이 :ssh vic@192.168.1.9
+Libo 5G 와이파이 :ssh vic@192.168.1.9
 
 핑키 브링업:
 ros2 launch vicpinky_bringup bringup.launch.xml
