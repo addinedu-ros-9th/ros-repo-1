@@ -30,7 +30,8 @@ setup(
             'human_detector_node = ai_service.nodes.human_detector_node:main',
             'obstacle_detector_node = ai_service.nodes.obstacle_detector_node:main', 
             'ros2_bridege_node = ai_service.nodes.ros2_bridege_node:main',
-            'vision_manager_assist = ai_service.nodes.vision_manager_assist:main',   
+            'vision_manager_assist = ai_service.nodes.vision_manager_assist:main',  
+            'vision_manager_assist2 = ai_service.nodes.vision_manager_assist2:main', 
 
         ],
     },
