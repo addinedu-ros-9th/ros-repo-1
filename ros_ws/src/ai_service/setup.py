@@ -32,6 +32,8 @@ setup(
             'ros2_bridege_node = ai_service.nodes.ros2_bridege_node:main',
             'vision_manager_assist = ai_service.nodes.vision_manager_assist:main',  
             'vision_manager_assist2 = ai_service.nodes.vision_manager_assist2:main', 
+            'hand_gesture_detector = ai_service.nodes.hand_gesture_detector:main', 
+            'hand_gesture_detector_ros2_bridge = ai_service.nodes.hand_gesture_detector_ros2_bridge:main', 
 
         ],
     },

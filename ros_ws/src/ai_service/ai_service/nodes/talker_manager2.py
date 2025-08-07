@@ -15,15 +15,23 @@ import pvporcupine
 import re
 import rclpy
 import speech_recognition as sr
+import os
+import time
+import pytz
+import traceback
+import numpy as np
+import re
+import speech_recognition as sr
 from datetime import datetime
 from dotenv import load_dotenv
 from pydub import AudioSegment
 from google.cloud import texttospeech
+import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.service import Service
-from libo_interfaces.msg import TalkCommand, FaceExpression
-from libo_interfaces.srv import EndTask, ActivateTalker, DeactivateTalker
+from libo_interfaces.msg import TalkCommand, FaceExpression, VoiceCommand, Weight
+from libo_interfaces.srv import EndTask, ActivateTalker, DeactivateTalker, ActivateGesture, DeactivateGesture, ActivateTracker, DeactivateTracker
 
 
 # ================== 네트워크/오디오 기본 설정 ==================
@@ -100,62 +108,15 @@ for path in [PORCUPINE_MODEL_PATH, PORCUPINE_KEYWORD_PATH]:
     if not os.path.exists(path):
         raise FileNotFoundError(f"필요한 모델 파일이 존재하지 않습니다: {path}")
 
-# ================== 음성 명령 응답 매핑 ==================
-# 음성 명령 응답 매핑 - 카테고리별로 구성
-VOICE_COMMANDS = {
-    # 공통 음성 명령
-    "common": {
-        "power_on": {"type": "mp3", "value": "power_on.mp3"},                   # (전원 켜지는 소리 - 삐빅)
-        "initialized": {"type": "mp3", "value": "robot_initialized.mp3"},       # (초기화 완료 소리 - 따리리리링)
-        "charging": {"type": "tts", "value": "충전을 시작하겠습니다."},
-        "battery_sufficient": {"type": "tts", "value": "배터리가 충분합니다. 대기모드로 전환합니다."},
-        "depart_base": {"type": "tts", "value": "출발합니다~ (충전기를 뽑고)"},
-        "high_weigh": {"type": "tts", "value": "바구니가 가득 찼습니다. 정리해주세요."},
-        "obstacle_detected": {"type": "mp3", "value": "honk.mp3"},              # (장애물이 감지됐습니다. 잠시합니다. / 빵!!!!!!!!!!)
-        "reroute": {"type": "tts", "value": "새로운 경로로 안내합니다."},
-        "return": {"type": "mp3", "value": "complete.mp3"},                     # (복귀하겠습니다. / (북귀음 소리 - 빠빕))
-        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."},
-        "navigation_canceled": {"type": "tts", "value": "주행이 취소되었습니다"},
-        "emergency_stop": {"type": "tts", "value": "비상 정지! 안전을 위해 모든 작업을 중단합니다."},
-        "emergency_recovery": {"type": "tts", "value": "비상 상황이 해결되었습니다. 정상 상태로 복구합니다"}
-    },
-    
-    # 안내 관련 음성 명령
-    "escort": {
-        "depart_base": {"type": "tts", "value": "출발합니다~"},
-        "arrived_kiosk": {"type": "tts", "value": "잭 위치까지 에스코팅을 시작하겠습니다. 뒤로 따라와주시길 바랍니다."},
-        "lost_user": {"type": "tts", "value": "손님이 보이지 않습니다. 5초 후에 자동종료 됩니다."},
-        "user_reconnected": {"type": "mp3", "value": "reconnected.mp3"},        # (다시 연결된 소리, 뿌루루? 빠빅?)
-        "arrived_destination": {"type": "tts", "value": "도착했습니다. 더 필요한 것이 있으면 키오스크에서 불러주세요."},
-        "return": {"type": "mp3", "value": "complete.mp3"},                     # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
-        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
-    },
-    
-    # 배송 관련 음성 명령
-    "delivery": {
-        "depart_base": {"type": "tts", "value": "출발합니다~"},
-        "arrived_admin_desk": {"type": "tts", "value": "딜리버리 준비가 완료되었습니다. 다음 목적지를 선택해주세요."},
-        "receive_next_goal": {"type": "tts", "value": "목적지를 수신하였습니다. 출발하겠습니다."},
-        "arrived_destination": {"type": "tts", "value": "도착했습니다. 작업이 완료되면 말해주세요."},
-        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},        # 네? / (삐빅)
-        "return": {"type": "mp3", "value": "complete.mp3"},                      # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
-        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
-    },
-    
-    # 도움 관련 음성 명령
-    "assist": {
-        "depart_base": {"type": "tts", "value": "출발합니다~"},
-        "arrived_kiosk": {"type": "tts", "value": "어시스트를 시작하시려면 QR 코드를 카메라 앞에 대주세요"},
-        "qr_authenticated": {"type": "tts", "value": "QR 인증 완료! 어시스트를 시작하기 위해 카메라 앞에 서주세요."},
-        "no_person_5s": {"type": "tts", "value": "감지 실패!"},
-        "person_detected": {"type": "tts", "value": "감지 성공!"},
-        "called_by_staff": {"type": "mp3", "value": "ribo_response.mp3"},       # 네? / (삐빅)
-        "pause": {"type": "tts", "value": "일시정지합니다."},
-        "resume": {"type": "tts", "value": "어시스트를 재개합니다."},
-        "return": {"type": "mp3", "value": "complete.mp3"},                     # 복귀하겠습니다. / (북귀음 소리 - 빠빕)
-        "arrived_base": {"type": "tts", "value": "Base에 도착했습니다."}
-    }
-}
+# ================== 오디오/모드 관련 상수 정의 ==================
+# 모드 설정
+FOLLOW_MODE = "follow"
+GESTURE_MODE = "gesture"
+CURRENT_MODE = FOLLOW_MODE  # 기본 모드는 Follow 모드
+
+# 오디오 관련 상수
+CHANNELS = 1
+CHUNK = 2048                           # mic_streamer와 동일
 CHANNELS = 1
 CHUNK = 2048                           # mic_streamer와 동일
 
@@ -219,17 +180,21 @@ def create_tts_audio(tts_client, text, rate=TTS_RATE):
         log("TTS", f"음성 합성 실패: {str(e)}")
         return None
 
-def play_wake_response(comm_manager):
+def play_wake_response(comm_manager, talker_node=None, robot_id="libo_a"):
     """웨이크워드 감지 후 응답 생성 및 재생"""
-    # 'called_by_staff' 액션으로 응답 시도하고 실패하면 TTS 사용
-    success = comm_manager.play_voice_command("assist", "called_by_staff")
-    if success:
-        log("AUDIO", "웨이크워드 응답 전송 완료 (MP3)")
-    else:
-        wake_response = "네? 무엇을 도와드릴까요?"
-        success = comm_manager.play_tts_response(wake_response)
-        if not success:
-            log("AUDIO", "❌ 웨이크워드 응답 전송 실패")
+    success = False
+    
+    # TalkCommand 토픽 발행
+    if talker_node:
+        # TalkCommand 토픽으로 stop 액션 전송
+        talker_node.publish_talk_command(robot_id, "stop")
+        log("ROS", f"TalkCommand 발행 - robot_id: {robot_id}, action: stop")
+        
+        # VoiceCommand 토픽으로 wake_response 명령 전송
+        talker_node.publish_voice_command(robot_id, "voice_command", "wake_response")
+        log("ROS", f"VoiceCommand 발행 - robot_id: {robot_id}, category: voice_command, action: wake_response")
+        success = True
+    
     return success
 
 def recognize_speech(recognizer, audio_file_path):
@@ -254,16 +219,22 @@ def recognize_speech(recognizer, audio_file_path):
 def analyze_intent(client, transcript):
     """OpenAI API를 사용하여 텍스트에서 의도 추출"""
     intent = "ignore"  # 기본값
-    system_prompt = (
-        "당신은 로봇의 음성 명령을 분석하는 AI입니다.\n"
-        "사용자의 발화를 듣고, 아래 4가지 의도 중 하나로 분류하세요.\n\n"
-        "- pause_follow: '잠깐 멈춰', '멈춰봐' 등 일시정지 명령\n"
-        "- resume_follow: '다시 따라와', '다시 시작해' 등 팔로윙 재개 명령\n"
-        "- task_end: '어시스트 종료', '그만', '복귀' 등 작업 종료 명령\n"
-        "- ignore: '고마워', '아니야' 등 기타 대화나 무시해도 되는 표현\n\n"
-        "결과는 반드시 다음 JSON 형식으로만 출력해야 합니다:\n"
-        '{"intent": "..."}'
-    )
+    system_prompt = """
+    당신은 로봇의 음성 명령을 분석하는 AI입니다.
+    사용자의 발화를 듣고, 아래 의도 중 하나로 분류하세요.
+
+    - pause_assist: '잠깐 멈춰', '잠깐만 기다려봐' 등 작업 일시중지 명령
+    - resume_assist: '다시 따라와', '계속하자' 등 작업 재개 명령
+    - start_gesture: '제스쳐모드 시작', '내 동작 보고 따라와' 등 제스처 모드 시작 명령
+    - start_follow: 'follow모드 시작' 등 팔로우 모드 시작 명령
+    - get_mode: '지금 어떤 모드야?' 등 현재 모드 확인 명령
+    - get_weight: '지금 무게 얼마나 돼?', '지금 책 무게는?' 등 책 무게 확인 명령
+    - stop_assist: '이제 그만하고 복귀하자', '제스쳐 모드 중지', '어시스트 중지' 등 작업 중지 명령
+    - ignore: '아니야 잘못불렀어', '오늘 날씨 어때' 등 무시할만한 명령
+
+    결과는 반드시 다음 JSON 형식으로만 출력해야 합니다:
+    {"intent": "..."}
+    """
     
     try:
         completion = client.chat.completions.create(
@@ -633,24 +604,20 @@ class CommunicationManager:
             bool: 성공 여부
         """
         try:
-            if category not in VOICE_COMMANDS:
-                log("ERROR", f"유효하지 않은 카테고리: {category}")
-                return False
-                
-            if action not in VOICE_COMMANDS[category]:
-                log("ERROR", f"'{category}' 카테고리에 '{action}' 액션이 없습니다")
-                return False
-                
-            command = VOICE_COMMANDS[category][action]
-            log("VOICE", f"명령 실행: {category}.{action} ({command['type']})")
+            # 직접 처리하는 대신 VoiceCommand 메시지를 통해 speaker_node에 전송
+            # speaker_node에서 실제 음성 명령 처리
+            log("VOICE", f"음성 명령 요청: {category}.{action}")
             
-            if command['type'] == 'mp3':
-                return self.play_mp3_file(command['value'])
-            elif command['type'] == 'tts':
-                return self.play_tts_response(command['value'])
+            # 기본 응답은 TTS로 처리
+            if action == "called_by_staff":
+                return self.play_tts_response("네?")
+            elif category == "assist" and action == "pause":
+                return self.play_tts_response("일시정지합니다.")
+            elif category == "assist" and action == "resume":
+                return self.play_tts_response("어시스트를 재개합니다.")
             else:
-                log("ERROR", f"알 수 없는 명령 타입: {command['type']}")
-                return False
+                # 그 외 명령은 기본 TTS 응답 제공
+                return self.play_tts_response(f"{action} 명령을 처리합니다.")
         except Exception as e:
             log("ERROR", f"음성 명령 실행 오류: {str(e)}")
             return False
@@ -670,6 +637,12 @@ class TalkerNode(Node):
     ROS2 노드 클래스 - 음성 명령 토픽 구독자 및 제어 명령 발행자
     """
     def __init__(self, comm_manager):
+        global CURRENT_MODE
+        CURRENT_MODE = "follow"  # 초기 모드 설정
+        
+        # 무게 관련 변수 초기화
+        self.current_weight = 0.0
+        self.weight_unit = "g"  # 기본 단위는 그램
         super().__init__('talker_node')
         
         # 통신 관리자 참조 저장
@@ -688,6 +661,13 @@ class TalkerNode(Node):
             10
         )
         
+        # VoiceCommand 토픽 발행자
+        self.voice_cmd_pub = self.create_publisher(
+            VoiceCommand,
+            '/voice_command',
+            10
+        )
+        
         # FaceExpression 토픽 발행자
         self.face_expr_pub = self.create_publisher(
             FaceExpression,
@@ -695,10 +675,44 @@ class TalkerNode(Node):
             10
         )
         
+        # Weight 토픽 구독자
+        self.weight_sub = self.create_subscription(
+            Weight,
+            '/weight',
+            self.weight_callback,
+            10
+        )
+        self.get_logger().info('Weight 토픽 구독 시작')
+        
         # EndTask 서비스 클라이언트
         self.end_task_client = self.create_client(
             EndTask, 
             '/end_task',
+            callback_group=self.callback_group
+        )
+        
+        # Gesture/Tracker 서비스 클라이언트들
+        self.activate_tracker_client = self.create_client(
+            ActivateTracker,
+            '/activate_tracker',
+            callback_group=self.callback_group
+        )
+        
+        self.deactivate_tracker_client = self.create_client(
+            DeactivateTracker,
+            '/deactivate_tracker',
+            callback_group=self.callback_group
+        )
+        
+        self.activate_gesture_client = self.create_client(
+            ActivateGesture,
+            '/activate_gesture',
+            callback_group=self.callback_group
+        )
+        
+        self.deactivate_gesture_client = self.create_client(
+            DeactivateGesture,
+            '/deactivate_gesture',
             callback_group=self.callback_group
         )
         
@@ -772,6 +786,74 @@ class TalkerNode(Node):
         
         self.get_logger().info(f"TalkCommand 발행: robot_id={robot_id}, action={action}")
         self.talk_cmd_pub.publish(msg)
+        
+    def publish_voice_command(self, robot_id, category, action):
+        """VoiceCommand 메시지 발행"""
+        msg = VoiceCommand()
+        msg.robot_id = robot_id
+        msg.category = category
+        msg.action = action
+        
+        self.get_logger().info(f"VoiceCommand 발행: robot_id={robot_id}, category={category}, action={action}")
+        self.voice_cmd_pub.publish(msg)
+        
+    def activate_tracker(self, robot_id):
+        """Tracker 활성화 서비스 호출"""
+        try:
+            req = ActivateTracker.Request()
+            req.robot_id = robot_id
+            self.activate_tracker_client.call_async(req)
+            self.get_logger().info(f'ActivateTracker 서비스 호출: 로봇={robot_id}')
+        except Exception as e:
+            self.get_logger().error(f'ActivateTracker 서비스 호출 실패: {str(e)}')
+    
+    def deactivate_tracker(self, robot_id):
+        """Tracker 비활성화 서비스 호출"""
+        try:
+            req = DeactivateTracker.Request()
+            req.robot_id = robot_id
+            self.deactivate_tracker_client.call_async(req)
+            self.get_logger().info(f'DeactivateTracker 서비스 호출: 로봇={robot_id}')
+        except Exception as e:
+            self.get_logger().error(f'DeactivateTracker 서비스 호출 실패: {str(e)}')
+    
+    def activate_gesture(self, robot_id):
+        """Gesture 활성화 서비스 호출"""
+        try:
+            req = ActivateGesture.Request()
+            req.robot_id = robot_id
+            self.activate_gesture_client.call_async(req)
+            self.get_logger().info(f'ActivateGesture 서비스 호출: 로봇={robot_id}')
+        except Exception as e:
+            self.get_logger().error(f'ActivateGesture 서비스 호출 실패: {str(e)}')
+    
+    def deactivate_gesture(self, robot_id):
+        """Gesture 비활성화 서비스 호출"""
+        try:
+            req = DeactivateGesture.Request()
+            req.robot_id = robot_id
+            self.deactivate_gesture_client.call_async(req)
+            self.get_logger().info(f'DeactivateGesture 서비스 호출: 로봇={robot_id}')
+        except Exception as e:
+            self.get_logger().error(f'DeactivateGesture 서비스 호출 실패: {str(e)}')
+            
+    def weight_callback(self, msg):
+        """Weight 토픽 메시지 수신 콜백"""
+        # Weight 메시지에서 필요한 정보 추출
+        robot_id = msg.robot_id
+        weight_value = msg.weight
+        
+        # 무게 정보 저장
+        self.current_weight = weight_value
+        
+        # 무게에 따른 단위 자동 조정 (가독성 향상)
+        if weight_value >= 1000:
+            self.weight_unit = "kg"
+            self.current_weight = weight_value / 1000.0
+        else:
+            self.weight_unit = "g"
+        
+        self.get_logger().debug(f'Weight 토픽 수신: 로봇={robot_id}, 무게={self.current_weight}{self.weight_unit}')
         
     def activate_talker_callback(self, request, response):
         """
@@ -870,7 +952,15 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
     4. LLM(OpenAI)을 통한 의도 분석
     5. 의도에 따른 적절한 액션 실행
     
-    주의: EndTask 서비스는 오직 stop_follow 의도일 때만 호출됩니다.
+    지원하는 의도:
+    - pause_assist: 작업 일시중지
+    - resume_assist: 작업 재개
+    - start_gesture: 제스처 모드 시작
+    - start_follow: 팔로우 모드 시작
+    - get_mode: 현재 모드 확인
+    - get_weight: 책 무게 확인
+    - stop_assist: 작업 중지 및 복귀
+    - ignore: 무시할 명령
     
     Args:
         comm_manager: 통신 관리자 인스턴스
@@ -882,6 +972,127 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
     Returns:
         None
     """
+    global CURRENT_MODE
+    
+    # 음성 수집 및 텍스트 변환 로직
+    try:
+        # 웨이크워드 응답 재생
+        if not play_wake_response(comm_manager, talker_node, robot_id):
+            log("ERROR", "웨이크워드 응답 재생 실패")
+            return
+        
+        # 음성 수집 (침묵 감지)
+        log("AUDIO", "음성 수집 시작...")
+        audio_data, duration = collect_audio(comm_manager)
+        if audio_data is None or len(audio_data) == 0:
+            log("AUDIO", "유효한 음성 데이터가 수집되지 않았습니다.")
+            return
+        
+        # 임시 WAV 파일 저장
+        tmp_dir = "/tmp"
+        os.makedirs(tmp_dir, exist_ok=True)
+        tmp_wav = os.path.join(tmp_dir, f"voice_command_{int(time.time())}.wav")
+        save_wav_file(tmp_wav, audio_data)
+        log("AUDIO", f"음성 데이터 저장됨: {tmp_wav} ({len(audio_data)} bytes, {duration:.2f} sec)")
+        
+        # STT로 음성을 텍스트로 변환
+        transcript = recognize_speech(recognizer, tmp_wav)
+        if transcript is None:
+            log("STT", "음성 인식 실패")
+            talker_node.publish_voice_command(robot_id, "voice_command", "speech_recognition_failed")
+            return
+        
+        log("STT", f"인식된 텍스트: '{transcript}'")
+        
+        # 의도 분석
+        intent = analyze_intent(client, transcript)
+        log("INTENT", f"분석된 의도: {intent}")
+        
+        # 의도에 따른 액션 실행
+        if intent == "pause_assist":
+            # 일시중지 명령 처리
+            log("ACTION", "일시중지 명령 처리")
+            talker_node.publish_talk_command(robot_id, "stop")
+            talker_node.publish_face_expression(robot_id, "normal")
+            talker_node.publish_voice_command(robot_id, "voice_command", "pause_assist")
+            
+        elif intent == "resume_assist":
+            # 재개 명령 처리
+            log("ACTION", "재개 명령 처리")
+            talker_node.publish_talk_command(robot_id, "activate")
+            talker_node.publish_face_expression(robot_id, "speaking")
+            talker_node.publish_voice_command(robot_id, "voice_command", "resume_assist")
+            
+        elif intent == "start_gesture":
+            # 제스처 모드 시작
+            log("ACTION", "제스처 모드 시작")
+            CURRENT_MODE = GESTURE_MODE
+            talker_node.publish_talk_command(robot_id, "activate")
+            
+            # DeactivateTracker.srv, ActivateGesture.srv 호출
+            talker_node.deactivate_tracker(robot_id)
+            talker_node.activate_gesture(robot_id)
+            
+            talker_node.publish_voice_command(robot_id, "voice_command", "start_gesture")
+            
+        elif intent == "start_follow":
+            # 팔로우 모드 시작
+            log("ACTION", "팔로우 모드 시작")
+            CURRENT_MODE = FOLLOW_MODE
+            talker_node.publish_talk_command(robot_id, "activate")
+            
+            # ActivateTracker.srv, DeactivateGesture.srv 호출
+            talker_node.activate_tracker(robot_id)
+            talker_node.deactivate_gesture(robot_id)
+            
+            talker_node.publish_voice_command(robot_id, "voice_command", "start_follow")
+            
+        elif intent == "get_mode":
+            # 현재 모드 확인
+            log("ACTION", "현재 모드 확인")
+            mode_name = "제스처 모드" if CURRENT_MODE == GESTURE_MODE else "팔로우 모드"
+            
+            # 동적 메시지 생성을 위해 커스텀 액션 사용
+            # 직접 문자열 생성 대신 토픽으로 현재 모드 전송
+            if CURRENT_MODE == GESTURE_MODE:
+                talker_node.publish_voice_command(robot_id, "voice_command", "current_mode_gesture")
+            else:
+                talker_node.publish_voice_command(robot_id, "voice_command", "current_mode_follow")
+            
+        elif intent == "get_weight":
+            # 책 무게 확인 - Weight.msg 토픽에서 값 가져오기
+            log("ACTION", "책 무게 확인 명령 처리")
+            
+            # Weight 정보를 VoiceCommand로 전송
+            # 간단하게 무게 정보를 전송하고 speaker_node에서 처리
+            talker_node.publish_voice_command(robot_id, "voice_command", "weight_info")
+            
+            # 실제 무게 정보는 로그에만 남김
+            log("INFO", f"현재 무게 정보: {talker_node.current_weight}{talker_node.weight_unit}")
+            
+        elif intent == "stop_assist":
+            # 작업 중지 및 복귀
+            log("ACTION", "작업 중지 및 복귀 명령 처리")
+            talker_node.call_end_task(robot_id)
+            talker_node.publish_voice_command(robot_id, "voice_command", "stop_assist")
+            
+        elif intent == "ignore":
+            # 무시할 명령
+            log("ACTION", "무시 가능한 명령")
+            talker_node.publish_voice_command(robot_id, "voice_command", "ignore")
+            
+        else:
+            # 알 수 없는 의도
+            log("ACTION", f"알 수 없는 의도: {intent}")
+            talker_node.publish_voice_command(robot_id, "voice_command", "unknown_intent")
+            
+    except Exception as e:
+        log("ERROR", f"음성 명령 처리 중 오류 발생: {str(e)}")
+        traceback.print_exc()
+        try:
+            talker_node.publish_voice_command(robot_id, "voice_command", "error")
+        except:
+            pass
     # [1] 음성 수집 및 노이즈 레벨 조정 (원본 샘플링 레이트 사용)
     log("AUDIO", "주변 소음 분석 중... (0.5초)")
     log("CONFIG", f"음성 인식을 위해 원본 레이트({NATIVE_RATE}Hz) 사용")
