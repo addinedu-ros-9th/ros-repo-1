@@ -9,9 +9,9 @@ import socket
 import json
 import cv2
 import numpy as np
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGraphicsScene, QGraphicsPixmapItem, QGraphicsView
-from PyQt5.QtCore import Qt, QRectF, QTimer, QThread, pyqtSignal
-from PyQt5.QtGui import QPixmap, QPainter, QImage
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QGraphicsScene, QGraphicsPixmapItem, QGraphicsView, QGraphicsRectItem, QGraphicsEllipseItem, QGraphicsItem
+from PyQt5.QtCore import Qt, QRectF, QTimer, QThread, pyqtSignal, QPropertyAnimation, QEasingCurve
+from PyQt5.QtGui import QPixmap, QPainter, QImage, QPen, QBrush, QColor
 from PyQt5 import uic
 from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
@@ -106,10 +106,120 @@ class VideoReceiverThread(QThread):
         self.running = False
         self.wait()
 
+class MapButton(QGraphicsItem):
+    """맵 위의 클릭 가능한 버튼 아이템"""
+    
+    def __init__(self, button_id, x, y, width=40, height=40, parent=None):
+        super().__init__(parent)
+        self.button_id = button_id  # 버튼 ID 저장
+        # 중심점 기준으로 좌상단 좌표 계산
+        self.button_rect = QRectF(x - width/2, y - height/2, width, height)
+        # 마우스 이벤트 허용
+        self.setAcceptHoverEvents(True)
+        self.setFlag(QGraphicsItem.ItemIsSelectable)
+        self.setFlag(QGraphicsItem.ItemIsFocusable)
+        self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
+        
+        # 애니메이션 관련 변수들
+        self.animation_timer = None
+        self.animation_circle = None
+    
+    def boundingRect(self):
+        """바운딩 박스 반환"""
+        return self.button_rect
+    
+    def paint(self, painter, option, widget):
+        """그리기 (투명하게)"""
+        # 투명하게 그리기 (시각적으로는 보이지 않음)
+        painter.setPen(QPen(Qt.transparent))
+        painter.setBrush(QBrush(Qt.transparent))
+        painter.drawRect(self.button_rect)
+    
+    def mousePressEvent(self, event):
+        """버튼 클릭 이벤트 처리"""
+        print(f"🗺️ 맵 버튼 클릭: {self.button_id} (좌표: {self.button_rect.center().x():.1f}, {self.button_rect.center().y():.1f})")
+        
+        # 빨간색 동그라미 애니메이션 생성
+        self.create_click_animation()
+        
+        # 이벤트 처리 완료 (전파 방지)
+        event.accept()
+    
+    def mouseDoubleClickEvent(self, event):
+        """더블클릭 이벤트 무시 (한번 클릭만 작동하도록)"""
+        event.accept()
+    
+    def create_click_animation(self):
+        """클릭 시 빨간색 동그라미 애니메이션 생성"""
+        try:
+            # 기존 애니메이션 정리
+            if self.animation_circle:
+                self.scene().removeItem(self.animation_circle)
+                self.animation_circle = None
+            
+            if self.animation_timer:
+                self.animation_timer.stop()
+                self.animation_timer = None
+            
+            # 빨간색 동그라미 생성 (중심점 기준)
+            center_x = self.button_rect.center().x()
+            center_y = self.button_rect.center().y()
+            circle_size = 30  # 동그라미 크기
+            
+            self.animation_circle = QGraphicsEllipseItem(center_x - circle_size/2, center_y - circle_size/2, circle_size, circle_size)
+            self.animation_circle.setPen(QPen(QColor(255, 0, 0), 3))  # 빨간색 테두리
+            self.animation_circle.setBrush(QBrush(QColor(255, 0, 0, 100)))  # 반투명 빨간색
+            
+            # 씬에 추가
+            if self.scene():
+                self.scene().addItem(self.animation_circle)
+            
+            # 1초 후 애니메이션 제거
+            self.animation_timer = QTimer()
+            self.animation_timer.timeout.connect(self.remove_animation)
+            self.animation_timer.start(1000)  # 1초
+            
+        except Exception as e:
+            print(f"❌ 애니메이션 생성 실패: {e}")
+    
+    def remove_animation(self):
+        """애니메이션 제거"""
+        try:
+            if self.animation_circle and self.scene():
+                self.scene().removeItem(self.animation_circle)
+                self.animation_circle = None
+            
+            if self.animation_timer:
+                self.animation_timer.stop()
+                self.animation_timer = None
+                
+        except Exception as e:
+            print(f"❌ 애니메이션 제거 실패: {e}")
+
 class MainViewTab(QWidget):
     def __init__(self, ros_node, parent=None):
         super().__init__(parent)
         self.ros_node = ros_node  # ROS 노드 저장
+        
+        # 맵 버튼 좌표 상수 정의 (중심점 기준)
+        self.MAP_BUTTON_POSITIONS = {
+            'D3': (637.0, 294.0),
+            'C4': (685.0, 225.0),
+            'E4': (685.0, 360.0),
+            'D5': (737.0, 296.0),
+            'D52': (798.0, 295.0),  # 두 번째 D5
+            'C6': (846.0, 224.0),
+            'E6': (844.0, 362.0),
+            'D7': (891.0, 298.0),   # 첫 번째 D7
+            'D72': (958.0, 312.0),  # 두 번째 D7
+            'C8': (1027.0, 262.0),
+            'E8': (1028.0, 352.0),
+            'D9': (1100.0, 314.0),
+            'kiosk1': (1115.0, 430.0),
+            'kiosk2': (553.0, 200.0),
+            'base': (572.0, 392.0),
+            'admin': (222.0, 244.0)
+        }
         
         # TaskStatus 관련 변수들
         self.task_status_data = {}  # 작업 상태 데이터 저장
@@ -199,6 +309,13 @@ class MainViewTab(QWidget):
             
             # 맵 뷰에 배경 이미지 로드
             self.load_map_background()
+            
+            # map_view에 마우스 클릭 이벤트 연결
+            if hasattr(self, 'map_view'):
+                self.map_view.mousePressEvent = self.map_view_mouse_press_event
+                self.get_logger().info("✅ map_view 마우스 클릭 이벤트 연결 완료")
+            else:
+                self.get_logger().error("❌ map_view 위젯을 찾을 수 없음")
             
         except Exception as e:
             # UI 파일이 없을 경우 기본 레이아웃 설정
@@ -421,6 +538,9 @@ class MainViewTab(QWidget):
                     self.map_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
                     self.map_view.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
                     
+                    # 맵 버튼들 배치
+                    self.add_map_buttons(scene)
+                    
                     self.get_logger().info("✅ 맵 배경 이미지 로드 완료")
                 else:
                     self.get_logger().error("❌ 이미지 파일 로드 실패")
@@ -429,6 +549,20 @@ class MainViewTab(QWidget):
                 
         except Exception as e:
             self.get_logger().error(f"❌ 맵 배경 로드 중 오류: {e}")
+    
+    def add_map_buttons(self, scene):
+        """맵에 버튼들을 배치"""
+        try:
+            # 각 버튼 생성 및 씬에 추가
+            for button_id, (x, y) in self.MAP_BUTTON_POSITIONS.items():
+                button = MapButton(button_id, x, y, 40, 40)
+                scene.addItem(button)
+                self.get_logger().debug(f"✅ 맵 버튼 추가: {button_id} ({x:.1f}, {y:.1f})")
+            
+            self.get_logger().info(f"✅ 맵 버튼 {len(self.MAP_BUTTON_POSITIONS)}개 배치 완료")
+            
+        except Exception as e:
+            self.get_logger().error(f"❌ 맵 버튼 배치 중 오류: {e}")
     
     def robot_status_callback(self, msg):
         """OverallStatus 메시지 수신"""
@@ -763,3 +897,16 @@ class MainViewTab(QWidget):
         # Z축 회전 (Yaw) 계산
         yaw = math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
         return yaw
+    
+    def map_view_mouse_press_event(self, event):
+        """map_view 마우스 클릭 이벤트 처리"""
+        # 스크롤 클릭(middle click)일 때만 좌표 출력
+        if event.button() == Qt.MiddleButton:
+            # 클릭한 위치를 씬 좌표로 변환
+            scene_pos = self.map_view.mapToScene(event.pos())
+            
+            # 클릭한 좌표를 터미널 로그로 출력
+            self.get_logger().info(f"🗺️ 맵 스크롤 클릭: X={scene_pos.x():.1f}, Y={scene_pos.y():.1f}")
+        
+        # 이벤트 처리 완료
+        event.accept()
