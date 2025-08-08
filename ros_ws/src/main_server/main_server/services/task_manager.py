@@ -32,6 +32,8 @@ import random  # 랜덤 좌표 생성용
 from enum import Enum  # 상태 열거형
 import threading  # 스레드 관리
 from ..database.db_manager import DatabaseManager  # DB 매니저 추가
+from geometry_msgs.msg import PoseWithCovarianceStamped  # AMCL 포즈 메시지 추가
+import math  # Yaw 계산용
 
 # 좌표 매핑 딕셔너리 (A1~E9까지 총 45개 좌표)
 LOCATION_COORDINATES = {
@@ -224,6 +226,8 @@ class Task:  # 작업 정보를 담는 클래스
 class TaskManager(Node):
     def __init__(self):  # TaskManager 노드 초기화 및 서비스 서버 설정
         super().__init__('task_manager')
+        # AMCL 포즈 캐시를 가장 먼저 초기화해 타이머 콜백에서의 경합을 방지
+        self.current_pose_by_robot = {}
         
         # TaskRequest 서비스 서버 생성
         self.service = self.create_service(
@@ -613,6 +617,18 @@ class TaskManager(Node):
         self.get_logger().info('🗣️ DeactivateTalker 클라이언트 준비됨 - deactivate_talker 서비스 연결...')
         self.get_logger().info('🎯 ActivateTracker 클라이언트 준비됨 - activate_tracker 서비스 연결...')
         self.get_logger().info('🎯 DeactivateTracker 클라이언트 준비됨 - deactivate_tracker 서비스 연결...')
+        
+        # AMCL 포즈 구독 설정 및 캐시 초기화
+        self.declare_parameter('amcl_robot_id', 'libo_a')  # 실제 포즈를 적용할 대상 로봇 ID
+        self.amcl_robot_id = self.get_parameter('amcl_robot_id').get_parameter_value().string_value
+        # self.current_pose_by_robot는 상단에서 초기화됨
+        self.amcl_pose_subscription = self.create_subscription(
+            PoseWithCovarianceStamped,
+            '/amcl_pose',
+            self.amcl_pose_callback,
+            10
+        )
+        self.get_logger().info(f"✅ AMCL 포즈 구독 시작: /amcl_pose → 적용 대상 로봇='{self.amcl_robot_id}'")
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -643,6 +659,9 @@ class TaskManager(Node):
         if not self.robots:  # 로봇이 없으면 로그만 출력
             self.get_logger().debug(f'📡 발행할 로봇이 없음 (등록된 로봇: 0개)')
             return
+        # 방어적 초기화 (예외적 상황 대비)
+        if not hasattr(self, 'current_pose_by_robot'):
+            self.current_pose_by_robot = {}
             
         for robot_id, robot in self.robots.items():  # 현재 활성 로봇들에 대해 반복 (robot 객체도 가져옴)
             status_msg = OverallStatus()  # OverallStatus 메시지 생성
@@ -665,55 +684,16 @@ class TaskManager(Node):
                 battery_decrease = int((current_time - robot.state_start_time) * 0.5)  # 0.5% per second
                 status_msg.battery = max(10, 100 - battery_decrease)  # 최대 100%에서 시작해서 최소 10%
             
-            # 위치 및 방향 시뮬레이션 (상태에 따라 다른 위치)
-            if robot.current_state == RobotState.INIT:
-                # 초기화 상태: 기본 위치
+            # 우선순위: AMCL에서 받은 포즈 캐시가 있으면(최근 여부 무관) 그 값을 사용, 없으면 0.0
+            pose_map = getattr(self, 'current_pose_by_robot', {})
+            if robot_id in pose_map:
+                pose = pose_map[robot_id]
+                status_msg.position_x = pose['x']
+                status_msg.position_y = pose['y']
+                status_msg.position_yaw = pose['yaw_deg']
+            else:
                 status_msg.position_x = 0.0
                 status_msg.position_y = 0.0
-                status_msg.position_yaw = 0.0
-            elif robot.current_state == RobotState.CHARGING:
-                # 충전 상태: 충전소 위치 (E3)
-                status_msg.position_x = 3.9
-                status_msg.position_y = 8.1
-                status_msg.position_yaw = 0.0
-            elif robot.current_state == RobotState.STANDBY:
-                # 대기 상태: 대기 구역 위치 (A2)
-                status_msg.position_x = 6.0
-                status_msg.position_y = 0.0
-                status_msg.position_yaw = 90.0
-            elif robot.current_state in [RobotState.ESCORT, RobotState.DELIVERY, RobotState.ASSIST]:
-                # 작업 상태: 현재 활성 task의 위치에 따라 설정
-                if self.tasks and self.tasks[0].robot_id == robot_id:
-                    current_task = self.tasks[0]
-                    if current_task.stage == 1:
-                        # Stage 1: CallLocation으로 이동 중
-                        if current_task.call_location in LOCATION_COORDINATES:
-                            x, y = LOCATION_COORDINATES[current_task.call_location]
-                            status_msg.position_x = x
-                            status_msg.position_y = y
-                            status_msg.position_yaw = 45.0
-                    elif current_task.stage == 2:
-                        # Stage 2: GoalLocation으로 이동 중
-                        if current_task.goal_location in LOCATION_COORDINATES:
-                            x, y = LOCATION_COORDINATES[current_task.goal_location]
-                            status_msg.position_x = x
-                            status_msg.position_y = y
-                            status_msg.position_yaw = 135.0
-                    elif current_task.stage == 3:
-                        # Stage 3: Base로 이동 중
-                        x, y = LOCATION_COORDINATES['Base']
-                        status_msg.position_x = x
-                        status_msg.position_y = y
-                        status_msg.position_yaw = 180.0
-                else:
-                    # Task가 없으면 기본 위치
-                    status_msg.position_x = 5.0
-                    status_msg.position_y = 5.0
-                    status_msg.position_yaw = 0.0
-            else:
-                # 기타 상태: 기본 위치
-                status_msg.position_x = 5.0
-                status_msg.position_y = 5.0
                 status_msg.position_yaw = 0.0
             
             # 무게 데이터 처리 (libo_a 로봇에만 적용)
@@ -2128,6 +2108,36 @@ class TaskManager(Node):
 
         self.stage_delay_timer = self.create_timer(delay_sec, _advance_after_delay)  # delay_sec 후 콜백 1회 실행 예약
         return True  # 예약 성공 신호
+
+    def amcl_pose_callback(self, msg):  # AMCL 포즈 수신 콜백
+        """/amcl_pose에서 받은 로봇의 실제 위치(x, y)와 방향(yaw)을 캐시에 저장"""
+        try:
+            # 대상 로봇 ID 결정(파라미터 기반)
+            robot_id = self.amcl_robot_id
+            real_x = msg.pose.pose.position.x
+            real_y = msg.pose.pose.position.y
+            q = msg.pose.pose.orientation
+            yaw_rad = self._quaternion_to_yaw(q.x, q.y, q.z, q.w)
+            yaw_deg = math.degrees(yaw_rad)
+            
+            self.current_pose_by_robot[robot_id] = {
+                'x': real_x,
+                'y': real_y,
+                'yaw_deg': yaw_deg,
+                'timestamp': time.time()
+            }
+            self.get_logger().debug(f"🤖 AMCL 포즈 업데이트[{robot_id}]: x={real_x:.2f}, y={real_y:.2f}, yaw={yaw_deg:.1f}°")
+        except Exception as e:
+            self.get_logger().error(f"AMCL 포즈 처리 중 오류: {e}")
+    
+    def _has_recent_pose(self, robot_id: str, timeout_sec: float = 1.5) -> bool:  # 최근 포즈 존재 여부 확인
+        pose_map = getattr(self, 'current_pose_by_robot', None)
+        if not pose_map or robot_id not in pose_map:
+            return False
+        return (time.time() - pose_map[robot_id]['timestamp']) <= timeout_sec
+    
+    def _quaternion_to_yaw(self, x: float, y: float, z: float, w: float) -> float:  # 쿼터니언→Yaw(rad)
+        return math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)
