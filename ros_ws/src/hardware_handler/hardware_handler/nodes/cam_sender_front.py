@@ -29,7 +29,8 @@ def main(args=None):
     UDP_PORT_MONITORING = 7022
 
     # ADMIN_PC로 영상 전송
-    ADMIN_PC_IP = "192.168.1.2"
+    # ADMIN_PC_IP = "192.168.1.2"
+    ADMIN_PC_IP = "192.168.1.7"
     ADMIN_PC_PORT = 7021
 
     # 사용할 카메라 경로 (udev 규칙으로 고정된 경로)

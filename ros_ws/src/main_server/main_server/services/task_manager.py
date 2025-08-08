@@ -32,6 +32,8 @@ import random  # 랜덤 좌표 생성용
 from enum import Enum  # 상태 열거형
 import threading  # 스레드 관리
 from ..database.db_manager import DatabaseManager  # DB 매니저 추가
+from geometry_msgs.msg import PoseWithCovarianceStamped  # AMCL 포즈 메시지 추가
+import math  # Yaw 계산용
 
 # 좌표 매핑 딕셔너리 (A1~E9까지 총 45개 좌표)
 LOCATION_COORDINATES = {
@@ -224,6 +226,12 @@ class Task:  # 작업 정보를 담는 클래스
 class TaskManager(Node):
     def __init__(self):  # TaskManager 노드 초기화 및 서비스 서버 설정
         super().__init__('task_manager')
+        # AMCL 포즈 캐시를 가장 먼저 초기화해 타이머 콜백에서의 경합을 방지
+        self.current_pose_by_robot = {}
+        
+        # 표정 상태 캐시 및 기본 로봇 ID 초기화
+        self.face_state_by_robot = {}  # robot_id -> face state cache
+        self.default_robot_id = 'libo_a'
         
         # TaskRequest 서비스 서버 생성
         self.service = self.create_service(
@@ -334,7 +342,7 @@ class TaskManager(Node):
         self.led_publisher = self.create_publisher(String, 'led_status', 10)
         
         # Expression 퍼블리셔 생성
-        self.expression_publisher = self.create_publisher(FaceExpression, 'expression', 10)
+        self.expression_publisher = self.create_publisher(FaceExpression, '/face_expression', 10)
         
         # 작업 목록을 저장할 리스트
         self.tasks = []  # 생성된 작업들을 저장할 리스트
@@ -349,6 +357,9 @@ class TaskManager(Node):
         # 무게 데이터 저장 변수
         self.current_weight = 0.0  # 현재 무게 (g 단위)
         self.last_weight_update = None  # 마지막 무게 업데이트 시간
+        # 무게 한계(과중) 임계치 및 상태 플래그
+        self.overweight_threshold_g = 3000.0  # 임계치 (그램)
+        self.is_overweight_active = False     # 현재 임계치 초과 상태 여부
         
         # DetectionTimer 상태 추적 변수 (user_reconnected 로직용)
         self.detection_timer_reached_5s = False  # 5초 이상 도달했는지 여부
@@ -377,6 +388,9 @@ class TaskManager(Node):
         
         # OverallStatus 10초 주기 DB 저장 타이머 추가
         self.status_db_timer = self.create_timer(10.0, self.persist_overall_status_to_db)
+        
+        # Stage 전환 지연용 타이머 핸들러
+        self.stage_delay_timer = None
         
         # Task 타입별 Stage 로직 정의 (통합 관리)
         self.task_stage_logic = {
@@ -423,7 +437,7 @@ class TaskManager(Node):
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_kiosk'},  # 키오스크 도착 음성
-                        {'action': 'advance_stage'}  # Stage 2로 진행
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 Stage 2로 진행
                     ]
                 },
                 2: {  # Stage 2: 사용자 추적 및 목적지로 이동하는 단계
@@ -436,7 +450,7 @@ class TaskManager(Node):
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_destination'},  # 목적지 도착 음성 명령
                         {'action': 'deactivate_detector'},  # 감지기 비활성화
-                        {'action': 'advance_stage'}  # Stage 3으로 진행
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 Stage 3으로 진행
                     ],
                     'timer_5s': [  # 5초 타이머 시 실행할 액션들
                         {'action': 'voice', 'command': 'lost_user'}  # 사용자 분실 경고 음성
@@ -491,7 +505,7 @@ class TaskManager(Node):
                     'qr_check_completed': [  # QR Check 완료 시 실행할 액션들
                         {'action': 'deactivate_qr_scanner'},  # QR Scanner 비활성화
                         {'action': 'voice', 'command': 'qr_authenticated'},  # QR 인증 완료 음성 명령
-                        {'action': 'advance_stage'}  # Stage 2로 진행
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 Stage 2로 진행
                     ]
                 },
                 2: {  # Stage 2: QR 인증 대기하는 단계 (목적지 이동 없음)
@@ -503,11 +517,11 @@ class TaskManager(Node):
                     ],
                     'tracker_failed': [  # Tracker 활성화 실패 시 실행할 액션들
                         {'action': 'deactivate_talker'},  # Talker 비활성화
-                        {'action': 'advance_stage'}  # 다음 스테이지로 진행
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 다음 스테이지로 진행
                     ],
                     'talker_failed': [  # Talker 활성화 실패 시 실행할 액션들
                         {'action': 'deactivate_tracker'},  # Tracker 비활성화
-                        {'action': 'advance_stage'}  # 다음 스테이지로 진행
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 다음 스테이지로 진행
                     ],
                     'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
                         {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
@@ -607,6 +621,18 @@ class TaskManager(Node):
         self.get_logger().info('🗣️ DeactivateTalker 클라이언트 준비됨 - deactivate_talker 서비스 연결...')
         self.get_logger().info('🎯 ActivateTracker 클라이언트 준비됨 - activate_tracker 서비스 연결...')
         self.get_logger().info('🎯 DeactivateTracker 클라이언트 준비됨 - deactivate_tracker 서비스 연결...')
+        
+        # AMCL 포즈 구독 설정 및 캐시 초기화
+        self.declare_parameter('amcl_robot_id', 'libo_a')  # 실제 포즈를 적용할 대상 로봇 ID
+        self.amcl_robot_id = self.get_parameter('amcl_robot_id').get_parameter_value().string_value
+        # self.current_pose_by_robot는 상단에서 초기화됨
+        self.amcl_pose_subscription = self.create_subscription(
+            PoseWithCovarianceStamped,
+            '/amcl_pose',
+            self.amcl_pose_callback,
+            10
+        )
+        self.get_logger().info(f"✅ AMCL 포즈 구독 시작: /amcl_pose → 적용 대상 로봇='{self.amcl_robot_id}'")
     
     def check_robot_timeouts(self):  # 로봇 타임아웃 체크
         """1초마다 로봇 목록을 확인하여 타임아웃된 로봇을 목록에서 제거"""
@@ -628,6 +654,9 @@ class TaskManager(Node):
             else:  # 처음 보는 로봇이라면
                 self.robots[msg.sender_id] = Robot(msg.sender_id)  # 새로운 로봇 객체를 생성해서 목록에 추가
                 self.get_logger().info(f'🤖 새로운 로봇 <{msg.sender_id}> 감지됨')  # 새로운 로봇 감지 로그 출력
+                
+                # 초기 임시 표정: happy 5초 표시 (STANDBY 진입 시 normal 적용)
+                self.show_temporary_expression(msg.sender_id, 'happy', duration_sec=5.0)
             
         except Exception as e:  # 예외 발생 시 처리
             self.get_logger().error(f'❌ Heartbeat 처리 중 오류: {e}')  # 에러 로그
@@ -637,6 +666,9 @@ class TaskManager(Node):
         if not self.robots:  # 로봇이 없으면 로그만 출력
             self.get_logger().debug(f'📡 발행할 로봇이 없음 (등록된 로봇: 0개)')
             return
+        # 방어적 초기화 (예외적 상황 대비)
+        if not hasattr(self, 'current_pose_by_robot'):
+            self.current_pose_by_robot = {}
             
         for robot_id, robot in self.robots.items():  # 현재 활성 로봇들에 대해 반복 (robot 객체도 가져옴)
             status_msg = OverallStatus()  # OverallStatus 메시지 생성
@@ -659,55 +691,16 @@ class TaskManager(Node):
                 battery_decrease = int((current_time - robot.state_start_time) * 0.5)  # 0.5% per second
                 status_msg.battery = max(10, 100 - battery_decrease)  # 최대 100%에서 시작해서 최소 10%
             
-            # 위치 및 방향 시뮬레이션 (상태에 따라 다른 위치)
-            if robot.current_state == RobotState.INIT:
-                # 초기화 상태: 기본 위치
+            # 우선순위: AMCL에서 받은 포즈 캐시가 있으면(최근 여부 무관) 그 값을 사용, 없으면 0.0
+            pose_map = getattr(self, 'current_pose_by_robot', {})
+            if robot_id in pose_map:
+                pose = pose_map[robot_id]
+                status_msg.position_x = pose['x']
+                status_msg.position_y = pose['y']
+                status_msg.position_yaw = pose['yaw_deg']
+            else:
                 status_msg.position_x = 0.0
                 status_msg.position_y = 0.0
-                status_msg.position_yaw = 0.0
-            elif robot.current_state == RobotState.CHARGING:
-                # 충전 상태: 충전소 위치 (E3)
-                status_msg.position_x = 3.9
-                status_msg.position_y = 8.1
-                status_msg.position_yaw = 0.0
-            elif robot.current_state == RobotState.STANDBY:
-                # 대기 상태: 대기 구역 위치 (A2)
-                status_msg.position_x = 6.0
-                status_msg.position_y = 0.0
-                status_msg.position_yaw = 90.0
-            elif robot.current_state in [RobotState.ESCORT, RobotState.DELIVERY, RobotState.ASSIST]:
-                # 작업 상태: 현재 활성 task의 위치에 따라 설정
-                if self.tasks and self.tasks[0].robot_id == robot_id:
-                    current_task = self.tasks[0]
-                    if current_task.stage == 1:
-                        # Stage 1: CallLocation으로 이동 중
-                        if current_task.call_location in LOCATION_COORDINATES:
-                            x, y = LOCATION_COORDINATES[current_task.call_location]
-                            status_msg.position_x = x
-                            status_msg.position_y = y
-                            status_msg.position_yaw = 45.0
-                    elif current_task.stage == 2:
-                        # Stage 2: GoalLocation으로 이동 중
-                        if current_task.goal_location in LOCATION_COORDINATES:
-                            x, y = LOCATION_COORDINATES[current_task.goal_location]
-                            status_msg.position_x = x
-                            status_msg.position_y = y
-                            status_msg.position_yaw = 135.0
-                    elif current_task.stage == 3:
-                        # Stage 3: Base로 이동 중
-                        x, y = LOCATION_COORDINATES['Base']
-                        status_msg.position_x = x
-                        status_msg.position_y = y
-                        status_msg.position_yaw = 180.0
-                else:
-                    # Task가 없으면 기본 위치
-                    status_msg.position_x = 5.0
-                    status_msg.position_y = 5.0
-                    status_msg.position_yaw = 0.0
-            else:
-                # 기타 상태: 기본 위치
-                status_msg.position_x = 5.0
-                status_msg.position_y = 5.0
                 status_msg.position_yaw = 0.0
             
             # 무게 데이터 처리 (libo_a 로봇에만 적용)
@@ -1093,6 +1086,12 @@ class TaskManager(Node):
                     self.get_logger().info(f'✅ 충전 시작 음성 명령 발행 완료')
                 else:
                     self.get_logger().warning(f'⚠️ 충전 시작 음성 명령 발행 실패')
+                
+                # CHARGING 표정 1회 발행
+                try:
+                    self.send_expression_command(current_task.robot_id, 'charging')
+                except Exception as e:
+                    self.get_logger().warn(f'⚠️ CHARGING 표정 발행 실패: {current_task.robot_id} (오류: {e})')
             else:
                 self.get_logger().warning(f'⚠️  로봇 <{current_task.robot_id}> 찾을 수 없음 - state 변경 불가')
             
@@ -1390,6 +1389,33 @@ class TaskManager(Node):
         """무게 데이터를 받았을 때 호출되는 콜백 함수"""
         self.current_weight = msg.data  # 무게 데이터 저장
         self.last_weight_update = time.time()  # 마지막 무게 업데이트 시간 갱신
+        # 임계치 초과 경고 (상향 교차 시 1회 경고) + 표정 전환 발행
+        try:
+            is_over = self.current_weight > self.overweight_threshold_g
+            was_over = self.is_overweight_active
+
+            # 상향 교차: 정상 -> 과중
+            if is_over and not was_over:
+                self.get_logger().warning(
+                    f'⚠️ [Weight] 한계 초과: {self.current_weight:.1f}g > {self.overweight_threshold_g:.0f}g'
+                )
+                # 과중 플래그 on → 반영
+                self.set_condition(self.default_robot_id, 'overweight', True)
+                self.update_face_expression(self.default_robot_id)
+
+            # 하향 교차: 과중 해제 -> 정상
+            elif not is_over and was_over:
+                self.get_logger().info(
+                    f'✅ [Weight] 한계 복귀: {self.current_weight:.1f}g ≤ {self.overweight_threshold_g:.0f}g'
+                )
+                # 과중 플래그 off → 반영
+                self.set_condition(self.default_robot_id, 'overweight', False)
+                self.update_face_expression(self.default_robot_id)
+
+            # 상태 플래그 갱신
+            self.is_overweight_active = is_over
+        except Exception as e:
+            self.get_logger().error(f'❌ 무게 임계치 검사 중 오류: {e}')
         # self.get_logger().info(f'⚖️ [libo_a Weight] 실시간 수신: {self.current_weight:.1f}g ({self.current_weight/1000.0:.3f}kg)')  # 실시간 무게 데이터 표시
     
     def get_current_weight(self):  # 현재 무게 반환
@@ -1434,6 +1460,12 @@ class TaskManager(Node):
                     self.get_logger().info(f'✅ 초기화 완료 음성 명령 발행 완료')
                 else:
                     self.get_logger().warning(f'⚠️ 초기화 완료 음성 명령 발행 실패')
+                
+                # CHARGING 표정 1회 발행
+                try:
+                    self.send_expression_command(robot.robot_id, 'charging')
+                except Exception as e:
+                    self.get_logger().warn(f'⚠️ CHARGING 표정 발행 실패: {robot.robot_id} (오류: {e})')
         
         elif robot.current_state == RobotState.CHARGING:
             # CHARGING 상태에서 10초 후 STANDBY로 변경 (임시)
@@ -1447,6 +1479,12 @@ class TaskManager(Node):
                     self.get_logger().info(f'✅ 배터리 충분 음성 명령 발행 완료')
                 else:
                     self.get_logger().warning(f'⚠️ 배터리 충분 음성 명령 발행 실패')
+                
+                # STANDBY 표정: normal 1회 발행
+                try:
+                    self.send_expression_command(robot.robot_id, 'normal')
+                except Exception as e:
+                    self.get_logger().warn(f'⚠️ STANDBY 표정 발행 실패: {robot.robot_id} (오류: {e})')
         
         # ESCORT, DELIVERY, ASSIST 상태는 Task 완료 시까지 자동 변경하지 않음
         # 이 상태들은 advance_task_stage에서만 변경됨
@@ -1615,6 +1653,10 @@ class TaskManager(Node):
             self.get_logger().warn(f'🔄 [{task.task_type}] 강제 Stage 변경: {target_stage}')
             # 강제 stage 변경 후 해당 stage의 stage_start 이벤트 처리
             self.process_task_stage_logic(task, target_stage, 'stage_start')
+            
+        elif action_type == 'advance_after_wait':
+            seconds = float(action.get('seconds', 5))
+            self.schedule_advance_stage_after_delay(seconds)
             
         elif action_type == 'advance_stage':
             # advance_stage 메서드 호출 (기존 로직 재사용)
@@ -2012,6 +2054,12 @@ class TaskManager(Node):
                 # 복구 완료 음성 알림
                 self.send_voice_command(robot_id, 'common', 'emergency_recovery')
                 
+                # STANDBY 표정: normal 1회 발행
+                try:
+                    self.send_expression_command(robot_id, 'normal')
+                except Exception as e:
+                    self.get_logger().warn(f'⚠️ STANDBY 표정 발행 실패: {robot_id} (오류: {e})')
+                
                 return True
             else:
                 self.get_logger().warning(f'⚠️ 복구 실패: 로봇 <{robot_id}>이 EMERGENCY 상태가 아님')
@@ -2083,6 +2131,130 @@ class TaskManager(Node):
                     self.get_logger().warning(f'⚠️ overall_status_log 저장 실패: {robot_id}')
         except Exception as e:
             self.get_logger().error(f'❌ OverallStatus DB 저장 중 오류: {e}')
+
+    def schedule_advance_stage_after_delay(self, delay_sec: float = 5.0):  # 지정 시간 뒤 advance_stage 실행 예약
+        """지정한 시간(delay_sec) 후에 advance_stage를 호출하는 비동기 지연 메서드"""
+        try:
+            if hasattr(self, 'stage_delay_timer') and self.stage_delay_timer is not None:  # 기존 타이머가 있으면
+                self.destroy_timer(self.stage_delay_timer)  # 기존 타이머 파기(중복 실행 방지)
+                self.stage_delay_timer = None  # 참조 정리
+        except Exception:
+            self.stage_delay_timer = None  # 예외 시에도 참조 정리
+
+        self.get_logger().info(f'⏳ Stage 전환 대기: {delay_sec:.1f}초 뒤 advance_stage 실행')  # 로그로 대기 안내
+
+        def _advance_after_delay():  # 타이머가 만료되었을 때 실행될 콜백
+            try:
+                self.advance_stage()  # 실제 Stage 전환 실행
+            finally:
+                try:
+                    if self.stage_delay_timer is not None:  # (안전) 타이머 객체가 남아있으면
+                        self.destroy_timer(self.stage_delay_timer)  # 타이머 파기
+                except Exception:
+                    pass  # 파기 중 예외는 무시
+                self.stage_delay_timer = None  # 참조 정리(재예약 대비)
+
+        self.stage_delay_timer = self.create_timer(delay_sec, _advance_after_delay)  # delay_sec 후 콜백 1회 실행 예약
+        return True  # 예약 성공 신호
+
+    def amcl_pose_callback(self, msg):  # AMCL 포즈 수신 콜백
+        """/amcl_pose에서 받은 로봇의 실제 위치(x, y)와 방향(yaw)을 캐시에 저장"""
+        try:
+            # 대상 로봇 ID 결정(파라미터 기반)
+            robot_id = self.amcl_robot_id
+            real_x = msg.pose.pose.position.x
+            real_y = msg.pose.pose.position.y
+            q = msg.pose.pose.orientation
+            yaw_rad = self._quaternion_to_yaw(q.x, q.y, q.z, q.w)
+            yaw_deg = math.degrees(yaw_rad)
+            
+            self.current_pose_by_robot[robot_id] = {
+                'x': real_x,
+                'y': real_y,
+                'yaw_deg': yaw_deg,
+                'timestamp': time.time()
+            }
+            self.get_logger().debug(f"🤖 AMCL 포즈 업데이트[{robot_id}]: x={real_x:.2f}, y={real_y:.2f}, yaw={yaw_deg:.1f}°")
+        except Exception as e:
+            self.get_logger().error(f"AMCL 포즈 처리 중 오류: {e}")
+    
+    def _has_recent_pose(self, robot_id: str, timeout_sec: float = 1.5) -> bool:  # 최근 포즈 존재 여부 확인
+        pose_map = getattr(self, 'current_pose_by_robot', None)
+        if not pose_map or robot_id not in pose_map:
+            return False
+        return (time.time() - pose_map[robot_id]['timestamp']) <= timeout_sec
+    
+    def _quaternion_to_yaw(self, x: float, y: float, z: float, w: float) -> float:  # 쿼터니언→Yaw(rad)
+        return math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+
+    # ===== 표정 상태 관리 최소 구현 =====
+    def _ensure_face_state(self, robot_id: str):
+        if robot_id not in self.face_state_by_robot:
+            self.face_state_by_robot[robot_id] = {
+                'baseline': 'normal',
+                'flags': {
+                    'charging': False,
+                    'overweight': False,
+                },
+                'temporary': {
+                    'expr': None,
+                    'until': 0.0,
+                },
+                'current': None,
+            }
+
+    def set_baseline_expression(self, robot_id: str, expression: str):
+        """지속형 베이스 표정 설정(예: normal/focused/charging 등)"""
+        self._ensure_face_state(robot_id)
+        self.face_state_by_robot[robot_id]['baseline'] = expression
+
+    def set_condition(self, robot_id: str, name: str, active: bool):
+        """상황 플래그 설정(예: charging/overweight 등)"""
+        self._ensure_face_state(robot_id)
+        if name not in self.face_state_by_robot[robot_id]['flags']:
+            self.face_state_by_robot[robot_id]['flags'][name] = False
+        self.face_state_by_robot[robot_id]['flags'][name] = active
+
+    def show_temporary_expression(self, robot_id: str, expression: str, duration_sec: float = 5.0):
+        """임시 표정 설정(만료 시 자동 복귀)"""
+        self._ensure_face_state(robot_id)
+        now = time.time()
+        self.face_state_by_robot[robot_id]['temporary'] = {
+            'expr': expression,
+            'until': now + duration_sec,
+        }
+        self.update_face_expression(robot_id)
+
+    def _compute_desired_expression(self, robot_id: str) -> str:
+        self._ensure_face_state(robot_id)
+        state = self.face_state_by_robot[robot_id]
+        now = time.time()
+
+        # 1) 임시 표정 유효하면 최우선
+        temp = state['temporary']
+        if temp['expr'] and now <= temp['until']:
+            return temp['expr']
+        # 만료 정리
+        if temp['expr'] and now > temp['until']:
+            state['temporary'] = {'expr': None, 'until': 0.0}
+
+        # 2) 조건 플래그 우선순위 적용
+        flags = state['flags']
+        if flags.get('charging'):
+            return 'charging'
+        if flags.get('overweight'):
+            return 'heavy'
+
+        # 3) 기본 베이스 표현
+        return state['baseline']
+
+    def update_face_expression(self, robot_id: str):
+        """우선순위 규칙으로 최종 표정 계산 후 변경시만 퍼블리시"""
+        desired = self._compute_desired_expression(robot_id)
+        current = self.face_state_by_robot[robot_id]['current'] if robot_id in self.face_state_by_robot else None
+        if desired != current:
+            if self.send_expression_command(robot_id, desired):
+                self.face_state_by_robot[robot_id]['current'] = desired
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)

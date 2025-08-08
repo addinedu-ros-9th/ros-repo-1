@@ -682,7 +682,10 @@ class MainViewTab(QWidget):
                 robot_info += f"   상태: {status['state']}\n"
                 robot_info += f"   {available_text}\n"
                 robot_info += f"   배터리: {status['battery']}%\n"
-                robot_info += f"   무게: {status.get('book_weight', 0.0):.1f}kg\n"
+                weight_g = int(round(status.get('book_weight', 0.0) * 1000))
+                robot_info += f"   무게: {weight_g}g\n"
+                if weight_g > 3000:
+                    robot_info += f"   ⚠️ 무게 한계 초과: {weight_g}g > 3000g\n"
                 robot_info += f"   위치: ({status.get('position_x', 0.0):.1f}, {status.get('position_y', 0.0):.1f})\n"
                 robot_info += f"   방향: {status.get('position_yaw', 0.0):.1f}°\n"
                 robot_info += "─" * 20 + "\n"
