@@ -13,12 +13,16 @@ Local setup .bash
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < ROBOT > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 ros2 launch vicpinky_bringup bringup.launch.xml
+    ssh vic@192.168.1.7
+    ros2 launch vicpinky_bringup bringup.launch.xml
+    
 ros2 launch vicpinky_navigation bringup_launch.xml map:=map3_final.yaml
 
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < 메인 서버 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 ros2 run main_server task_manager
 ros2 run admin admin_gui
+    python3 main_app.py
 ros2 run main_server book_search_service
 ros2 run stock stock_gui
 
@@ -36,9 +40,6 @@ ros2 run ai_service vision_manager_assist4
 ros2 run ai_service qr_scanner_node
 ros2 run ai_service talker_manager2
 
-python3 hand_gesture_detector.py                -> 파이썬 3.10 가상환경으로 실행
-ros2 run ai_service hand_gesture_detector_ros2_bridge
-
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < HW Handler 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 ros2 run hardware_handler mic_streamer2
@@ -55,6 +56,11 @@ python3 strongsort_client.py                    -> 파이썬 3.10 가상환경�
 ros2 run ai_service ros2_bridege_node
 
 ros2 run ai_service human_detector_node
+
+
+ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < Hand Gesture AI Server > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
+python3 hand_gesture_detector.py                -> 파이썬 3.10 가상환경으로 실행
+ros2 run ai_service hand_gesture_detector_ros2_bridge
 
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < Kiosk GUI > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
