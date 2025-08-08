@@ -15,6 +15,7 @@ from PyQt5.QtGui import QColor
 
 from libo_interfaces.msg import OverallStatus, TaskStatus, Heartbeat
 from libo_interfaces.srv import TaskRequest, SetGoal, NavigationResult, CancelNavigation, AddGoalLocation
+from libo_interfaces.srv import EndTask
 
 class NavigatorServerNode(Node):  # SetGoal 서비스 서버 노드
     def __init__(self, log_callback=None):  # 로그 콜백 함수 추가
@@ -195,6 +196,7 @@ class MainControlTab(QWidget):
         self.navigation_result_client = self.ros_node.create_client(NavigationResult, 'navigation_result')
         self.add_goal_location_client = self.ros_node.create_client(AddGoalLocation, 'add_goal_location')
         self.cancel_navigation_client = self.ros_node.create_client(CancelNavigation, 'cancel_navigation')  # CancelNavigation 서비스 클라이언트
+        self.end_task_client = self.ros_node.create_client(EndTask, 'end_task')                  # EndTask 클라
         
         self.init_ui()
         self.init_ros_connections()
@@ -222,7 +224,7 @@ class MainControlTab(QWidget):
         self.toggle_navigator_button.clicked.connect(self.toggle_navigator_service)
         self.send_success_button.clicked.connect(lambda: self.send_navigation_result("SUCCEEDED"))
         self.send_failed_button.clicked.connect(lambda: self.send_navigation_result("FAILED"))
-        self.send_canceled_button.clicked.connect(self.send_cancel_navigation)  # CancelNavigation 서비스 호출로 변경
+        self.send_canceled_button.clicked.connect(self.send_end_task)                            # CancelNavigation → EndTask로 변경
         
         # CancelNavigation 로그 업데이트 타이머
         self.cancel_log_timer = QTimer()
@@ -527,29 +529,25 @@ class MainControlTab(QWidget):
             else:
                 self.cancel_navigation_log_text.setPlainText("취소 요청 없음")
     
-    def send_cancel_navigation(self):
-        """CancelNavigation 서비스 호출"""
-        if not self.cancel_navigation_client.wait_for_service(timeout_sec=1.0):
-            self.log_navigator_message("❌ CancelNavigation 서비스를 찾을 수 없음")
-            return
-        
-        request = CancelNavigation.Request()  # CancelNavigation 요청 생성 (비어있음)
-        
-        future = self.cancel_navigation_client.call_async(request)  # 비동기 서비스 호출
-        future.add_done_callback(self.cancel_navigation_response_callback)
-        
-        self.log_navigator_message("📤 CancelNavigation 전송: 네비게이션 취소 요청")
-    
-    def cancel_navigation_response_callback(self, future):
-        """CancelNavigation 응답 처리"""
-        try:
-            response = future.result()
-            if response.success:
-                self.log_navigator_message("✅ CancelNavigation 성공: 네비게이션이 취소되었습니다")
-            else:
-                self.log_navigator_message(f"❌ CancelNavigation 실패: {response.message}")
-        except Exception as e:
-            self.log_navigator_message(f"❌ CancelNavigation 오류: {str(e)}")
+    def send_end_task(self):                                                                 # EndTask 서비스 호출
+        if not self.end_task_client.wait_for_service(timeout_sec=1.0):                       # 서비스 대기 (1초)
+            self.log_task_message("❌ EndTask 서비스를 찾을 수 없음")                          # 로그
+            return                                                                           # 조기 종료
+        request = EndTask.Request()                                                          # 요청 생성
+        request.robot_id = self.robot_id_edit.text()                                         # 로봇 ID 입력값
+        future = self.end_task_client.call_async(request)                                    # 비동기 호출
+        future.add_done_callback(self.end_task_response_callback)                            # 콜백 연결
+        self.log_task_message(f"📤 EndTask 전송: robot_id={request.robot_id}")                # 로그
+
+    def end_task_response_callback(self, future):                                            # EndTask 응답 콜백
+        try:                                                                                 # 예외 처리
+            response = future.result()                                                       # 결과 수신
+            if response.success:                                                             # 성공
+                self.log_task_message(f"✅ EndTask 성공: {response.message}")                 # 로그
+            else:                                                                             # 실패
+                self.log_task_message(f"❌ EndTask 실패: {response.message}")                 # 로그
+        except Exception as e:                                                               # 예외
+            self.log_task_message(f"❌ EndTask 오류: {str(e)}")                               # 로그
     
     def cleanup(self):
         """탭 종료 시 정리"""

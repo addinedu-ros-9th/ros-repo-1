@@ -512,11 +512,6 @@ class TaskManager(Node):
                     'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
                         {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
                         {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
-                    ],
-                    'end_task': [  # EndTask 요청 시 실행할 액션들
-                        {'action': 'deactivate_tracker'},  # Tracker 비활성화
-                        {'action': 'deactivate_talker'},  # Talker 비활성화
-                        {'action': 'advance_stage'}  # Stage 3으로 진행
                     ]
                 },
                 3: {  # Stage 3: Base로 복귀하는 단계
@@ -574,10 +569,6 @@ class TaskManager(Node):
                     'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
                         {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
                         {'action': 'force_stage', 'target': 3}  # Stage 3으로 강제 진행
-                    ],
-                    'end_task': [  # EndTask 요청 시 실행할 액션들
-                        {'action': 'deactivate_talker'},  # Talker 비활성화
-                        {'action': 'advance_stage'}  # Stage 3으로 진행
                     ]
                 },
                 3: {  # Stage 3: Base로 복귀하는 단계
@@ -1291,6 +1282,7 @@ class TaskManager(Node):
                 if self.tasks and len(self.tasks) > 0:
                     current_task = self.tasks[0]  # 첫 번째 활성 task
                     robot_id = current_task.robot_id
+                    task_id = current_task.task_id  # 타이머 콜백에서 동일 task 확인용
                     
                     self.get_logger().info(f'🔄 [{current_task.task_type}] 네비게이션 취소 - 모든 부가 기능 비활성화 시작')
                     
@@ -1306,8 +1298,31 @@ class TaskManager(Node):
                     current_task.stage = 3  # stage를 3으로 변경
                     self.get_logger().info(f'🔄 [{current_task.task_type}] 네비게이션 취소로 인한 stage 변경: 3')
                     
-                    # 4. stage 3의 stage_start 이벤트 처리
-                    self.process_task_stage_logic(current_task, 3, 'stage_start')
+                    # 4. 1.0초 버퍼 후 stage 3의 stage_start 실행 (Navigator 취소 정리 시간 확보)
+                    try:
+                        if self.cancel_buffer_timer is not None:
+                            self.destroy_timer(self.cancel_buffer_timer)  # 기존 타이머 정리
+                            self.cancel_buffer_timer = None
+                    except Exception:
+                        self.cancel_buffer_timer = None
+                    
+                    def _start_stage3_after_buffer():  # 1회성 콜백
+                        try:
+                            # 아직 동일 task가 활성인지 확인 후 진행
+                            if self.tasks and len(self.tasks) > 0 and self.tasks[0].task_id == task_id:
+                                self.get_logger().info(f'⏳ 취소 후 1.0초 경과 - Stage 3 시작')
+                                self.process_task_stage_logic(self.tasks[0], 3, 'stage_start')  # Base 복귀 시작
+                            else:
+                                self.get_logger().warn('⚠️ 버퍼 경과 중 task 변경됨 - Stage 3 시작 생략')
+                        finally:
+                            try:
+                                if self.cancel_buffer_timer is not None:
+                                    self.destroy_timer(self.cancel_buffer_timer)
+                            except Exception:
+                                pass
+                            self.cancel_buffer_timer = None
+                    
+                    self.cancel_buffer_timer = self.create_timer(1.0, _start_stage3_after_buffer)  # 1초 지연 실행
                     
                     self.get_logger().info(f'✅ [{current_task.task_type}] 네비게이션 취소 및 정리 완료')
             else:
@@ -1643,26 +1658,28 @@ class TaskManager(Node):
 
     def end_task_callback(self, request, response):  # EndTask 서비스 콜백
         """EndTask 서비스 콜백"""
-        self.get_logger().info(f'📥 EndTask 요청 받음!')
-        self.get_logger().info(f'   - 로봇 ID: {request.robot_id}')
+        self.get_logger().info(f'📥 EndTask 요청 받음!')  # 로그
+        self.get_logger().info(f'   - 로봇 ID: {request.robot_id}')  # 로그
         
         # 해당 로봇의 활성 작업 찾기 (로봇당 하나의 활성 작업만 있음)
-        active_task = None
-        for task in self.tasks:
+        active_task = None  # 초기값
+        for task in self.tasks:  # 활성 task 탐색
             if task.robot_id == request.robot_id:  # robot_id만으로 작업 찾기
-                active_task = task
-                break
+                active_task = task  # 지정
+                break  # 종료
         
         if active_task:
-            # task_stage_logic에서 end_task 이벤트 처리
-            self.process_task_stage_logic(active_task, active_task.stage, 'end_task')
-            response.success = True
-            response.message = f"EndTask 이벤트 처리 완료: {request.robot_id} - {active_task.task_type}"  # active_task에서 task_type 가져오기
+            # 범용 종료 처리: 네비게이션 취소 요청 → 응답 콜백에서 부가 기능 OFF + Stage 3 강제  # 핵심
+            self.cancel_navigation()  # 네비 취소 비동기 요청
+            
+            # stage별 'end_task' 분기 대신 전역 처리로 통일됨  # 추가 분기 호출 제거
+            response.success = True  # 성공 응답
+            response.message = f"EndTask 처리: {request.robot_id} - {active_task.task_type} (네비 취소 요청 및 복귀 진행)"  # 메시지
         else:
-            response.success = False
-            response.message = f"로봇 <{request.robot_id}>의 활성 작업을 찾을 수 없습니다"
+            response.success = False  # 실패 응답
+            response.message = f"로봇 <{request.robot_id}>의 활성 작업을 찾을 수 없습니다"  # 메시지
         
-        return response
+        return response  # 반환
 
     def robot_qr_check_callback(self, request, response):  # RobotQRCheck 서비스 콜백
         """RobotQRCheck 서비스 콜백"""
