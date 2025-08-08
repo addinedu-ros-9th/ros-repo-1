@@ -978,10 +978,8 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
     
     # 음성 수집 및 텍스트 변환 로직
     try:
-        # 웨이크워드 응답 재생
-        if not play_wake_response(comm_manager, talker_node, robot_id):
-            log("ERROR", "웨이크워드 응답 재생 실패")
-            return
+        # 웨이크워드 응답 재생 없이 바로 리스닝 모드로 진행
+        # 얼굴 표정은 이미 웨이크워드 감지 시 listening으로 설정되어 있음
         
         # 음성 수집 (침묵 감지)
         log("AUDIO", "음성 수집 시작...")
@@ -1009,6 +1007,9 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
         # 의도 분석
         intent = analyze_intent(client, transcript)
         log("INTENT", f"분석된 의도: {intent}")
+        
+        # 로봇 응답을 위해 speaking 모드로 변경
+        talker_node.publish_face_expression(robot_id, "speaking")
         
         # 의도에 따른 액션 실행
         if intent == "pause_assist":
@@ -1353,16 +1354,10 @@ def main(args=None):
                         log("COMMAND", f"TalkCommand 발행: robot_id={robot_id}, action=stop")
                         talker_node.publish_talk_command(robot_id, "stop")
                         
-                        # 웨이크워드 감지 시 얼굴 표정을 'speaking'으로 변경
-                        talker_node.publish_face_expression(robot_id, "speaking")
+                        # 웨이크워드 감지 시 얼굴 표정을 바로 'listening'으로 변경
+                        talker_node.publish_face_expression(robot_id, "listening")
                         
-                        # 웨이크워드 감지 시 응답 출력
-                        log("TTS", "웨이크워드 확인 응답 생성 중...")
-                        
-                        # 웨이크워드 응답 생성 및 재생
-                        play_wake_response(comm_manager)
-                                    
-                        # 웨이크워드 이후 음성 명령 처리 함수 호출
+                        # 웨이크워드 이후 음성 명령 처리 함수 호출 (응답 재생 없이)
                         log("STT", "다음 명령을 말씀하세요... (최대 15초)")
                         process_voice_command(comm_manager, talker_node, recognizer, client, robot_id)
                         
