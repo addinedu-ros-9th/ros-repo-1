@@ -432,7 +432,6 @@ class TaskManager(Node):
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
                         {'action': 'led', 'emotion': '슬픔'},  # 출근길 슬픔 LED 표시
-                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '슬픔'},  # 출근길 슬픔 표현
                         {'action': 'navigate', 'target': 'call_location'}  # 호출지로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
@@ -444,7 +443,6 @@ class TaskManager(Node):
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'activate_detector'},  # 사용자 감지기 활성화
                         {'action': 'led', 'emotion': '화남'},  # 업무 중 화남 LED 표시
-                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '화남'},  # 업무 중 화남 표현
                         {'action': 'navigate', 'target': 'goal_location'}  # 목적지로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
@@ -468,12 +466,12 @@ class TaskManager(Node):
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
                         {'action': 'led', 'emotion': '기쁨'},  # 퇴근길 기쁨 LED 표시
-                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '기쁨'},  # 퇴근길 기쁨 표현
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_base'},  # Base 도착 음성 명령
-                        {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
+                        {'action': 'temporary_expression', 'expr': 'happy', 'seconds': 5},
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 Stage 3으로 진행
                     ]
                 }
             },
@@ -487,7 +485,6 @@ class TaskManager(Node):
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
                         {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
-                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '슬픔'},  # 슬픔 표현
                         {'action': 'navigate', 'target': 'call_location'}  # 호출지로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
@@ -511,7 +508,6 @@ class TaskManager(Node):
                 2: {  # Stage 2: QR 인증 대기하는 단계 (목적지 이동 없음)
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시 (네비게이션 없음)
-                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '화남'},  # 화남 표현
                         {'action': 'activate_tracker'},  # Tracker 활성화
                         {'action': 'activate_talker'}  # Talker 활성화
                     ],
@@ -532,12 +528,12 @@ class TaskManager(Node):
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
                         {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
-                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '기쁨'},  # 기쁨 표현
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_base'},  # Base 도착 음성 명령
-                        {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
+                        {'action': 'temporary_expression', 'expr': 'happy', 'seconds': 5},
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 Stage 3으로 진행
                     ]
                 }
             },
@@ -551,7 +547,6 @@ class TaskManager(Node):
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'depart_base'},  # 출발 음성 명령
                         {'action': 'led', 'emotion': '슬픔'},  # 슬픔 LED 표시
-                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '슬픔'},  # 슬픔 표현
                         {'action': 'navigate', 'target': 'admin_desk'}  # admin PC로 네비게이션
                     ],
                     'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
@@ -568,7 +563,6 @@ class TaskManager(Node):
                         # 도착후 대기 한다고 알림
                         # 관리자가 맵으로 다음 목적지를 선택하기 전까지 대기
                         {'action': 'led', 'emotion': '화남'},  # 화남 LED 표시
-                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '화남'},  # 화남 표현
                         # AddGoalLocation.srv가 성공적으로 도달할 때까지 대기
                     ],
                     'goal_location_updated': [  # AddGoalLocation 성공 시 실행할 액션들
@@ -589,12 +583,12 @@ class TaskManager(Node):
                     'stage_start': [  # 스테이지 시작 시 실행할 액션들
                         {'action': 'voice', 'command': 'return'},  # 복귀 음성 명령
                         {'action': 'led', 'emotion': '기쁨'},  # 기쁨 LED 표시
-                        {'action': 'expression', 'robot_id': 'robot_id', 'status': '기쁨'},  # 기쁨 표현
                         {'action': 'navigate', 'target': 'base'}  # Base로 네비게이션
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_base'},  # Base 도착 음성 명령
-                        {'action': 'advance_stage'}  # Task 완료 (Stage 4로 진행하여 완료 처리)
+                        {'action': 'temporary_expression', 'expr': 'happy', 'seconds': 5},
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 Stage 3으로 진행
                     ]
                 }
             }
@@ -1087,11 +1081,9 @@ class TaskManager(Node):
                 else:
                     self.get_logger().warning(f'⚠️ 충전 시작 음성 명령 발행 실패')
                 
-                # CHARGING 표정 1회 발행
-                try:
-                    self.send_expression_command(current_task.robot_id, 'charging')
-                except Exception as e:
-                    self.get_logger().warn(f'⚠️ CHARGING 표정 발행 실패: {current_task.robot_id} (오류: {e})')
+                # CHARGING 플래그 on → 임시표정(happy)이 우선 표시됨
+                self.set_condition(current_task.robot_id, 'charging', True)
+                self.update_face_expression(current_task.robot_id)
             else:
                 self.get_logger().warning(f'⚠️  로봇 <{current_task.robot_id}> 찾을 수 없음 - state 변경 불가')
             
@@ -1661,6 +1653,10 @@ class TaskManager(Node):
         elif action_type == 'advance_stage':
             # advance_stage 메서드 호출 (기존 로직 재사용)
             self.advance_stage()
+        elif action_type == 'temporary_expression':
+            expr = action.get('expr')
+            seconds = float(action.get('seconds', 5))
+            self.show_temporary_expression(task.robot_id, expr, seconds)
         else:
             self.get_logger().warning(f'⚠️ 알 수 없는 액션 타입: {action_type}')
 
