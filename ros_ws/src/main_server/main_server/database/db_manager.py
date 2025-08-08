@@ -27,6 +27,14 @@ class DatabaseManager:
                 charset='utf8mb4',             # 문자셋  # 이모지 포함
                 autocommit=True                # 자동 커밋  # INSERT마다 즉시 반영
             )
+            # 표준: DB 세션 타임존을 UTC로 고정 (+00:00)
+            # - TIMESTAMP 기본값(CURRENT_TIMESTAMP)과 앱이 넣는 시간 모두 UTC로 통일
+            # - 표시(KST)는 조회/클라이언트에서 변환
+            try:
+                with self.connection.cursor() as cursor:
+                    cursor.execute("SET time_zone = '+00:00'")  # 세션 타임존 UTC
+            except Exception as tz_e:
+                print(f"⚠️ 세션 타임존(UTC) 설정 실패(무시하고 진행): {tz_e}")
             print("✅ 데이터베이스 연결 성공")  # 연결 성공 로그
         except Exception as e:
             print(f"❌ 데이터베이스 연결 실패: {e}")  # 실패 사유 출력
@@ -649,14 +657,14 @@ class DatabaseManager:
                     print("❌ 데이터베이스 재연결 실패")  # 실패 안내
                     return False  # 저장 불가
 
-            # 시간 변환 (TIMESTAMP 컬럼에 맞춤)  # NULL 허용
+            # 시간 변환 (TIMESTAMP 컬럼에 맞춤) → UTC로 통일 저장
             start_dt = None  # 기본값 None
             end_dt = None  # 기본값 None
             try:
                 if data.get('start_time') is not None:
-                    start_dt = datetime.fromtimestamp(float(data['start_time']))  # epoch→datetime
+                    start_dt = datetime.utcfromtimestamp(float(data['start_time']))  # epoch→UTC datetime
                 if data.get('end_time') is not None:
-                    end_dt = datetime.fromtimestamp(float(data['end_time']))  # epoch→datetime
+                    end_dt = datetime.utcfromtimestamp(float(data['end_time']))  # epoch→UTC datetime
             except Exception:
                 pass  # 변환 실패 시 None 유지
 
@@ -679,8 +687,8 @@ class DatabaseManager:
                 int(data.get('task_stage', 0)),     # 스테이지(정수)
                 data.get('call_location'),          # 호출 위치
                 data.get('goal_location'),          # 목적지 위치
-                start_dt,                            # 시작 시간(datetime)
-                end_dt,                              # 종료 시간(datetime)
+                start_dt,                            # 시작 시간(UTC)
+                end_dt,                              # 종료 시간(UTC)
                 log_type,                            # 로그 타입(START/COMPLETE)
             )
             with self.connection.cursor() as cursor:
