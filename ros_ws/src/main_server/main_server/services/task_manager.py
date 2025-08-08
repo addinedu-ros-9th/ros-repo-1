@@ -378,6 +378,9 @@ class TaskManager(Node):
         # OverallStatus 10초 주기 DB 저장 타이머 추가
         self.status_db_timer = self.create_timer(10.0, self.persist_overall_status_to_db)
         
+        # Stage 전환 지연용 타이머 핸들러
+        self.stage_delay_timer = None
+        
         # Task 타입별 Stage 로직 정의 (통합 관리)
         self.task_stage_logic = {
             
@@ -423,7 +426,7 @@ class TaskManager(Node):
                     ],
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_kiosk'},  # 키오스크 도착 음성
-                        {'action': 'advance_stage'}  # Stage 2로 진행
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 Stage 2로 진행
                     ]
                 },
                 2: {  # Stage 2: 사용자 추적 및 목적지로 이동하는 단계
@@ -436,7 +439,7 @@ class TaskManager(Node):
                     'navigation_success': [  # 네비게이션 성공 시 실행할 액션들
                         {'action': 'voice', 'command': 'arrived_destination'},  # 목적지 도착 음성 명령
                         {'action': 'deactivate_detector'},  # 감지기 비활성화
-                        {'action': 'advance_stage'}  # Stage 3으로 진행
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 Stage 3으로 진행
                     ],
                     'timer_5s': [  # 5초 타이머 시 실행할 액션들
                         {'action': 'voice', 'command': 'lost_user'}  # 사용자 분실 경고 음성
@@ -491,7 +494,7 @@ class TaskManager(Node):
                     'qr_check_completed': [  # QR Check 완료 시 실행할 액션들
                         {'action': 'deactivate_qr_scanner'},  # QR Scanner 비활성화
                         {'action': 'voice', 'command': 'qr_authenticated'},  # QR 인증 완료 음성 명령
-                        {'action': 'advance_stage'}  # Stage 2로 진행
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 Stage 2로 진행
                     ]
                 },
                 2: {  # Stage 2: QR 인증 대기하는 단계 (목적지 이동 없음)
@@ -503,11 +506,11 @@ class TaskManager(Node):
                     ],
                     'tracker_failed': [  # Tracker 활성화 실패 시 실행할 액션들
                         {'action': 'deactivate_talker'},  # Talker 비활성화
-                        {'action': 'advance_stage'}  # 다음 스테이지로 진행
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 다음 스테이지로 진행
                     ],
                     'talker_failed': [  # Talker 활성화 실패 시 실행할 액션들
                         {'action': 'deactivate_tracker'},  # Tracker 비활성화
-                        {'action': 'advance_stage'}  # 다음 스테이지로 진행
+                        {'action': 'advance_after_wait', 'seconds': 5}  # 5초 대기 후 다음 스테이지로 진행
                     ],
                     'navigation_canceled': [  # 네비게이션 취소 시 실행할 액션들
                         {'action': 'voice', 'command': 'navigation_canceled'},  # 네비게이션 취소 알림
@@ -1616,6 +1619,10 @@ class TaskManager(Node):
             # 강제 stage 변경 후 해당 stage의 stage_start 이벤트 처리
             self.process_task_stage_logic(task, target_stage, 'stage_start')
             
+        elif action_type == 'advance_after_wait':
+            seconds = float(action.get('seconds', 5))
+            self.schedule_advance_stage_after_delay(seconds)
+            
         elif action_type == 'advance_stage':
             # advance_stage 메서드 호출 (기존 로직 재사용)
             self.advance_stage()
@@ -2083,6 +2090,31 @@ class TaskManager(Node):
                     self.get_logger().warning(f'⚠️ overall_status_log 저장 실패: {robot_id}')
         except Exception as e:
             self.get_logger().error(f'❌ OverallStatus DB 저장 중 오류: {e}')
+
+    def schedule_advance_stage_after_delay(self, delay_sec: float = 5.0):  # 지정 시간 뒤 advance_stage 실행 예약
+        """지정한 시간(delay_sec) 후에 advance_stage를 호출하는 비동기 지연 메서드"""
+        try:
+            if hasattr(self, 'stage_delay_timer') and self.stage_delay_timer is not None:  # 기존 타이머가 있으면
+                self.destroy_timer(self.stage_delay_timer)  # 기존 타이머 파기(중복 실행 방지)
+                self.stage_delay_timer = None  # 참조 정리
+        except Exception:
+            self.stage_delay_timer = None  # 예외 시에도 참조 정리
+
+        self.get_logger().info(f'⏳ Stage 전환 대기: {delay_sec:.1f}초 뒤 advance_stage 실행')  # 로그로 대기 안내
+
+        def _advance_after_delay():  # 타이머가 만료되었을 때 실행될 콜백
+            try:
+                self.advance_stage()  # 실제 Stage 전환 실행
+            finally:
+                try:
+                    if self.stage_delay_timer is not None:  # (안전) 타이머 객체가 남아있으면
+                        self.destroy_timer(self.stage_delay_timer)  # 타이머 파기
+                except Exception:
+                    pass  # 파기 중 예외는 무시
+                self.stage_delay_timer = None  # 참조 정리(재예약 대비)
+
+        self.stage_delay_timer = self.create_timer(delay_sec, _advance_after_delay)  # delay_sec 후 콜백 1회 실행 예약
+        return True  # 예약 성공 신호
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)
