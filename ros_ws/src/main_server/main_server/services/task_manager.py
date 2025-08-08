@@ -349,6 +349,9 @@ class TaskManager(Node):
         # 무게 데이터 저장 변수
         self.current_weight = 0.0  # 현재 무게 (g 단위)
         self.last_weight_update = None  # 마지막 무게 업데이트 시간
+        # 무게 한계(과중) 임계치 및 상태 플래그
+        self.overweight_threshold_g = 3000.0  # 임계치 (그램)
+        self.is_overweight_active = False     # 현재 임계치 초과 상태 여부
         
         # DetectionTimer 상태 추적 변수 (user_reconnected 로직용)
         self.detection_timer_reached_5s = False  # 5초 이상 도달했는지 여부
@@ -1393,6 +1396,16 @@ class TaskManager(Node):
         """무게 데이터를 받았을 때 호출되는 콜백 함수"""
         self.current_weight = msg.data  # 무게 데이터 저장
         self.last_weight_update = time.time()  # 마지막 무게 업데이트 시간 갱신
+        # 임계치 초과 경고 (상향 교차 시 1회 경고)
+        try:
+            is_over = self.current_weight > self.overweight_threshold_g
+            if is_over and not self.is_overweight_active:
+                self.get_logger().warning(
+                    f'⚠️ [Weight] 한계 초과: {self.current_weight:.1f}g > {self.overweight_threshold_g:.0f}g'
+                )
+            self.is_overweight_active = is_over
+        except Exception as e:
+            self.get_logger().error(f'❌ 무게 임계치 검사 중 오류: {e}')
         # self.get_logger().info(f'⚖️ [libo_a Weight] 실시간 수신: {self.current_weight:.1f}g ({self.current_weight/1000.0:.3f}kg)')  # 실시간 무게 데이터 표시
     
     def get_current_weight(self):  # 현재 무게 반환
