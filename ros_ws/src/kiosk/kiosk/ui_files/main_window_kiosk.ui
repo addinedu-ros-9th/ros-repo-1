@@ -329,6 +329,46 @@ QPushButton:pressed {
      <string>📚</string>
     </property>
    </widget>
+   <widget class="QPushButton" name="kiosk_settings">
+    <property name="geometry">
+     <rect>
+      <x>1000</x>
+      <y>720</y>
+      <width>171</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>11</pointsize>
+      <weight>75</weight>
+      <bold>true</bold>
+     </font>
+    </property>
+    <property name="styleSheet">
+     <string>QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #71866a, stop:1 #5a6b4f);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #7d9270, stop:1 #64755a);
+    border: 2px solid #5a6b4f;
+}
+QPushButton:pressed {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 #5a6b4f, stop:1 #4a5a3f);
+}</string>
+    </property>
+    <property name="text">
+     <string> Kiosk Settings</string>
+    </property>
+   </widget>
   </widget>
  </widget>
  <resources/>

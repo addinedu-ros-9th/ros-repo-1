@@ -6,6 +6,9 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5 import uic
+# Explicit imports for linters/static checks
+from PyQt5.QtWidgets import QMainWindow, QMessageBox, QInputDialog, QApplication
+from PyQt5.QtCore import QTimer, QSettings, Qt
 import rclpy
 from rclpy.node import Node
 
@@ -18,6 +21,9 @@ class MainWindow(QMainWindow):
             rclpy.init()
         self.ros_node = Node('kiosk_main_window')
         
+        # Kiosk 위치 상태 (기본값 E9) - QSettings에서 복원
+        self.kiosk_location_id = self._load_kiosk_location_from_settings()
+
         self.book_search_widget = None  # 책 검색 위젯 참조
         self.qr_check_client = None  # QR 체크 클라이언트
         self.task_request_client = None  # 태스크 요청 클라이언트
@@ -60,6 +66,10 @@ class MainWindow(QMainWindow):
         
         # 윈도우를 항상 최상위에 유지
         self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
+
+        # Kiosk 설정 버튼 라벨에 현재 위치 표시
+        if hasattr(self, 'kiosk_settings'):
+            self._update_kiosk_settings_button_label()
         
         print("✅ 메인 윈도우 UI 로드 완료")
     
@@ -72,6 +82,8 @@ class MainWindow(QMainWindow):
             self.payment.clicked.disconnect()
             self.book_corner.clicked.disconnect()
             self.qr_scan_button.clicked.disconnect()
+            if hasattr(self, 'kiosk_settings'):
+                self.kiosk_settings.clicked.disconnect()
         except:
             pass
         
@@ -80,6 +92,8 @@ class MainWindow(QMainWindow):
         self.payment.clicked.connect(self.on_payment_clicked)
         self.book_corner.clicked.connect(self.on_book_corner_clicked)
         self.qr_scan_button.clicked.connect(self.on_qr_scan_clicked)
+        if hasattr(self, 'kiosk_settings'):
+            self.kiosk_settings.clicked.connect(self.kiosk_location_setting)
         
         print("✅ 메인 윈도우 시그널-슬롯 연결 완료")
     
@@ -171,7 +185,7 @@ class MainWindow(QMainWindow):
             # TaskRequest.srv 파라미터 준비
             robot_id = ""  # task_manager에서 자동 선택
             task_type = "assist"
-            call_location = "E9"  # 키오스크 위치 (kiosk_1: 8.98, -0.16)
+            call_location = getattr(self, 'kiosk_location_id', 'E9')  # 선택된 키오스크 위치
             goal_location = ""  # 어시스트 임무는 목적지 없음
             
             print(f"📍 TaskRequest 파라미터:")
@@ -268,11 +282,16 @@ class MainWindow(QMainWindow):
         
         if self.book_search_widget is None:
             self.book_search_widget = BookSearchWidget()
+            # 현재 설정된 키오스크 위치 주입
+            if hasattr(self.book_search_widget, 'set_kiosk_location'):
+                self.book_search_widget.set_kiosk_location(getattr(self, 'kiosk_location_id', 'E9'))
             # 홈 버튼 시그널 연결 (한 번만)
             self.book_search_widget.home_requested.connect(self.show_main_window)
         else:
             # 기존 위젯이 있으면 초기화
             self.book_search_widget.reset_widget()
+            if hasattr(self.book_search_widget, 'set_kiosk_location'):
+                self.book_search_widget.set_kiosk_location(getattr(self, 'kiosk_location_id', 'E9'))
         
         # 현재 윈도우 숨기고 책 검색 윈도우 표시
         self.hide()
@@ -438,6 +457,9 @@ class MainWindow(QMainWindow):
                 rclpy.init()
             
             self.book_corner_widget = BookCornerWidget()
+        # 현재 설정된 키오스크 위치 주입
+        if hasattr(self.book_corner_widget, 'set_kiosk_location'):
+            self.book_corner_widget.set_kiosk_location(getattr(self, 'kiosk_location_id', 'E9'))
             # 홈 버튼 시그널 연결 (한 번만)
             self.book_corner_widget.home_requested.connect(self.show_main_window)
             
@@ -595,6 +617,56 @@ class MainWindow(QMainWindow):
                 print("✅ Call Robot 버튼 숨김 처리 완료")
         except Exception as e:
             print(f"❌ Call Robot 버튼 숨김 처리 중 오류: {e}")
+
+    def kiosk_location_setting(self):
+        """Kiosk 위치 설정 다이얼로그 (E9=kiosk_1, C3=kiosk_2)"""
+        try:
+            options = [
+                "E9 (kiosk_1)",
+                "C3 (kiosk_2)"
+            ]
+            current_display = f"{self.kiosk_location_id} (kiosk_1)" if self.kiosk_location_id == 'E9' else f"{self.kiosk_location_id} (kiosk_2)"
+            item, ok = QInputDialog.getItem(self, "키오스크 위치 설정", "위치를 선택하세요:", options, 0, False)
+            if ok and item:
+                # 선택값에서 위치 ID 추출 (앞의 토큰)
+                new_loc = item.split()[0]
+                self.kiosk_location_id = new_loc
+                # 저장 및 UI 반영
+                self._save_kiosk_location_to_settings(new_loc)
+                self._update_kiosk_settings_button_label()
+                # 자식 위젯들에 반영
+                if hasattr(self, 'book_search_widget') and self.book_search_widget:
+                    if hasattr(self.book_search_widget, 'set_kiosk_location'):
+                        self.book_search_widget.set_kiosk_location(new_loc)
+                if hasattr(self, 'book_corner_widget') and self.book_corner_widget:
+                    if hasattr(self.book_corner_widget, 'set_kiosk_location'):
+                        self.book_corner_widget.set_kiosk_location(new_loc)
+                QMessageBox.information(self, "설정 완료", f"키오스크 위치가 {new_loc}로 설정되었습니다.")
+        except Exception as e:
+            print(f"❌ Kiosk 위치 설정 중 오류: {e}")
+
+    def _update_kiosk_settings_button_label(self):
+        try:
+            if hasattr(self, 'kiosk_settings'):
+                self.kiosk_settings.setText(f" Kiosk Settings ({self.kiosk_location_id})")
+        except Exception as e:
+            print(f"⚠️ Kiosk 설정 버튼 라벨 갱신 오류: {e}")
+
+    def _load_kiosk_location_from_settings(self) -> str:
+        try:
+            settings = QSettings('LIBO', 'KioskApp')
+            value = settings.value('kiosk/location_id', 'E9')
+            # QSettings가 QVariant로 반환할 수 있으므로 str 변환 보장
+            return str(value) if value else 'E9'
+        except Exception:
+            return 'E9'
+
+    def _save_kiosk_location_to_settings(self, value: str) -> None:
+        try:
+            settings = QSettings('LIBO', 'KioskApp')
+            settings.setValue('kiosk/location_id', value)
+        except Exception as e:
+            print(f"⚠️ Kiosk 위치 저장 오류: {e}")
 
 
 

@@ -395,7 +395,7 @@ QPushButton:disabled {
 }</string>
      </property>
      <property name="text">
-      <string>🛒 Add to Cart</string>
+      <string> Add to Cart</string>
      </property>
     </widget>
     <widget class="QPushButton" name="qr_scan_button">
@@ -434,7 +434,7 @@ QPushButton:pressed {
 }</string>
      </property>
      <property name="text">
-      <string>📱 Barcode Scan</string>
+      <string> Barcode Scan</string>
      </property>
     </widget>
    </widget>
@@ -474,7 +474,7 @@ QGroupBox::title {
 }</string>
     </property>
     <property name="title">
-     <string>🛒 Shopping Cart</string>
+     <string> Shopping Cart</string>
     </property>
     <widget class="QTableWidget" name="cart_table">
      <property name="geometry">
@@ -614,7 +614,7 @@ QPushButton:pressed {
 }</string>
      </property>
      <property name="text">
-      <string>🧹 Clear All</string>
+      <string> Clear All</string>
      </property>
     </widget>
     <widget class="QLabel" name="total_label">
@@ -651,9 +651,9 @@ QPushButton:pressed {
      </property>
      <property name="geometry">
       <rect>
-       <x>620</x>
+       <x>489</x>
        <y>720</y>
-       <width>160</width>
+       <width>291</width>
        <height>60</height>
       </rect>
      </property>

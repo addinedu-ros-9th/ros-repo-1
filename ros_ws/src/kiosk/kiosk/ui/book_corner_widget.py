@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5 import uic
+from PyQt5.QtCore import QSettings
 
 # ROS2 관련 import 추가
 import rclpy
@@ -25,6 +26,9 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
         QWidget.__init__(self)
         Node.__init__(self, 'book_corner_widget')
         
+        # Kiosk 위치 상태 (기본값 E9) - QSettings에서 복원
+        self.kiosk_location_id = self._load_kiosk_location_from_settings()
+
         # TaskRequest 클라이언트 초기화
         self.task_request_client = TaskRequestClient()
         self.task_request_client.task_request_completed.connect(self.on_task_request_response)
@@ -220,7 +224,7 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
             
             # TaskRequest.srv 파라미터 준비
             robot_id = ""  # task_manager에서 자동 선택
-            call_location = "E9"  # 키오스크 위치
+            call_location = getattr(self, 'kiosk_location_id', 'E9')  # 선택된 키오스크 위치
             goal_location = corner_waypoints.get(corner_name, "D5")  # 코너 위치
             
             print(f"📍 TaskRequest 파라미터:")
@@ -473,6 +477,25 @@ class BookCornerWidget(Node, QWidget): # Node를 QWidget 앞으로 이동
         """윈도우 종료 시 리소스 정리"""
         self.cleanup_task_request_client()
         event.accept()
+
+    def set_kiosk_location(self, location_id: str):
+        """외부에서 키오스크 위치를 주입"""
+        try:
+            self.kiosk_location_id = location_id
+            # 지속성도 업데이트
+            settings = QSettings('LIBO', 'KioskApp')
+            settings.setValue('kiosk/location_id', location_id)
+            print(f"✅ BookCornerWidget kiosk_location_id={location_id}")
+        except Exception as e:
+            print(f"⚠️ BookCornerWidget 위치 설정 오류: {e}")
+
+    def _load_kiosk_location_from_settings(self) -> str:
+        try:
+            settings = QSettings('LIBO', 'KioskApp')
+            value = settings.value('kiosk/location_id', 'E9')
+            return str(value) if value else 'E9'
+        except Exception:
+            return 'E9'
 
 def main(args=None):
     rclpy.init(args=args)
