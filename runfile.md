@@ -22,8 +22,6 @@ ros2 run admin admin_gui
 ros2 run main_server book_search_service
 ros2 run stock stock_gui
 
-
-ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < 메인 서버 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 ros2 run libo_navigator navigator_node
 
 
@@ -32,21 +30,18 @@ ros2 launch vicpinky_navigation nav2_view.launch.xml
 
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < AI Server > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
-pyenv activate libo_python3_10_venv             -> 가상환경 실행
-python3 strongsort_client.py                    -> 파이썬파일로 직접 실행 + 파이썬 3.10 가상환경으로 실행
-ros2 run ai_service ros2_bridege_node
-
-ros2 run ai_service human_detector_node         -> (파이썬 3.10 가상환경으로 실행)
 ros2 run ai_service obstacle_detector_node      -> 로봇 bringup이 되어 있어야 함. 
-ros2 run ai_service vision_manager_assist
+ros2 run ai_service vision_manager_assist4
 
 ros2 run ai_service qr_scanner_node
-
 ros2 run ai_service talker_manager2
+
+python3 hand_gesture_detector.py                -> 파이썬 3.10 가상환경으로 실행
+ros2 run ai_service hand_gesture_detector_ros2_bridge
 
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < HW Handler 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
-ros2 run hardware_handler mic_streamer
+ros2 run hardware_handler mic_streamer2
 ros2 run hardware_handler speaker_node2
 ros2 run hardware_handler heartbeat_sender
 ros2 run libo_gui robot_face_gui 
@@ -56,13 +51,14 @@ ros2 run hardware_handler cam_sender_front
 ros2 launch ascamera nuwa.launch.py -> depth camera, depth_ws 워크스페이스
 ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200 ->  esp
 
+python3 strongsort_client.py                    -> 파이썬 3.10 가상환경으로 실행
+ros2 run ai_service ros2_bridege_node
+
+ros2 run ai_service human_detector_node
+
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < Kiosk GUI > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 ros2 run kiosk main_ui
-
-
-
-
 
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
