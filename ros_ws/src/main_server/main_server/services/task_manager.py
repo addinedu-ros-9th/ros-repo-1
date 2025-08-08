@@ -229,6 +229,10 @@ class TaskManager(Node):
         # AMCL 포즈 캐시를 가장 먼저 초기화해 타이머 콜백에서의 경합을 방지
         self.current_pose_by_robot = {}
         
+        # 표정 상태 캐시 및 기본 로봇 ID 초기화
+        self.face_state_by_robot = {}  # robot_id -> face state cache
+        self.default_robot_id = 'libo_a'
+        
         # TaskRequest 서비스 서버 생성
         self.service = self.create_service(
             TaskRequest,
@@ -338,7 +342,7 @@ class TaskManager(Node):
         self.led_publisher = self.create_publisher(String, 'led_status', 10)
         
         # Expression 퍼블리셔 생성
-        self.expression_publisher = self.create_publisher(FaceExpression, 'expression', 10)
+        self.expression_publisher = self.create_publisher(FaceExpression, '/face_expression', 10)
         
         # 작업 목록을 저장할 리스트
         self.tasks = []  # 생성된 작업들을 저장할 리스트
@@ -650,6 +654,9 @@ class TaskManager(Node):
             else:  # 처음 보는 로봇이라면
                 self.robots[msg.sender_id] = Robot(msg.sender_id)  # 새로운 로봇 객체를 생성해서 목록에 추가
                 self.get_logger().info(f'🤖 새로운 로봇 <{msg.sender_id}> 감지됨')  # 새로운 로봇 감지 로그 출력
+                
+                # 초기 임시 표정: happy 5초 표시 (STANDBY 진입 시 normal 적용)
+                self.show_temporary_expression(msg.sender_id, 'happy', duration_sec=5.0)
             
         except Exception as e:  # 예외 발생 시 처리
             self.get_logger().error(f'❌ Heartbeat 처리 중 오류: {e}')  # 에러 로그
@@ -1079,6 +1086,12 @@ class TaskManager(Node):
                     self.get_logger().info(f'✅ 충전 시작 음성 명령 발행 완료')
                 else:
                     self.get_logger().warning(f'⚠️ 충전 시작 음성 명령 발행 실패')
+                
+                # CHARGING 표정 1회 발행
+                try:
+                    self.send_expression_command(current_task.robot_id, 'charging')
+                except Exception as e:
+                    self.get_logger().warn(f'⚠️ CHARGING 표정 발행 실패: {current_task.robot_id} (오류: {e})')
             else:
                 self.get_logger().warning(f'⚠️  로봇 <{current_task.robot_id}> 찾을 수 없음 - state 변경 불가')
             
@@ -1376,13 +1389,30 @@ class TaskManager(Node):
         """무게 데이터를 받았을 때 호출되는 콜백 함수"""
         self.current_weight = msg.data  # 무게 데이터 저장
         self.last_weight_update = time.time()  # 마지막 무게 업데이트 시간 갱신
-        # 임계치 초과 경고 (상향 교차 시 1회 경고)
+        # 임계치 초과 경고 (상향 교차 시 1회 경고) + 표정 전환 발행
         try:
             is_over = self.current_weight > self.overweight_threshold_g
-            if is_over and not self.is_overweight_active:
+            was_over = self.is_overweight_active
+
+            # 상향 교차: 정상 -> 과중
+            if is_over and not was_over:
                 self.get_logger().warning(
                     f'⚠️ [Weight] 한계 초과: {self.current_weight:.1f}g > {self.overweight_threshold_g:.0f}g'
                 )
+                # 과중 플래그 on → 반영
+                self.set_condition(self.default_robot_id, 'overweight', True)
+                self.update_face_expression(self.default_robot_id)
+
+            # 하향 교차: 과중 해제 -> 정상
+            elif not is_over and was_over:
+                self.get_logger().info(
+                    f'✅ [Weight] 한계 복귀: {self.current_weight:.1f}g ≤ {self.overweight_threshold_g:.0f}g'
+                )
+                # 과중 플래그 off → 반영
+                self.set_condition(self.default_robot_id, 'overweight', False)
+                self.update_face_expression(self.default_robot_id)
+
+            # 상태 플래그 갱신
             self.is_overweight_active = is_over
         except Exception as e:
             self.get_logger().error(f'❌ 무게 임계치 검사 중 오류: {e}')
@@ -1430,6 +1460,12 @@ class TaskManager(Node):
                     self.get_logger().info(f'✅ 초기화 완료 음성 명령 발행 완료')
                 else:
                     self.get_logger().warning(f'⚠️ 초기화 완료 음성 명령 발행 실패')
+                
+                # CHARGING 표정 1회 발행
+                try:
+                    self.send_expression_command(robot.robot_id, 'charging')
+                except Exception as e:
+                    self.get_logger().warn(f'⚠️ CHARGING 표정 발행 실패: {robot.robot_id} (오류: {e})')
         
         elif robot.current_state == RobotState.CHARGING:
             # CHARGING 상태에서 10초 후 STANDBY로 변경 (임시)
@@ -1443,6 +1479,12 @@ class TaskManager(Node):
                     self.get_logger().info(f'✅ 배터리 충분 음성 명령 발행 완료')
                 else:
                     self.get_logger().warning(f'⚠️ 배터리 충분 음성 명령 발행 실패')
+                
+                # STANDBY 표정: normal 1회 발행
+                try:
+                    self.send_expression_command(robot.robot_id, 'normal')
+                except Exception as e:
+                    self.get_logger().warn(f'⚠️ STANDBY 표정 발행 실패: {robot.robot_id} (오류: {e})')
         
         # ESCORT, DELIVERY, ASSIST 상태는 Task 완료 시까지 자동 변경하지 않음
         # 이 상태들은 advance_task_stage에서만 변경됨
@@ -2012,6 +2054,12 @@ class TaskManager(Node):
                 # 복구 완료 음성 알림
                 self.send_voice_command(robot_id, 'common', 'emergency_recovery')
                 
+                # STANDBY 표정: normal 1회 발행
+                try:
+                    self.send_expression_command(robot_id, 'normal')
+                except Exception as e:
+                    self.get_logger().warn(f'⚠️ STANDBY 표정 발행 실패: {robot_id} (오류: {e})')
+                
                 return True
             else:
                 self.get_logger().warning(f'⚠️ 복구 실패: 로봇 <{robot_id}>이 EMERGENCY 상태가 아님')
@@ -2138,6 +2186,75 @@ class TaskManager(Node):
     
     def _quaternion_to_yaw(self, x: float, y: float, z: float, w: float) -> float:  # 쿼터니언→Yaw(rad)
         return math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+
+    # ===== 표정 상태 관리 최소 구현 =====
+    def _ensure_face_state(self, robot_id: str):
+        if robot_id not in self.face_state_by_robot:
+            self.face_state_by_robot[robot_id] = {
+                'baseline': 'normal',
+                'flags': {
+                    'charging': False,
+                    'overweight': False,
+                },
+                'temporary': {
+                    'expr': None,
+                    'until': 0.0,
+                },
+                'current': None,
+            }
+
+    def set_baseline_expression(self, robot_id: str, expression: str):
+        """지속형 베이스 표정 설정(예: normal/focused/charging 등)"""
+        self._ensure_face_state(robot_id)
+        self.face_state_by_robot[robot_id]['baseline'] = expression
+
+    def set_condition(self, robot_id: str, name: str, active: bool):
+        """상황 플래그 설정(예: charging/overweight 등)"""
+        self._ensure_face_state(robot_id)
+        if name not in self.face_state_by_robot[robot_id]['flags']:
+            self.face_state_by_robot[robot_id]['flags'][name] = False
+        self.face_state_by_robot[robot_id]['flags'][name] = active
+
+    def show_temporary_expression(self, robot_id: str, expression: str, duration_sec: float = 5.0):
+        """임시 표정 설정(만료 시 자동 복귀)"""
+        self._ensure_face_state(robot_id)
+        now = time.time()
+        self.face_state_by_robot[robot_id]['temporary'] = {
+            'expr': expression,
+            'until': now + duration_sec,
+        }
+        self.update_face_expression(robot_id)
+
+    def _compute_desired_expression(self, robot_id: str) -> str:
+        self._ensure_face_state(robot_id)
+        state = self.face_state_by_robot[robot_id]
+        now = time.time()
+
+        # 1) 임시 표정 유효하면 최우선
+        temp = state['temporary']
+        if temp['expr'] and now <= temp['until']:
+            return temp['expr']
+        # 만료 정리
+        if temp['expr'] and now > temp['until']:
+            state['temporary'] = {'expr': None, 'until': 0.0}
+
+        # 2) 조건 플래그 우선순위 적용
+        flags = state['flags']
+        if flags.get('charging'):
+            return 'charging'
+        if flags.get('overweight'):
+            return 'heavy'
+
+        # 3) 기본 베이스 표현
+        return state['baseline']
+
+    def update_face_expression(self, robot_id: str):
+        """우선순위 규칙으로 최종 표정 계산 후 변경시만 퍼블리시"""
+        desired = self._compute_desired_expression(robot_id)
+        current = self.face_state_by_robot[robot_id]['current'] if robot_id in self.face_state_by_robot else None
+        if desired != current:
+            if self.send_expression_command(robot_id, desired):
+                self.face_state_by_robot[robot_id]['current'] = desired
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)
