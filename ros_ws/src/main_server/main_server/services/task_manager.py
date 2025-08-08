@@ -342,6 +342,10 @@ class TaskManager(Node):
         # 로봇 목록을 저장할 딕셔너리 (robot_id를 키로 사용)
         self.robots = {}  # 로봇들을 저장할 딕셔너리
         
+        # 마지막으로 발행한 상태 메시지 캐시
+        self.last_overall_status_by_robot = {}  # robot_id -> OverallStatus
+        self.last_task_status_by_id = {}        # task_id -> TaskStatus
+        
         # 무게 데이터 저장 변수
         self.current_weight = 0.0  # 현재 무게 (g 단위)
         self.last_weight_update = None  # 마지막 무게 업데이트 시간
@@ -370,6 +374,9 @@ class TaskManager(Node):
         
         # DB 매니저 초기화
         self.db_manager = DatabaseManager()
+        
+        # OverallStatus 10초 주기 DB 저장 타이머 추가
+        self.status_db_timer = self.create_timer(10.0, self.persist_overall_status_to_db)
         
         # Task 타입별 Stage 로직 정의 (통합 관리)
         self.task_stage_logic = {
@@ -728,6 +735,13 @@ class TaskManager(Node):
                 status_msg.book_weight = 0.0
             
             self.status_publisher.publish(status_msg)  # 메시지 발행
+            
+            # 캐시에 저장 (그대로 DB에 쓰기 위함)
+            try:
+                self.last_overall_status_by_robot[robot_id] = status_msg
+            except Exception as _:
+                pass
+            
             self.get_logger().debug(f'📡 로봇 상태 발행: {robot_id} → {robot.current_state.value} | {"사용가능" if robot.is_available else "사용중"} | 배터리: {status_msg.battery}%')
     
     def publish_task_status(self):  # 활성 작업들의 상태 발행
@@ -752,7 +766,54 @@ class TaskManager(Node):
             task_status_msg.end_time.nanosec = 0  # 진행중이므로 종료 시간은 0
             
             self.task_status_publisher.publish(task_status_msg)  # 메시지 발행
-
+            
+            # 캐시에 저장 (원하면 그대로 DB에 쓰기 위함)
+            try:
+                self.last_task_status_by_id[task.task_id] = task_status_msg
+            except Exception as _:
+                pass
+    
+    def publish_and_log_task_event(self, task, event: str):  # TaskStatus 이벤트 메시지 생성/발행/DB저장
+        try:
+            msg = TaskStatus()
+            msg.task_id = task.task_id
+            msg.robot_id = task.robot_id
+            msg.task_type = task.task_type
+            msg.task_stage = task.stage
+            msg.call_location = task.call_location
+            msg.goal_location = task.goal_location
+            # 시작 시간 설정
+            msg.start_time.sec = int(task.start_time)
+            msg.start_time.nanosec = int((task.start_time - int(task.start_time)) * 1_000_000_000)
+            # 종료 시간 설정 (완료 이벤트일 때만)
+            if event.upper() == 'COMPLETED' and task.end_time is not None:
+                msg.end_time.sec = int(task.end_time)
+                msg.end_time.nanosec = int((task.end_time - int(task.end_time)) * 1_000_000_000)
+            else:
+                msg.end_time.sec = 0
+                msg.end_time.nanosec = 0
+            # 퍼블리시
+            self.task_status_publisher.publish(msg)
+            # 캐시 갱신
+            self.last_task_status_by_id[task.task_id] = msg
+            # DB 저장 (메시지 그대로 매핑)
+            data = {
+                'event': event.upper(),
+                'task_id': msg.task_id,
+                'robot_id': msg.robot_id,
+                'task_type': msg.task_type,
+                'task_stage': int(msg.task_stage),
+                'call_location': msg.call_location,
+                'goal_location': msg.goal_location,
+                'start_time': float(task.start_time),
+                'end_time': float(task.end_time) if (event.upper() == 'COMPLETED' and task.end_time is not None) else None,
+            }
+            ok = self.db_manager.save_task_status_event(data)
+            if not ok:
+                self.get_logger().warning(f'⚠️ Task 이벤트 DB 저장 실패: {event} / {task.task_id}')
+        except Exception as e:
+            self.get_logger().error(f'❌ Task 이벤트 처리 중 오류: {e}')
+    
     def task_request_callback(self, request, response):  # 키오스크로부터 받은 작업 요청을 처리
         """TaskRequest 서비스 콜백"""
         self.get_logger().info(f'📥 Task Request 받음!')
@@ -826,6 +887,9 @@ class TaskManager(Node):
         self.tasks.append(new_task)  # 작업 목록에 추가
         
         self.get_logger().info(f'✅ 새로운 작업 생성됨: {new_task.get_info()}')  # 생성된 작업 정보 출력
+        
+        # Task 시작 이벤트: 메시지 생성→퍼블리시→DB 저장 (단일 소스)
+        self.publish_and_log_task_event(new_task, 'STARTED')
         
         # Task 생성 후 자동으로 로봇을 사용중으로 설정
         if self.set_robot_unavailable_for_task(selected_robot_id):
@@ -1028,6 +1092,9 @@ class TaskManager(Node):
             current_task.end_time = time.time()  # 종료 시간 기록
             current_task.status = "completed"  # 상태를 완료로 변경
             
+            # Task 완료 이벤트: 메시지 생성→퍼블리시→DB 저장 (단일 소스)
+            self.publish_and_log_task_event(current_task, 'COMPLETED')
+            
             # 로봇을 사용가능 상태로 변경
             if self.set_robot_available_after_task(current_task.robot_id):
                 self.get_logger().info(f'🔓 로봇 <{current_task.robot_id}> 사용가능 상태로 변경됨')
@@ -1043,13 +1110,6 @@ class TaskManager(Node):
                     self.get_logger().info(f'✅ 충전 시작 음성 명령 발행 완료')
                 else:
                     self.get_logger().warning(f'⚠️ 충전 시작 음성 명령 발행 실패')
-                
-                # Base 도착 음성 명령은 task_stage_logic에서 이미 처리됨 (중복 제거)
-                # self.get_logger().info(f'🗣️ Base 도착 음성 명령 발행: {current_task.task_type}.arrived_base')
-                # if self.send_voice_command_by_task_type(current_task.robot_id, current_task.task_type, 'arrived_base'):
-                #     self.get_logger().info(f'✅ Base 도착 음성 명령 발행 완료')
-                # else:
-                #     self.get_logger().warning(f'⚠️ Base 도착 음성 명령 발행 실패')
             else:
                 self.get_logger().warning(f'⚠️  로봇 <{current_task.robot_id}> 찾을 수 없음 - state 변경 불가')
             
@@ -1985,6 +2045,27 @@ class TaskManager(Node):
             self.process_task_stage_logic(task, 3, 'stage_start')
         else:
             self.get_logger().warning(f'⚠️ Task[{task.task_id}] 이미 Stage {task.stage} - 강제 변경 불필요')
+
+    def persist_overall_status_to_db(self):  # 10초마다 전체 로봇 상태 스냅샷 DB 저장
+        try:
+            if not self.last_overall_status_by_robot:
+                return
+            for robot_id, msg in self.last_overall_status_by_robot.items():
+                payload = {
+                    'robot_id': msg.robot_id,
+                    'robot_state': msg.robot_state,
+                    'is_available': bool(msg.is_available),
+                    'battery': int(msg.battery),
+                    'book_weight': float(msg.book_weight),
+                    'position_x': float(msg.position_x),
+                    'position_y': float(msg.position_y),
+                    'position_yaw': float(msg.position_yaw),
+                }
+                ok = self.db_manager.save_overall_status(payload)
+                if not ok:
+                    self.get_logger().warning(f'⚠️ overall_status_log 저장 실패: {robot_id}')
+        except Exception as e:
+            self.get_logger().error(f'❌ OverallStatus DB 저장 중 오류: {e}')
 
 def main(args=None):  # ROS2 노드 실행 및 종료 처리
     rclpy.init(args=args)
