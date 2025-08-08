@@ -1078,17 +1078,9 @@ class TaskManager(Node):
         
         # 첫 번째 활성 task를 대상으로 함 (미니멀 구현)
         current_task = self.tasks[0]
-        old_stage = current_task.stage
         
-        current_task.stage += 1  # stage 1단계 증가
-        
-        # Stage별 아이콘
-        stage_icons = {1: "🟡", 2: "🔵", 3: "🟢"}
-        
-        self.get_logger().info(f'🎯 Task[{current_task.task_id}] Stage 변화: {stage_icons.get(old_stage, "⚪")} {old_stage} → {stage_icons.get(current_task.stage, "⚪")} {current_task.stage}')
-        
-        # stage 3을 넘어가면 task 완료 및 제거
-        if current_task.stage > 3:
+        # Stage 3에서 완료 처리: 더 이상 증가시키지 않음 (3 → 완료)
+        if current_task.stage >= 3:
             current_task.end_time = time.time()  # 종료 시간 기록
             current_task.status = "completed"  # 상태를 완료로 변경
             
@@ -1115,19 +1107,27 @@ class TaskManager(Node):
             
             # task 목록에서 제거
             self.tasks.remove(current_task)
-            
             self.get_logger().info(f'🏁 Task[{current_task.task_id}] 완료 및 제거됨!')
             self.get_logger().info(f'📊 현재 활성 task 수: {len(self.tasks)}개')
-        else:
-            # Stage 3 이하일 때 현재 상태 로그
-            stage_desc = {1: "시작", 2: "진행중", 3: "완료직전"}.get(current_task.stage, f"Stage {current_task.stage}")
-            self.get_logger().info(f'📍 현재 상태: {stage_icons.get(current_task.stage, "⚪")} Stage {current_task.stage} ({stage_desc})')
-            
-            # 새로운 통합 시스템으로 stage_start 이벤트 처리
-            self.process_task_stage_logic(current_task, current_task.stage, 'stage_start')
-            
-            # 기존 좌표 전송 로직은 navigate 액션에서 처리되므로 제거
-            # (process_task_stage_logic에서 자동으로 처리됨)
+            return
+        
+        # 여기까지 왔으면 Stage가 1 또는 2 → +1 증가 처리
+        old_stage = current_task.stage
+        current_task.stage += 1  # stage 1단계 증가
+        
+        # Stage별 아이콘
+        stage_icons = {1: "🟡", 2: "🔵", 3: "🟢"}
+        self.get_logger().info(
+            f'🎯 Task[{current_task.task_id}] Stage 변화: {stage_icons.get(old_stage, "⚪")} {old_stage} → {stage_icons.get(current_task.stage, "⚪")} {current_task.stage}'
+        )
+        
+        # Stage 3 이하일 때 현재 상태 로그 및 다음 stage_start 처리
+        stage_desc = {1: "시작", 2: "진행중", 3: "완료직전"}.get(current_task.stage, f"Stage {current_task.stage}")
+        self.get_logger().info(f'📍 현재 상태: {stage_icons.get(current_task.stage, "⚪")} Stage {current_task.stage} ({stage_desc})')
+        
+        # 새로운 통합 시스템으로 stage_start 이벤트 처리
+        self.process_task_stage_logic(current_task, current_task.stage, 'stage_start')
+        # 기존 좌표 전송 로직은 navigate 액션에서 처리되므로 없음
 
     def test_navigator_communication(self):  # Navigator 통신 테스트
         """더미 좌표로 Navigator 통신을 테스트하는 메서드"""
