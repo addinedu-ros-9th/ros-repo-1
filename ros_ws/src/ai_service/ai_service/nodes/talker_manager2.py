@@ -30,8 +30,9 @@ import rclpy
 from rclpy.node import Node
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.service import Service
-from libo_interfaces.msg import TalkCommand, FaceExpression, VoiceCommand, Weight
+from libo_interfaces.msg import TalkCommand, FaceExpression, VoiceCommand
 from libo_interfaces.srv import EndTask, ActivateTalker, DeactivateTalker, ActivateGesture, DeactivateGesture, ActivateTracker, DeactivateTracker
+from std_msgs.msg import Float32  # ESP에서 발행하는 weight_data 토픽 사용
 
 
 # ================== 네트워크/오디오 기본 설정 ==================
@@ -226,7 +227,7 @@ def analyze_intent(client, transcript):
     - pause_assist: '잠깐 멈춰', '잠깐만 기다려봐' 등 작업 일시중지 명령
     - resume_assist: '다시 따라와', '계속하자' 등 작업 재개 명령
     - start_gesture: '제스쳐모드 시작', '내 동작 보고 따라와' 등 제스처 모드 시작 명령
-    - start_follow: 'follow모드 시작' 등 팔로우 모드 시작 명령
+    - start_follow: '팔로우 모드 시작' 등 팔로우 모드 시작 명령
     - get_mode: '지금 어떤 모드야?' 등 현재 모드 확인 명령
     - get_weight: '지금 무게 얼마나 돼?', '지금 책 무게는?' 등 책 무게 확인 명령
     - stop_assist: '이제 그만하고 복귀하자', '제스쳐 모드 중지', '어시스트 중지' 등 작업 중지 명령
@@ -643,6 +644,7 @@ class TalkerNode(Node):
         # 무게 관련 변수 초기화
         self.current_weight = 0.0
         self.weight_unit = "g"  # 기본 단위는 그램
+        self.robot_id = "libo_a"  # 기본 로봇 ID
         super().__init__('talker_node')
         
         # 통신 관리자 참조 저장
@@ -675,14 +677,14 @@ class TalkerNode(Node):
             10
         )
         
-        # Weight 토픽 구독자
+        # Weight 데이터 토픽 구독자 (ESP에서 발행하는 Float32 타입)
         self.weight_sub = self.create_subscription(
-            Weight,
-            '/weight',
+            Float32,
+            '/weight_data',
             self.weight_callback,
             10
         )
-        self.get_logger().info('Weight 토픽 구독 시작')
+        self.get_logger().info('ESP의 /weight_data 토픽 구독 시작')
         
         # EndTask 서비스 클라이언트
         self.end_task_client = self.create_client(
@@ -838,10 +840,9 @@ class TalkerNode(Node):
             self.get_logger().error(f'DeactivateGesture 서비스 호출 실패: {str(e)}')
             
     def weight_callback(self, msg):
-        """Weight 토픽 메시지 수신 콜백"""
-        # Weight 메시지에서 필요한 정보 추출
-        robot_id = msg.robot_id
-        weight_value = msg.weight
+        """ESP에서 발행한 weight_data(Float32) 토픽 메시지 수신 콜백"""
+        # Float32 메시지에서 값 추출
+        weight_value = msg.data  # Float32 메시지는 .data 필드에 값이 있음
         
         # 무게 정보 저장
         self.current_weight = weight_value
@@ -853,7 +854,8 @@ class TalkerNode(Node):
         else:
             self.weight_unit = "g"
         
-        self.get_logger().debug(f'Weight 토픽 수신: 로봇={robot_id}, 무게={self.current_weight}{self.weight_unit}')
+        # 현재 로봇 ID와 함께 로그 출력
+        self.get_logger().debug(f'Weight 데이터 수신: 로봇={self.robot_id}, 무게={self.current_weight}{self.weight_unit}')
         
     def activate_talker_callback(self, request, response):
         """
@@ -1060,15 +1062,18 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
                 talker_node.publish_voice_command(robot_id, "voice_command", "current_mode_follow")
             
         elif intent == "get_weight":
-            # 책 무게 확인 - Weight.msg 토픽에서 값 가져오기
+            # 책 무게 확인 - ESP에서 발행하는 /weight_data 토픽에서 값 가져오기
             log("ACTION", "책 무게 확인 명령 처리")
             
-            # Weight 정보를 VoiceCommand로 전송
-            # 간단하게 무게 정보를 전송하고 speaker_node에서 처리
+            # VoiceCommand로 무게 정보 요청 전송
             talker_node.publish_voice_command(robot_id, "voice_command", "weight_info")
             
-            # 실제 무게 정보는 로그에만 남김
+            # 현재 저장된 무게 정보 로그에 출력
             log("INFO", f"현재 무게 정보: {talker_node.current_weight}{talker_node.weight_unit}")
+            
+            # 더 자세한 안내 메시지 추가 (TTS 변환용)
+            weight_msg = f"현재 책의 무게는 {talker_node.current_weight} {talker_node.weight_unit} 입니다."
+            comm_manager.play_tts_response(weight_msg)
             
         elif intent == "stop_assist":
             # 작업 중지 및 복귀
