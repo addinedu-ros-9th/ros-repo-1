@@ -26,20 +26,20 @@ def main(args=None):
     
     # ===== 전송 대상 설정 =====
     # 모니터링 서비스 (옵션)
-    UDP_IP_MONITORING = "127.0.0.1"
+    UDP_IP_MONITORING = "192.168.1.7"
     UDP_PORT_MONITORING = 7001
     SEND_TO_MONITORING = False
 
     # ADMIN_PC로 영상 전송
-    ADMIN_PC_IP = "127.0.0.1"  # 로컬 테스트용으로 localhost로 변경
-    ADMIN_PC_PORT = 7021
+    ADMIN_PC_IP = "192.168.1.7"  # 로컬 테스트용으로 localhost로 변경
+    ADMIN_PC_PORT = 7022
     SEND_TO_ADMIN_PC = True
 
     # 사용할 카메라 경로 (로컬 테스트용)
     # Linux: 0, 1, 2... 또는 /dev/video0, /dev/video1...
     # Windows: 0, 1, 2...
     # macOS: 0, 1, 2...
-    WEBCAM_PATH = '/dev/video2'  # 로컬 테스트용으로 video1 사용
+    WEBCAM_PATH = '/dev/video0'  # 로컬 테스트용으로 video1 사용
     
     # udev 규칙으로 고정된 경로 (실제 로봇 환경용)
     # WEBCAM_PATH = '/dev/my_webcam_2'

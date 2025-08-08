@@ -64,8 +64,6 @@ class VideoReceiverThread(QThread):
                                 direction = header.get('direction', 'unknown')
                                 frame_id = header.get('frame_id', 0)
                                 
-                                print(f"📥 프레임 수신: {direction}, ID: {frame_id}, 크기: {len(image_data)} bytes")
-                                
                                 # JPEG 디코딩
                                 nparr = np.frombuffer(image_data, np.uint8)
                                 frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -76,19 +74,15 @@ class VideoReceiverThread(QThread):
                                     self.frame_received.emit(frame_rgb)
                                     frame_count += 1
                                     
-                                    if frame_count % 30 == 0:  # 30프레임마다 로그
-                                        print(f"✅ 프레임 처리 완료: {frame_count}개")
-                                    
                                     # 100프레임마다 메모리 정리
                                     if frame_count % 100 == 0:
                                         import gc
                                         gc.collect()
-                                        print(f"🧹 메모리 정리 완료 (프레임: {frame_count})")
                                 else:
-                                    print("❌ 프레임 디코딩 실패")
+                                    pass
                                     
-                            except (json.JSONDecodeError, cv2.error) as e:
-                                print(f"⚠️ 프레임 파싱 오류: {e}")
+                            except (json.JSONDecodeError, cv2.error):
+                                pass
                                 
                 except socket.timeout:
                     continue
@@ -494,7 +488,6 @@ class MainViewTab(QWidget):
                     Qt.SmoothTransformation
                 )
                 self.video_front.setPixmap(scaled_pixmap)
-                print(f"🎬 영상 표시 완료: {width}x{height} -> {scaled_pixmap.width()}x{scaled_pixmap.height()}")
             else:
                 print("❌ video_front 위젯을 찾을 수 없음")
                 
@@ -534,7 +527,6 @@ class MainViewTab(QWidget):
                     Qt.SmoothTransformation
                 )
                 self.video_back.setPixmap(scaled_pixmap)
-                print(f"🎬 Back camera 영상 표시 완료: {width}x{height} -> {scaled_pixmap.width()}x{scaled_pixmap.height()}")
             else:
                 print("❌ video_back 위젯을 찾을 수 없음")
                 
