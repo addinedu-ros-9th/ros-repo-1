@@ -61,6 +61,10 @@ class MainWindow(QMainWindow):
         # Call Robot 버튼 초기 상태 설정 (숨김)
         self.call_manager.setVisible(False)
         
+        # Kiosk Settings 버튼 초기 상태 설정 (숨김)
+        if hasattr(self, 'kiosk_settings'):
+            self.kiosk_settings.setVisible(False)
+        
         # 윈도우 크기 설정 (새로운 디자인에 맞게)
         self.resize(1200, 800)
         
@@ -139,39 +143,48 @@ class MainWindow(QMainWindow):
             print(f"✅ QR 인증 성공: {message}")
             self.admin_authenticated = True
             
-            # Call Robot 버튼 표시
+            # Call Robot 버튼과 Kiosk Settings 버튼 표시
             self.show_call_robot_button()
             
             QMessageBox.information(self, "QR 인증 성공", 
-                                  f"관리자 인증이 완료되었습니다.\n{message}\n\nCall Robot 버튼이 5초간 표시됩니다.")
+                                  f"관리자 인증이 완료되었습니다.\n{message}\n\nCall Robot 버튼과 Kiosk Settings 버튼이 10초간 표시됩니다.")
         else:
             print(f"❌ QR 인증 실패: {message}")
             self.admin_authenticated = False
             QMessageBox.warning(self, "QR 인증 실패", f"QR 인증에 실패했습니다.\n{message}")
     
     def show_call_robot_button(self):
-        """Call Robot 버튼 표시 (5초간)"""
+        """Call Robot 버튼 표시 (10초간)"""
         self.call_manager.setVisible(True)
         
-        # 5초 후 버튼 숨기기
+        # Kiosk Settings 버튼도 표시
+        if hasattr(self, 'kiosk_settings'):
+            self.kiosk_settings.setVisible(True)
+        
+        # 10초 후 버튼 숨기기
         if self.call_robot_timer:
             self.call_robot_timer.stop()
         
         self.call_robot_timer = QTimer()
         self.call_robot_timer.timeout.connect(self.hide_call_robot_button)
-        self.call_robot_timer.start(5000)  # 5초
+        self.call_robot_timer.start(10000)  # 10초
         
-        print("🤖 Call Robot 버튼 표시 (5초)")
+        print("🤖 Call Robot 버튼 및 Kiosk Settings 버튼 표시")
     
     def hide_call_robot_button(self):
         """Call Robot 버튼 숨기기"""
         self.call_manager.setVisible(False)
+        
+        # Kiosk Settings 버튼도 숨기기
+        if hasattr(self, 'kiosk_settings'):
+            self.kiosk_settings.setVisible(False)
+        
         self.admin_authenticated = False
         
         if self.call_robot_timer:
             self.call_robot_timer.stop()
         
-        print("🤖 Call Robot 버튼 숨김")
+        print("🤖 Call Robot 버튼 및 Kiosk Settings 버튼 숨김")
     
     def on_call_robot_clicked(self):
         """Call Robot 버튼 클릭 (관리자용 로봇 호출)"""
@@ -615,6 +628,11 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'call_manager'):
                 self.call_manager.setVisible(False)
                 print("✅ Call Robot 버튼 숨김 처리 완료")
+            
+            # Kiosk Settings 버튼도 숨기기
+            if hasattr(self, 'kiosk_settings'):
+                self.kiosk_settings.setVisible(False)
+                print("✅ Kiosk Settings 버튼 숨김 처리 완료")
         except Exception as e:
             print(f"❌ Call Robot 버튼 숨김 처리 중 오류: {e}")
 
@@ -648,7 +666,7 @@ class MainWindow(QMainWindow):
     def _update_kiosk_settings_button_label(self):
         try:
             if hasattr(self, 'kiosk_settings'):
-                self.kiosk_settings.setText(f" Kiosk Settings ({self.kiosk_location_id})")
+                self.kiosk_settings.setText(f" Kiosk Settings")
         except Exception as e:
             print(f"⚠️ Kiosk 설정 버튼 라벨 갱신 오류: {e}")
 
