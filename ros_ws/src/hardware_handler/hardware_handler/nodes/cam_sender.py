@@ -30,8 +30,8 @@ def main(args=None):
     # ===== 설정: 전송할 대상 및 카메라 옵션을 정의하는 부분 =====
     # 모니터링 서비스(수신자 1)의 IP 주소 및 포트
     # UDP_IP_MONITORING = "127.0.0.1"
-    # UDP_IP_MONITORING = "192.168.1.2"
-    UDP_IP_MONITORING = "192.168.1.7"
+    UDP_IP_MONITORING = "192.168.1.2"
+    # UDP_IP_MONITORING = "192.168.1.7"
     UDP_PORT_MONITORING = 7101
 
     # AI 서비스(수신자 2)의 IP 주소 및 포트
