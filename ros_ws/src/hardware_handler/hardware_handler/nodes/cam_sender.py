@@ -35,8 +35,8 @@ def main(args=None):
     UDP_PORT_MONITORING = 7101
 
     # AI 서비스(수신자 2)의 IP 주소 및 포트
-    # UDP_IP_FOLLOWING = "127.0.0.1"
-    UDP_IP_FOLLOWING = "192.168.1.7" # 실제 IP 사용 시 주석 해제
+    UDP_IP_FOLLOWING = "127.0.0.1"
+    # UDP_IP_FOLLOWING = "192.168.1.7" # 실제 IP 사용 시 주석 해제
     UDP_PORT_FOLLOWING = 7020
 
     # 사용할 카메라의 고정 경로
