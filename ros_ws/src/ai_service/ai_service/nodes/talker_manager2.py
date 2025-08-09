@@ -125,27 +125,6 @@ def get_kr_time():
 def log(tag, message):
     """일관된 형식으로 로그 출력"""
     print(f"[{get_kr_time()}][{tag}] {message}")
-    
-def safe_execute(func, error_tag="ERROR", error_msg="오류 발생", *args, **kwargs):
-    """예외 처리를 통합한 안전한 함수 실행 래퍼"""
-    try:
-        return func(*args, **kwargs)
-    except Exception as e:
-        log(error_tag, f"{error_msg}: {str(e)}")
-        return None
-        
-def process_audio_data(audio_data, volume_factor=1.4):
-    """오디오 데이터 처리: int16에서 float32로 변환 및 볼륨 조정"""
-    # int16에서 float32로 변환
-    audio_float32 = audio_data.astype(np.float32) / 32768.0
-    
-    # 볼륨 증가 (약 3데시벨 증가 = 약 1.4배 볼륨)
-    audio_float32 = audio_float32 * volume_factor
-    
-    # 클리핑 방지 (값이 1.0을 넘지 않도록)
-    audio_float32 = np.clip(audio_float32, -1.0, 1.0)
-    
-    return audio_float32
 
 def recognize_speech(recognizer, audio_file_path):
     """음성을 텍스트로 변환"""
@@ -366,99 +345,6 @@ class CommunicationManager:
         thread.daemon = True
         thread.start()
         return thread
-
-    def play_mp3_effect(self, file_name):
-        """MP3 효과음 재생 - VoiceCommand로 처리"""
-        try:
-            # VoiceCommand 메시지를 통해 speaker_node2에 전송
-            # speaker_node2에서 실제 MP3 파일 처리를 담당함
-            if self.talker_node:
-                robot_id = self.current_robot_id or "libo_a"
-                self.talker_node.publish_voice_command(robot_id, "mp3_effect", file_name)
-                log("MP3", f"MP3 효과음 재생 요청: {file_name}")
-                return True
-            else:
-                log("ERROR", "talker_node가 설정되지 않았습니다. VoiceCommand를 발행할 수 없습니다.")
-                return False
-        except Exception as e:
-            log("WARNING", f"MP3 효과음 재생 요청 실패: {str(e)}")
-            return False
-    
-    def play_tts_response(self, text):
-        """텍스트를 TTS로 변환하여 VoiceCommand로 전송"""
-        try:
-            log("TTS", f"음성 응답 요청: {text}")
-            
-            # VoiceCommand 메시지를 통해 speaker_node2에 전송
-            # speaker_node2에서 실제 TTS 처리를 담당함
-            if self.talker_node:
-                robot_id = self.current_robot_id or "libo_a"
-                
-                # text를 그대로 action으로 사용하는 대신, 
-                # 1) 기존 메시지를 미리 정의된 액션에 매핑하거나
-                # 2) text를 ROS 메시지 파라미터로 전달할 수 있음
-                
-                # 1번 방법: 일반적인 메시지는 미리 정의된 액션으로 매핑
-                if text == "네?":
-                    self.talker_node.publish_voice_command(robot_id, "voice_command", "wake_response")
-                elif text == "일시정지합니다.":
-                    self.talker_node.publish_voice_command(robot_id, "voice_command", "pause_assist")
-                elif text == "어시스트를 재개합니다.":
-                    self.talker_node.publish_voice_command(robot_id, "voice_command", "resume_assist")
-                elif "효과음" in text and "실패했습니다" in text:
-                    self.talker_node.publish_voice_command(robot_id, "error", "mp3_file_failed")
-                else:
-                    # 그 외 일반 텍스트는 dynamic_tts 카테고리로 전달
-                    # speaker_node2.py에서 이 텍스트를 직접 TTS 변환
-                    self.talker_node.publish_voice_command(robot_id, "dynamic_tts", text)
-                
-                # 얼굴 표정 변경 (발화 중)
-                self.talker_node.publish_face_expression(robot_id, "speaking")
-                
-                log("TTS", "TTS 요청 전송 완료")
-                return True
-            else:
-                log("ERROR", "talker_node가 설정되지 않았습니다. VoiceCommand를 발행할 수 없습니다.")
-                return False
-        except Exception as e:
-            log("ERROR", f"TTS 요청 전송 오류: {str(e)}")
-            return False
-            
-    def play_voice_command(self, category, action):
-        """카테고리와 액션에 따라 음성 명령을 재생
-        
-        Args:
-            category (str): 명령 카테고리 ('common', 'escort', 'delivery', 'assist')
-            action (str): 카테고리 내 액션 이름
-            
-        Returns:
-            bool: 성공 여부
-        """
-        try:
-            # VoiceCommand 메시지를 통해 speaker_node2에 전송
-            # speaker_node2에서 실제 음성 명령 처리
-            log("VOICE", f"음성 명령 요청: {category}.{action}")
-            
-            if self.talker_node:
-                robot_id = self.current_robot_id or "libo_a"
-                
-                # 각 카테고리와 액션에 맞게 voice_command 메시지 발행
-                voice_category = "voice_command"  # 기본 카테고리
-                
-                # 액션은 그대로 전달하되, 필요에 따라 매핑 가능
-                # 예: called_by_staff -> staff_call 등으로 변환 가능
-                self.talker_node.publish_voice_command(robot_id, voice_category, action)
-                
-                # 얼굴 표정 변경 (발화 중)
-                self.talker_node.publish_face_expression(robot_id, "speaking")
-                
-                return True
-            else:
-                log("ERROR", "talker_node가 설정되지 않았습니다. VoiceCommand를 발행할 수 없습니다.")
-                return False
-        except Exception as e:
-            log("ERROR", f"음성 명령 실행 오류: {str(e)}")
-            return False
 
     def cleanup(self):
         """모든 리소스 정리"""
@@ -849,14 +735,12 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
             # 일시중지 명령 처리
             log("ACTION", "일시중지 명령 처리")
             talker_node.publish_talk_command(robot_id, "stop")
-            talker_node.publish_face_expression(robot_id, "normal")
             talker_node.publish_voice_command(robot_id, "voice_command", "pause_assist")
             
         elif intent == "resume_assist":
             # 재개 명령 처리
             log("ACTION", "재개 명령 처리")
             talker_node.publish_talk_command(robot_id, "activate")
-            talker_node.publish_face_expression(robot_id, "speaking")
             talker_node.publish_voice_command(robot_id, "voice_command", "resume_assist")
             
         elif intent == "start_gesture":
@@ -922,7 +806,21 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
             # 알 수 없는 의도
             log("ACTION", f"알 수 없는 의도: {intent}")
             talker_node.publish_voice_command(robot_id, "voice_command", "ignore")
-            
+
+        # 로봇 응답을 위해 5초 후 normal 모드로 변경 (비동기 처리)
+        def delayed_normal_expression():
+            try:
+                time.sleep(5.0)  # 5초 대기
+                talker_node.publish_face_expression(robot_id, "normal")
+                log("FACE", f"😊 5초 후 얼굴 표정 복귀: {robot_id} → normal")
+            except Exception as e:
+                log("ERROR", f"지연된 얼굴 표정 변경 중 오류: {str(e)}")
+        
+        # 백그라운드 스레드로 실행 (시스템에 영향 주지 않음)
+        normal_thread = threading.Thread(target=delayed_normal_expression)
+        normal_thread.daemon = True  # 메인 프로그램 종료 시 함께 종료
+        normal_thread.start()
+
     except Exception as e:
         log("ERROR", f"음성 명령 처리 중 오류 발생: {str(e)}")
         traceback.print_exc()
