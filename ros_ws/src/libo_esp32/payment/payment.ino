@@ -129,7 +129,7 @@ bool connectMicroROS() {
   }
   
   // 도메인 ID 설정
-  ret = rcl_init_options_set_domain_id(&init_options, 26);
+  ret = rcl_init_options_set_domain_id(&init_options, 77);
   if (ret != RCL_RET_OK) {
     Serial.printf("❌ 도메인 ID 설정 실패: %d\n", ret);
     return false;
