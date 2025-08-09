@@ -114,16 +114,33 @@ class AdvancedAssistFollowFSM(Node):
             self.get_logger().info('장애물 감지 정보 수신 대기 중...', once=True)
             return
 
-        # 2순위: [정면 장애물] 5초 대기 후 회피 로직
+        # 2순위: [정면 장애물] 조건부 로직
         if self.obstacle_status.center_detected:
-            if self.front_obstacle_timer is None:
-                self.get_logger().warn('🚨 정면 장애물 감지! 5초간 정지 후 대응합니다.')
+            # <<< 상세 로그: 판단 시작 >>>
+            self.get_logger().info(f"정면 장애물 감지됨. 거리 판단 시작 (현재: {msg.distance:.2f}m, 목표: {self.target_distance:.2f}m)", throttle_duration_sec=3)
+            
+            # 목표 거리보다 멀리 있을 때만 5초 대기 후 회피 시도
+            if msg.distance > self.target_distance:
+                if self.front_obstacle_timer is None:
+                    # <<< 상세 로그: 5초 대기 결정 >>>
+                    self.get_logger().warn("  -> [판단] 목표보다 멀리 있어 5초 대기 후 회피를 시도합니다. 타이머를 시작합니다.")
+                    self.transition_to_following(stop_first=True)
+                    self.front_obstacle_timer = self.create_timer(5.0, self.handle_front_obstacle_timeout)
+            # 목표 거리보다 가깝거나 같으면 그냥 정지
+            else:
+                # <<< 상세 로그: 현위치 정지 결정 >>>
+                self.get_logger().warn("  -> [판단] 목표 거리 내에 있으므로 후진 없이 현 위치에서 대기합니다.")
                 self.transition_to_following(stop_first=True)
-                self.front_obstacle_timer = self.create_timer(5.0, self.handle_front_obstacle_timeout)
+                # 혹시 다른 조건으로 타이머가 실행 중이었다면 안전하게 취소
+                if self.front_obstacle_timer is not None:
+                    self.get_logger().info("  -> 기존에 실행 중이던 전방 장애물 타이머를 취소합니다.")
+                    self.front_obstacle_timer.cancel()
+                    self.front_obstacle_timer = None
             return # 다른 로직 실행 방지
         else:
             if self.front_obstacle_timer is not None:
-                self.get_logger().info('전방 장애물 사라짐. 타이머를 취소하고 정상 동작을 재개합니다.')
+                # <<< 상세 로그: 타이머 취소 >>>
+                self.get_logger().info('✅ 전방 장애물이 사라졌습니다. 대기 타이머를 취소하고 정상 동작을 재개합니다.')
                 self.front_obstacle_timer.cancel()
                 self.front_obstacle_timer = None
 
@@ -230,13 +247,17 @@ class AdvancedAssistFollowFSM(Node):
             self.transition_to_following(stop_first=True)
 
     def handle_front_obstacle_timeout(self):
+        # <<< 상세 로그: 타이머 만료 >>>
+        self.get_logger().info("⏰ 전방 장애물 5초 대기 타이머 만료.")
         if self.obstacle_status and self.obstacle_status.center_detected:
-            self.get_logger().warn("전방 장애물 5초 이상 지속. 후진 회피를 시작합니다.")
+            # <<< 상세 로그: 회피 시작 >>>
+            self.get_logger().warn("  -> [조치] 장애물이 아직 존재하므로 후진 회피를 시작합니다.")
             self.avoidance_turn_direction = 1  # 후진 후 회전 방향은 좌측으로 고정
             self.transition_to_state("AVOIDING_BACKUP")
         else:
-            self.get_logger().info("5초 타이머 만료 시점에는 장애물이 사라졌습니다.")
-        self.front_obstacle_timer = None
+            # <<< 상세 로그: 회피 불필요 >>>
+            self.get_logger().info("  -> [조치] 타이머 만료 시점에는 장애물이 사라져 별도 조치 없이 정상 추종을 재개합니다.")
+        self.front_obstacle_timer = None # 타이머 완료 후 리셋
 
     def transition_to_following(self, stop_first=False):
         self.state = "FOLLOWING"
@@ -276,20 +297,46 @@ class AdvancedAssistFollowFSM(Node):
         self.obstacle_status = msg
         
     def talk_command_callback(self, msg: TalkCommand):
-        if not self.qr_authenticated or msg.robot_id != "libo_a": return
+        # 로봇 ID가 다르면 무시 (로그 기록 전에 체크)
+        if msg.robot_id != "libo_a": return
+
+        self.get_logger().info(f"🎤 음성 명령 수신: '{msg.action}'") 
+
+        # 추종 기능이 꺼져있으면, 명령을 처리하지 않음
+        if not self.qr_authenticated:
+            self.get_logger().warn("   -> 추적 비활성화 상태이므로 음성 명령을 처리하지 않습니다.") 
+            return
+        
         if msg.action == "stop":
-            if not self.is_paused_by_voice: self.is_paused_by_voice = True; self.transition_to_following(stop_first=True)
+            if not self.is_paused_by_voice:
+                self.get_logger().info("   -> 음성 명령으로 추적을 일시 중지합니다.") 
+                self.is_paused_by_voice = True
+                self.transition_to_following(stop_first=True)
         elif msg.action == "activate":
-            if self.is_paused_by_voice: self.is_paused_by_voice = False
+            if self.is_paused_by_voice:
+                self.get_logger().info("   -> 음성 명령으로 추적을 다시 시작합니다.") 
+                self.is_paused_by_voice = False
 
     def handle_activate_tracker(self, request, response):
-        self.qr_authenticated = True; response.success = True; return response
+        self.get_logger().info('▶️  추적 활성화 (Activate) 서비스 수신') 
+        self.qr_authenticated = True
+        response.success = True
+        return response
         
     def handle_deactivate_tracker(self, request, response):
-        self.qr_authenticated = False; self.transition_to_following(stop_first=True); response.success = True; return response
+        self.get_logger().info('⏹️  추적 비활성화 (Deactivate) 서비스 수신') 
+        self.qr_authenticated = False
+        self.transition_to_following(stop_first=True)
+        response.success = True
+        return response
         
     def handle_arrival_trigger(self, request, response):
-        self.qr_authenticated = False; self.send_voice_command("escort", "arrived"); self.transition_to_following(stop_first=True); response.success = True; return response
+        self.get_logger().info('🏁 도착 완료 (Arrival) 트리거 수신. 추적을 종료합니다.') 
+        self.qr_authenticated = False
+        self.send_voice_command("escort", "arrived")
+        self.transition_to_following(stop_first=True)
+        response.success = True
+        return response
 
 def main(args=None):
     rclpy.init(args=args)
