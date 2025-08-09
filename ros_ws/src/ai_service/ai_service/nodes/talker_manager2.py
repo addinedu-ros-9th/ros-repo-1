@@ -37,18 +37,15 @@ from std_msgs.msg import Float32  # ESP에서 발행하는 weight_data 토픽 �
 
 # ================== 네트워크/오디오 기본 설정 ==================
 # 네트워크 설정
-HARDWARE_HANDLER_IP = "0.0.0.0"      # 🖥️ Hardware Handler IP (UDP/TCP 서버 주소)
+HARDWARE_HANDLER_IP = "0.0.0.0"      # 🖥️ Hardware Handler IP (UDP 서버 주소)
 MIC_STREAM_PORT = 7010                 # 🎤 마이크 스트림 포트 (UDP 수신)
-SPEAKER_PORT = 7002                    # 🔊 스피커 출력 포트 (TCP 서버)
 
 # 오디오 설정
 NATIVE_RATE = 48000                    # 🎵 원본 샘플링 레이트 (마이크용)
 # NATIVE_RATE = 44100                    # 🎵 원본 샘플링 레이트 (웹캠 마이크용)
 TARGET_RATE = 16000                    # 🎯 웨이크워드 처리용 레이트
-TTS_RATE = 24000                       # 🗣️ TTS 출력 레이트
 
 print(f"[NETWORK CONFIG] 📡 UDP 서버: {HARDWARE_HANDLER_IP}:{MIC_STREAM_PORT} - 마이크 스트림 수신")
-print(f"[NETWORK CONFIG] 🔌 TCP 서버: {HARDWARE_HANDLER_IP}:{SPEAKER_PORT} - 스피커 노드 연결 수신")
 
 # ================== 프로젝트 루트 경로 세팅 ==================
 # 현재 실행 경로에서 ros-repo-1 위치 찾기
@@ -120,12 +117,7 @@ CHANNELS = 1
 CHUNK = 2048                           # mic_streamer와 동일
 CHANNELS = 1
 CHUNK = 2048                           # mic_streamer와 동일
-
-# TCP 서버 설정
-tcp_server = None
-tcp_client = None
-
-# ================== UDP/TCP 통신 관리 ==================
+# ================== 유틸리티 함수들 ==================
 def get_kr_time():
     kr_tz = pytz.timezone('Asia/Seoul')
     return datetime.now(kr_tz).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]  # 밀리초 3자리까지 표시
@@ -328,11 +320,8 @@ def save_wav_file(filepath, audio_data, channels=CHANNELS, sample_width=2, frame
 class CommunicationManager:
     def __init__(self):
         self.udp_sock = None
-        self.tcp_server = None
-        self.tcp_client = None
         self.buffer_queue = queue.Queue()
         self.stop_event = threading.Event()
-        self.tcp_ready = threading.Event()
         self.is_active = False  # 웨이크워드 및 명령 처리 활성화 상태 변수 - 기본값 False로 변경
         self.current_robot_id = "unknown"  # 현재 활성화/비활성화 요청한 로봇 ID
         self.last_status_report_time = 0  # 마지막 상태 출력 시간
@@ -421,177 +410,61 @@ class CommunicationManager:
         thread.start()
         return thread
 
-    def start_tcp_server(self):
-        """TCP 서버 초기화 및 시작"""
-        def _tcp_server():
-            try:
-                print(f"[{get_kr_time()}][TCP] 🔊 스피커 TCP 서버 초기화 중...")
-                self.tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                self.tcp_server.bind((HARDWARE_HANDLER_IP, SPEAKER_PORT))
-                self.tcp_server.listen(1)
-                
-                print(f"[{get_kr_time()}][TCP] 🎧 스피커 노드 연결 대기 중... ({HARDWARE_HANDLER_IP}:{SPEAKER_PORT})")
-                print(f"[{get_kr_time()}][TCP] ⚙️  설정: TTS_RATE={TTS_RATE}Hz, CHUNK={CHUNK}")
-                
-                while not self.stop_event.is_set():
-                    self.tcp_server.settimeout(1.0)  # 1초 타임아웃 설정
-                    try:
-                        self.tcp_client, addr = self.tcp_server.accept()
-                        print(f"[{get_kr_time()}][TCP] ✅ 스피커 노드 연결됨: {addr} → {HARDWARE_HANDLER_IP}:{SPEAKER_PORT}")
-                        self.tcp_ready.set()  # TCP 연결 완료 신호
-                        
-                        # 클라이언트 연결이 끊어질 때까지 대기
-                        while not self.stop_event.is_set():
-                            time.sleep(1)
-                            try:
-                                # 연결 상태 확인
-                                self.tcp_client.send(b'')
-                            except:
-                                print(f"[{get_kr_time()}][TCP] 클라이언트 연결이 끊어짐")
-                                self.tcp_ready.clear()
-                                break
-                                
-                    except socket.timeout:
-                        continue
-                    except Exception as e:
-                        print(f"[{get_kr_time()}][TCP] 연결 오류: {str(e)}")
-                        self.tcp_ready.clear()
-                        time.sleep(1)  # 재시도 전 대기
-                        
-            except Exception as e:
-                print(f"[{get_kr_time()}][TCP] 서버 오류: {str(e)}")
-            finally:
-                if self.tcp_client:
-                    self.tcp_client.close()
-                if self.tcp_server:
-                    self.tcp_server.close()
-                    
-        thread = threading.Thread(target=_tcp_server)
-        thread.daemon = True
-        thread.start()
-        return thread
-
-    def send_audio_data(self, audio_data):
-        """TTS 오디오 데이터를 TCP로 전송"""
-        if not self.tcp_ready.is_set():
-            print(f"[{get_kr_time()}][TCP] ⚠️ 스피커 노드가 연결되어 있지 않습니다.")
-            return False
-            
+    def play_mp3_effect(self, file_name):
+        """MP3 효과음 재생 - VoiceCommand로 처리"""
         try:
-            # 데이터 크기 전송 (4바이트)
-            total_size = len(audio_data) * 4  # float32는 4바이트
-            kb_size = total_size / 1024
-            print(f"[{get_kr_time()}][TCP] 📤 오디오 데이터 전송 시작: {kb_size:.2f}KB")
-            self.tcp_client.send(total_size.to_bytes(4, byteorder='big'))
-            
-            # 청크 단위로 전송
-            chunks_sent = 0
-            for i in range(0, len(audio_data), CHUNK):
-                chunk = audio_data[i:i + CHUNK]
-                if len(chunk) < CHUNK:
-                    chunk = np.pad(chunk, (0, CHUNK - len(chunk)))
-                self.tcp_client.send(chunk.tobytes())
-                chunks_sent += 1
-                
-                # 큰 오디오 데이터인 경우에만 진행 상황 표시
-                if total_size > 100000 and chunks_sent % 20 == 0:
-                    progress = min(100, int((i+CHUNK) * 100 / len(audio_data)))
-                    print(f"[{get_kr_time()}][TCP] 🔄 오디오 전송 중: {progress}% 완료")
-            
-            print(f"[{get_kr_time()}][TCP] ✅ 오디오 데이터 전송 완료: {chunks_sent}개 청크")
-            return True
-            
-        except Exception as e:
-            print(f"[{get_kr_time()}][TCP] ❌ 전송 오류: {str(e)}")
-            print(f"[{get_kr_time()}][TCP] 🔄 연결 상태 초기화 ({HARDWARE_HANDLER_IP}:{SPEAKER_PORT})")
-            self.tcp_ready.clear()
-            return False
-
-    def play_mp3_file(self, file_name):
-        """MP3 파일을 재생하여 TCP로 전송"""
-        file_path = os.path.join(MP3_EFFECTS_DIR, file_name)
-        if not os.path.exists(file_path):
-            log("ERROR", f"MP3 파일을 찾을 수 없습니다: {file_path}")
-            return False
-        
-        log("MP3", f"파일 로드 중: {file_name}")
-        
-        try:
-            # MP3 파일을 pydub로 직접 로드
-            sound = AudioSegment.from_mp3(file_path)
-            
-            # 모노 변환 (필요시)
-            if sound.channels > 1:
-                sound = sound.set_channels(1)
-            
-            # 샘플링 레이트 변환 (필요시)
-            if sound.frame_rate != TTS_RATE:
-                sound = sound.set_frame_rate(TTS_RATE)
-            
-            # 16비트로 설정 (필요시)
-            sound = sound.set_sample_width(2)
-            
-            # 오디오 데이터를 numpy 배열로 변환 및 처리
-            samples = np.array(sound.get_array_of_samples())
-            audio_float32 = process_audio_data(samples)
-            
-            # float32 형식으로 오디오 데이터 전송
-            log("AUDIO", "MP3 오디오 데이터 전송 중... (볼륨 3dB 증가)")
-            success = self.send_audio_data(audio_float32)
-            
-            if success:
-                log("AUDIO", f"MP3 전송 완료: {file_name}")
+            # VoiceCommand 메시지를 통해 speaker_node2에 전송
+            # speaker_node2에서 실제 MP3 파일 처리를 담당함
+            if self.talker_node:
+                robot_id = self.current_robot_id or "libo_a"
+                self.talker_node.publish_voice_command(robot_id, "mp3_effect", file_name)
+                log("MP3", f"MP3 효과음 재생 요청: {file_name}")
+                return True
             else:
-                log("AUDIO", f"❌ MP3 전송 실패: {file_name}")
-            
-            return success
-        
+                log("ERROR", "talker_node가 설정되지 않았습니다. VoiceCommand를 발행할 수 없습니다.")
+                return False
         except Exception as e:
-            # MP3 파일 로드 실패 시 TTS로 대체
-            log("WARNING", f"MP3 파일 로드 실패, TTS로 대체: {str(e)}")
-            return self.play_tts_response(f"효과음 {file_name}을 재생하려 했으나 실패했습니다.")
+            log("WARNING", f"MP3 효과음 재생 요청 실패: {str(e)}")
+            return False
     
     def play_tts_response(self, text):
-        """텍스트를 TTS로 변환하여 TCP로 전송"""
+        """텍스트를 TTS로 변환하여 VoiceCommand로 전송"""
         try:
-            log("TTS", f"음성 응답 생성 중: {text}")
+            log("TTS", f"음성 응답 요청: {text}")
+            
+            # VoiceCommand 메시지를 통해 speaker_node2에 전송
+            # speaker_node2에서 실제 TTS 처리를 담당함
+            if self.talker_node:
+                robot_id = self.current_robot_id or "libo_a"
                 
-            synthesis_input = texttospeech.SynthesisInput(text=text)
-            
-            voice = texttospeech.VoiceSelectionParams(
-                language_code="ko-KR",
-                name="ko-KR-Standard-A",
-                ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
-            )
-            
-            audio_config = texttospeech.AudioConfig(
-                audio_encoding=texttospeech.AudioEncoding.LINEAR16,
-                sample_rate_hertz=TTS_RATE,
-            )
-            
-            tts_response = tts_client.synthesize_speech(
-                input=synthesis_input,
-                voice=voice,
-                audio_config=audio_config
-            )
-            
-            # 오디오 데이터를 float32로 변환 및 처리
-            audio_data = np.frombuffer(tts_response.audio_content, dtype=np.int16)
-            audio_float32 = process_audio_data(audio_data)
-            
-            # TCP를 통해 스피커 노드로 전송
-            log("AUDIO", "TTS 오디오 데이터 전송 중... (볼륨 3dB 증가)")
-            success = self.send_audio_data(audio_float32)
-            
-            if success:
-                log("AUDIO", "TTS 전송 완료")
+                # text를 그대로 action으로 사용하는 대신, 
+                # 1) 기존 메시지를 미리 정의된 액션에 매핑하거나
+                # 2) text를 ROS 메시지 파라미터로 전달할 수 있음
+                
+                # 1번 방법: 일반적인 메시지는 미리 정의된 액션으로 매핑
+                if text == "네?":
+                    self.talker_node.publish_voice_command(robot_id, "voice_command", "wake_response")
+                elif text == "일시정지합니다.":
+                    self.talker_node.publish_voice_command(robot_id, "voice_command", "pause_assist")
+                elif text == "어시스트를 재개합니다.":
+                    self.talker_node.publish_voice_command(robot_id, "voice_command", "resume_assist")
+                elif "효과음" in text and "실패했습니다" in text:
+                    self.talker_node.publish_voice_command(robot_id, "error", "mp3_file_failed")
+                else:
+                    # 그 외 일반 텍스트는 dynamic_tts 카테고리로 전달
+                    # speaker_node2.py에서 이 텍스트를 직접 TTS 변환
+                    self.talker_node.publish_voice_command(robot_id, "dynamic_tts", text)
+                
+                # 얼굴 표정 변경 (발화 중)
+                self.talker_node.publish_face_expression(robot_id, "speaking")
+                
+                log("TTS", "TTS 요청 전송 완료")
+                return True
             else:
-                log("AUDIO", "❌ TTS 전송 실패")
-                
-            return success
+                log("ERROR", "talker_node가 설정되지 않았습니다. VoiceCommand를 발행할 수 없습니다.")
+                return False
         except Exception as e:
-            log("ERROR", f"TTS 생성/전송 오류: {str(e)}")
+            log("ERROR", f"TTS 요청 전송 오류: {str(e)}")
             return False
             
     def play_voice_command(self, category, action):
@@ -605,20 +478,27 @@ class CommunicationManager:
             bool: 성공 여부
         """
         try:
-            # 직접 처리하는 대신 VoiceCommand 메시지를 통해 speaker_node에 전송
-            # speaker_node에서 실제 음성 명령 처리
+            # VoiceCommand 메시지를 통해 speaker_node2에 전송
+            # speaker_node2에서 실제 음성 명령 처리
             log("VOICE", f"음성 명령 요청: {category}.{action}")
             
-            # 기본 응답은 TTS로 처리
-            if action == "called_by_staff":
-                return self.play_tts_response("네?")
-            elif category == "assist" and action == "pause":
-                return self.play_tts_response("일시정지합니다.")
-            elif category == "assist" and action == "resume":
-                return self.play_tts_response("어시스트를 재개합니다.")
+            if self.talker_node:
+                robot_id = self.current_robot_id or "libo_a"
+                
+                # 각 카테고리와 액션에 맞게 voice_command 메시지 발행
+                voice_category = "voice_command"  # 기본 카테고리
+                
+                # 액션은 그대로 전달하되, 필요에 따라 매핑 가능
+                # 예: called_by_staff -> staff_call 등으로 변환 가능
+                self.talker_node.publish_voice_command(robot_id, voice_category, action)
+                
+                # 얼굴 표정 변경 (발화 중)
+                self.talker_node.publish_face_expression(robot_id, "speaking")
+                
+                return True
             else:
-                # 그 외 명령은 기본 TTS 응답 제공
-                return self.play_tts_response(f"{action} 명령을 처리합니다.")
+                log("ERROR", "talker_node가 설정되지 않았습니다. VoiceCommand를 발행할 수 없습니다.")
+                return False
         except Exception as e:
             log("ERROR", f"음성 명령 실행 오류: {str(e)}")
             return False
@@ -626,10 +506,6 @@ class CommunicationManager:
     def cleanup(self):
         """모든 리소스 정리"""
         self.stop_event.set()
-        if self.tcp_client:
-            self.tcp_client.close()
-        if self.tcp_server:
-            self.tcp_server.close()
         if self.udp_sock:
             self.udp_sock.close()
 
@@ -999,7 +875,7 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
         transcript = recognize_speech(recognizer, tmp_wav)
         if transcript is None:
             log("STT", "음성 인식 실패")
-            talker_node.publish_voice_command(robot_id, "voice_command", "speech_recognition_failed")
+            talker_node.publish_voice_command(robot_id, "voice_command", "ignore")
             return
         
         log("STT", f"인식된 텍스트: '{transcript}'")
@@ -1052,29 +928,27 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
             
         elif intent == "get_mode":
             # 현재 모드 확인
-            log("ACTION", "현재 모드 확인")
-            mode_name = "제스처 모드" if CURRENT_MODE == GESTURE_MODE else "팔로우 모드"
+            log("ACTION", "현재 모드 확인 명령 처리")
             
-            # 동적 메시지 생성을 위해 커스텀 액션 사용
-            # 직접 문자열 생성 대신 토픽으로 현재 모드 전송
+            # 현재 모드에 따라 동적 액션 전송
             if CURRENT_MODE == GESTURE_MODE:
-                talker_node.publish_voice_command(robot_id, "voice_command", "current_mode_gesture")
+                talker_node.publish_voice_command(robot_id, "voice_command", "mode_gesture")
             else:
-                talker_node.publish_voice_command(robot_id, "voice_command", "current_mode_follow")
+                talker_node.publish_voice_command(robot_id, "voice_command", "mode_follow")
             
         elif intent == "get_weight":
             # 책 무게 확인 - ESP에서 발행하는 /weight_data 토픽에서 값 가져오기
             log("ACTION", "책 무게 확인 명령 처리")
             
-            # VoiceCommand로 무게 정보 요청 전송
-            talker_node.publish_voice_command(robot_id, "voice_command", "weight_info")
+            # 현재 저장된 무게 정보를 소수점 3자리까지 포맷팅
+            weight_value = round(talker_node.current_weight, 3)
+            weight_action = f"get_weight_{weight_value}"
+            
+            # VoiceCommand로 무게 정보 전송 (동적 액션)
+            talker_node.publish_voice_command(robot_id, "voice_command", weight_action)
             
             # 현재 저장된 무게 정보 로그에 출력
-            log("INFO", f"현재 무게 정보: {talker_node.current_weight}{talker_node.weight_unit}")
-            
-            # 더 자세한 안내 메시지 추가 (TTS 변환용)
-            weight_msg = f"현재 책의 무게는 {talker_node.current_weight} {talker_node.weight_unit} 입니다."
-            comm_manager.play_tts_response(weight_msg)
+            log("INFO", f"현재 무게 정보: {weight_value}{talker_node.weight_unit}")
             
         elif intent == "stop_assist":
             # 작업 중지 및 복귀
@@ -1090,13 +964,13 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
         else:
             # 알 수 없는 의도
             log("ACTION", f"알 수 없는 의도: {intent}")
-            talker_node.publish_voice_command(robot_id, "voice_command", "unknown_intent")
+            talker_node.publish_voice_command(robot_id, "voice_command", "ignore")
             
     except Exception as e:
         log("ERROR", f"음성 명령 처리 중 오류 발생: {str(e)}")
         traceback.print_exc()
         try:
-            talker_node.publish_voice_command(robot_id, "voice_command", "error")
+            talker_node.publish_voice_command(robot_id, "voice_command", "ignore")
         except:
             pass
     # 함수 종료 - 이제 명확한 처리 흐름으로 중복된 코드를 제거했습니다
@@ -1130,11 +1004,10 @@ def main(args=None):
     comm_manager = CommunicationManager()
     log("STATUS", "⚠️ 토커매니저 초기 상태: 비활성화 (웨이크워드 감지 불가능 - ActivateTalker 서비스 호출 필요)")
     
-    # UDP 수신기 및 TCP 서버 시작 (비동기)
+    # UDP 수신기 시작 (비동기)
     udp_thread = comm_manager.start_udp_receiver()
-    tcp_thread = comm_manager.start_tcp_server()
 
-    # ========== 2. ROS2 노드 생성 (FaceExpression 메시지 발행용) ==========
+    # ========== 2. ROS2 노드 생성 (VoiceCommand 메시지 발행용) ==========
     log("INIT", "ROS2 노드 생성 중...")
     talker_node = TalkerNode(comm_manager)
     
@@ -1225,6 +1098,9 @@ def main(args=None):
                         robot_id = "libo_a"  # 기본 로봇 ID
                         log("WAKE", "🟢 Wakeword('리보야') 감지됨!")
                         
+                        # 웨이크워드 감지 시 VoiceCommand 발행 (스피커에게 응답음 재생 요청)
+                        talker_node.publish_voice_command(robot_id, "voice_command", "wake_response")
+                        
                         # 웨이크워드 감지 시 'stop' 명령 바로 발행
                         log("COMMAND", f"TalkCommand 발행: robot_id={robot_id}, action=stop")
                         talker_node.publish_talk_command(robot_id, "stop")
@@ -1265,8 +1141,6 @@ def main(args=None):
             # 스레드 종료 대기
             if 'udp_thread' in locals() and udp_thread.is_alive():
                 udp_thread.join(timeout=2.0)
-            if 'tcp_thread' in locals() and tcp_thread.is_alive():
-                tcp_thread.join(timeout=2.0)
                 
         # ROS2 종료
         if 'talker_node' in locals():
