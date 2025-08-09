@@ -46,7 +46,7 @@ ros2 run hardware_handler mic_streamer2
 ros2 run hardware_handler speaker_node2
 ros2 run hardware_handler heartbeat_sender
 ros2 run libo_gui robot_face_gui 
-ros2 run hardware_handler cam_sender
+ros2 run hardware_handler cam_sender            -> rear임.
 ros2 run hardware_handler cam_sender_front
 
 ros2 launch ascamera nuwa.launch.py -> depth camera, depth_ws 워크스페이스
@@ -61,6 +61,7 @@ ros2 run ai_service human_detector_node
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < Hand Gesture AI Server > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 python3 hand_gesture_detector.py                -> 파이썬 3.10 가상환경으로 실행
 ros2 run ai_service hand_gesture_detector_ros2_bridge
+ros2 run ai_service gesture_control_node
 
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < Kiosk GUI > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
