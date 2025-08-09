@@ -159,6 +159,7 @@ def analyze_intent(client, transcript):
     - get_mode: '지금 어떤 모드야?' 등 현재 모드 확인 명령
     - get_weight: '지금 무게 얼마나 돼?', '지금 책 무게는?' 등 책 무게 확인 명령
     - stop_assist: '이제 그만하고 복귀하자', '제스쳐 모드 중지', '어시스트 중지' 등 작업 중지 명령
+    - get_weather: '오늘 날씨 어때?' 등 날씨 확인 명령
     - ignore: '아니야 잘못불렀어', '오늘 날씨 어때' 등 무시할만한 명령
 
     결과는 반드시 다음 JSON 형식으로만 출력해야 합니다:
@@ -796,6 +797,54 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
             log("ACTION", "작업 중지 및 복귀 명령 처리")
             talker_node.call_end_task(robot_id)
             talker_node.publish_voice_command(robot_id, "voice_command", "stop_assist")
+            
+        elif intent == "get_weather":
+            # 날씨 정보 확인
+            log("ACTION", "날씨 정보 확인 명령 처리")
+            
+            try:
+                # OpenAI API를 사용하여 가산디지털단지역 날씨 정보 생성
+                weather_prompt = """
+                오늘 가산디지털단지역의 날씨 정보를 간단하게 전달하는 내용을 작성해주세요.
+                실제 날씨 정보가 아닌 일반적인 날씨 안내 멘트로 작성하되, 
+                "오늘 가산디지털단지 날씨는 맑고 기온은 25도 정도입니다. 외출하기 좋은 날씨네요!"와 같은 형식으로 
+                자연스럽고 친근한 톤으로 작성해주세요.
+                
+                반드시 다음 JSON 형식으로만 출력해야 합니다:
+                {"weather_info": "날씨 정보 내용"}
+                """
+                
+                completion = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": weather_prompt},
+                        {"role": "user", "content": "가산디지털단지역 날씨 알려줘"}
+                    ]
+                )
+                
+                weather_response = completion.choices[0].message.content
+                log("GPT", f"날씨 응답: {weather_response}")
+                
+                # JSON 파싱하여 weather_info 추출
+                import json
+                try:
+                    weather_data = json.loads(weather_response)
+                    weather_info = weather_data.get("weather_info", "날씨 정보를 가져올 수 없습니다.")
+                except json.JSONDecodeError:
+                    # JSON 파싱 실패 시 정규식으로 추출 시도
+                    match = re.search(r'{"weather_info":\s*"([^"]+)"}', weather_response)
+                    if match:
+                        weather_info = match.group(1)
+                    else:
+                        weather_info = "날씨 정보를 처리할 수 없습니다."
+                
+                # 동적 TTS로 날씨 정보 전송
+                talker_node.publish_voice_command(robot_id, "dynamic_tts", weather_info)
+                log("WEATHER", f"날씨 정보 전송: {weather_info}")
+                
+            except Exception as e:
+                log("ERROR", f"날씨 정보 처리 중 오류: {str(e)}")
+                talker_node.publish_voice_command(robot_id, "voice_command", "ignore")
             
         elif intent == "ignore":
             # 무시할 명령
