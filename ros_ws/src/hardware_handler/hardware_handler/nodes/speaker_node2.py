@@ -318,14 +318,15 @@ class SpeakerNode(Node):
                     # 클리핑 방지
                     audio_float32 = np.clip(audio_float32, -1.0, 1.0)
                     
-                    # 오디오 큐에 추가하여 재생
+                    # 직접 스트림으로 재생
+                    print(f"[{get_kr_time()}][AUDIO] MP3 효과음 '{file_name}' 재생 시작 (길이: {len(audio_float32)} 샘플)")
                     for i in range(0, len(audio_float32), CHUNK):
                         chunk = audio_float32[i:i + CHUNK]
                         if len(chunk) < CHUNK:
                             chunk = np.pad(chunk, (0, CHUNK - len(chunk)))
-                        self.audio_queue.put(chunk.tobytes())
+                        self.stream.write(chunk.tobytes())
                     
-                    print(f"[{get_kr_time()}][AUDIO] MP3 효과음 '{file_name}' 큐에 추가 완료 (길이: {len(audio_float32)} 샘플)")
+                    print(f"[{get_kr_time()}][AUDIO] MP3 효과음 '{file_name}' 재생 완료")
                     return True
                 except Exception as e:
                     print(f"[{get_kr_time()}][ERROR] MP3 처리 중 오류 발생: {str(e)}")
@@ -378,17 +379,17 @@ class SpeakerNode(Node):
             # 클리핑 방지 (값이 1.0을 넘지 않도록)
             audio_float32 = np.clip(audio_float32, -1.0, 1.0)
             
-            # 오디오 데이터를 큐에 추가하여 재생
-            print(f"[{get_kr_time()}][AUDIO] TTS 오디오 데이터 추가 중... (볼륨 3dB 증가)")
+            # 직접 스트림으로 재생
+            print(f"[{get_kr_time()}][AUDIO] TTS 오디오 재생 시작... (볼륨 3dB 증가)")
             
-            # 데이터를 바이트로 변환하여 큐에 추가
+            # 데이터를 바이트로 변환하여 직접 재생
             for i in range(0, len(audio_float32), CHUNK):
                 chunk = audio_float32[i:i + CHUNK]
                 if len(chunk) < CHUNK:
                     chunk = np.pad(chunk, (0, CHUNK - len(chunk)))
-                self.audio_queue.put(chunk.tobytes())
+                self.stream.write(chunk.tobytes())
             
-            print(f"[{get_kr_time()}][AUDIO] TTS 데이터 큐 추가 완료 (길이: {len(audio_float32)})")
+            print(f"[{get_kr_time()}][AUDIO] TTS 재생 완료 (길이: {len(audio_float32)} 샘플)")
             return True
             
         except Exception as e:
