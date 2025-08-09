@@ -28,6 +28,10 @@ ros2 run stock stock_gui
 
 ros2 run libo_navigator navigator_node
 
+< HW Handler 실행 >
+ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200 ->  esp
+esp RESET 누르기
+
 
 ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ < rviz2 실행 > ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ
 ros2 launch vicpinky_navigation nav2_view.launch.xml
@@ -50,7 +54,6 @@ ros2 run hardware_handler cam_sender            -> rear임.
 ros2 run hardware_handler cam_sender_front
 
 ros2 launch ascamera nuwa.launch.py -> depth camera, depth_ws 워크스페이스
-ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200 ->  esp
 
 python3 strongsort_client.py                    -> 파이썬 3.10 가상환경으로 실행
 ros2 run ai_service ros2_bridege_node
