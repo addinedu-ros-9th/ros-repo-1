@@ -147,49 +147,6 @@ def process_audio_data(audio_data, volume_factor=1.4):
     
     return audio_float32
 
-def create_tts_audio(tts_client, text, rate=TTS_RATE):
-    """텍스트를 TTS 오디오 데이터로 변환"""
-    synthesis_input = texttospeech.SynthesisInput(text=text)
-    
-    voice = texttospeech.VoiceSelectionParams(
-        language_code="ko-KR",
-        name="ko-KR-Standard-A",
-        ssml_gender=texttospeech.SsmlVoiceGender.FEMALE,
-    )
-    
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.LINEAR16,
-        sample_rate_hertz=rate,
-    )
-    
-    try:
-        tts_response = tts_client.synthesize_speech(
-            input=synthesis_input,
-            voice=voice,
-            audio_config=audio_config
-        )
-        return tts_response
-    except Exception as e:
-        log("TTS", f"음성 합성 실패: {str(e)}")
-        return None
-
-def play_wake_response(comm_manager, talker_node=None, robot_id="libo_a"):
-    """웨이크워드 감지 후 응답 생성 및 재생"""
-    success = False
-    
-    # TalkCommand 토픽 발행
-    if talker_node:
-        # TalkCommand 토픽으로 stop 액션 전송
-        talker_node.publish_talk_command(robot_id, "stop")
-        log("ROS", f"TalkCommand 발행 - robot_id: {robot_id}, action: stop")
-        
-        # VoiceCommand 토픽으로 wake_response 명령 전송
-        talker_node.publish_voice_command(robot_id, "voice_command", "wake_response")
-        log("ROS", f"VoiceCommand 발행 - robot_id: {robot_id}, category: voice_command, action: wake_response")
-        success = True
-    
-    return success
-
 def recognize_speech(recognizer, audio_file_path):
     """음성을 텍스트로 변환"""
     transcript = None
@@ -977,21 +934,6 @@ def process_voice_command(comm_manager, talker_node, recognizer, client, robot_i
     return
 
 
-def init_tcp_server():
-    """TCP 서버 초기화 및 클라이언트 대기"""
-    global tcp_server, tcp_client
-    
-    # TCP 서버 소켓 생성
-    log("TCP", "🔊 글로벌 TCP 서버 초기화 중...")
-    tcp_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcp_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    tcp_server.bind((HARDWARE_HANDLER_IP, SPEAKER_PORT))
-    tcp_server.listen(1)
-    
-    log("TCP", f"🎧 스피커 노드 연결 대기 중... ({HARDWARE_HANDLER_IP}:{SPEAKER_PORT})")
-    tcp_client, addr = tcp_server.accept()
-    log("TCP", f"✅ 스피커 노드 연결됨: {addr} → {HARDWARE_HANDLER_IP}:{SPEAKER_PORT}")
-
 def main(args=None):
     # ROS2 초기화
     rclpy.init(args=args)
@@ -1000,7 +942,6 @@ def main(args=None):
     log("INIT", "🚀 통신 관리자 초기화 중...")
     log("NETWORK", "📡 네트워크 설정 요약:")
     log("NETWORK", f"🎤 UDP 서버: {HARDWARE_HANDLER_IP}:{MIC_STREAM_PORT} - 마이크 스트림")
-    log("NETWORK", f"🔊 TCP 서버: {HARDWARE_HANDLER_IP}:{SPEAKER_PORT} - 스피커 출력")
     comm_manager = CommunicationManager()
     log("STATUS", "⚠️ 토커매니저 초기 상태: 비활성화 (웨이크워드 감지 불가능 - ActivateTalker 서비스 호출 필요)")
     
