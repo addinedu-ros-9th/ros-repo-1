@@ -308,8 +308,8 @@ class SpeakerNode(Node):
                     if sound.channels != CHANNELS:
                         sound = sound.set_channels(CHANNELS)
                         
-                    # 볼륨 약간 증가 (3dB)
-                    sound = sound + 3
+                    # 볼륨 증가 (6dB)
+                    sound = sound + 6
                     
                     # float32 데이터로 변환
                     samples = np.array(sound.get_array_of_samples())
@@ -373,14 +373,14 @@ class SpeakerNode(Node):
             audio_data = np.frombuffer(tts_response.audio_content, dtype=np.int16)
             audio_float32 = audio_data.astype(np.float32) / 32768.0
             
-            # 볼륨 3dB 증가 (약 1.4배)
-            audio_float32 *= 1.4
+            # 볼륨 6dB 증가 (약 2배)
+            audio_float32 *= 2.0
             
             # 클리핑 방지 (값이 1.0을 넘지 않도록)
             audio_float32 = np.clip(audio_float32, -1.0, 1.0)
             
             # 직접 스트림으로 재생
-            print(f"[{get_kr_time()}][AUDIO] TTS 오디오 재생 시작... (볼륨 3dB 증가)")
+            print(f"[{get_kr_time()}][AUDIO] TTS 오디오 재생 시작... (볼륨 6dB 증가)")
             
             # 데이터를 바이트로 변환하여 직접 재생
             for i in range(0, len(audio_float32), CHUNK):
