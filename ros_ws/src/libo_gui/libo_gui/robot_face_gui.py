@@ -6,7 +6,7 @@ from rclpy.node import Node
 from std_msgs.msg import String
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from PyQt5.QtGui import QPainter, QColor, QPen, QBrush, QFont
+from PyQt5.QtGui import QPainter, QColor, QPen, QBrush, QFont, QKeyEvent
 from PyQt5 import uic
 import math
 import os
@@ -399,19 +399,27 @@ class RobotFaceGUI(QMainWindow):
         
     def setup_connections(self):
         """새로운 버튼 연결 설정"""
-        # 기본 상태 버튼들
-        self.normal_button.clicked.connect(lambda: self.change_face_state("normal"))
-        self.focused_button.clicked.connect(lambda: self.change_face_state("focused"))
-        self.charging_button.clicked.connect(lambda: self.change_face_state("charging"))
-        self.heavy_button.clicked.connect(lambda: self.change_face_state("heavy"))
-        
-        # 특별 표정 버튼들
-        self.happy_button.clicked.connect(lambda: self.change_face_state("happy"))
-        self.sad_button.clicked.connect(lambda: self.change_face_state("sad"))
-        
-        # 음성 상태 버튼들 (FaceExpression으로 통일)
-        self.listening_button.clicked.connect(lambda: self.change_face_state("listening"))
-        self.speaking_button.clicked.connect(lambda: self.change_face_state("speaking"))
+        # 버튼들이 제거되어 연결 설정이 필요 없음
+        pass
+    
+    def keyPressEvent(self, event: QKeyEvent):
+        """키 입력 이벤트 처리 - 전체화면 전환"""
+        if event.key() == Qt.Key_F11 or event.key() == Qt.Key_F:
+            # F11 또는 F 키를 누르면 전체화면 전환
+            if self.isFullScreen():
+                self.showNormal()
+                print("🖥️ 전체화면 해제")
+            else:
+                self.showFullScreen()
+                print("🖥️ 전체화면 모드")
+        elif event.key() == Qt.Key_Escape:
+            # ESC 키를 누르면 전체화면 해제
+            if self.isFullScreen():
+                self.showNormal()
+                print("🖥️ ESC 키로 전체화면 해제")
+        else:
+            # 다른 키는 기본 처리
+            super().keyPressEvent(event)
             
     def change_face_state(self, state):
         """FaceExpression 상태 변경"""
@@ -538,6 +546,7 @@ def main(args=None):
     print("   🎭 지원 표정: normal, focused, charging, heavy, happy, sad, listening, speaking")
     print("   🔗 ROS2 토픽: /face_expression (FaceExpression으로 통일)")
     print("   🎯 상태 시스템: 모든 상태가 FaceExpression으로 통일")
+    print("   🖥️ 전체화면: F11 또는 F 키로 전체화면 전환, ESC 키로 해제")
     
     # 애플리케이션 실행
     try:
