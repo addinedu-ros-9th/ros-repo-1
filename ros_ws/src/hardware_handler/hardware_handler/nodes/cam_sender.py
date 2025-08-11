@@ -41,6 +41,7 @@ def main(args=None):
 
     # 사용할 카메라의 고정 경로
     WEBCAM_PATH = '/dev/my_webcam'
+    # WEBCAM_PATH = 0
     
     # ===== 스레드 간 데이터 전송을 위한 큐 생성 =====
     # 각 목적지별로 독립된 큐를 생성합니다.
