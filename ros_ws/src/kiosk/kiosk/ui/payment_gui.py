@@ -147,7 +147,7 @@ class BarcodeScannerThread(QThread):
             os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)
             
             # OpenCV VideoCapture 초기화 (imutils 대신)
-            self.cap = cv2.VideoCapture(2)
+            self.cap = cv2.VideoCapture(0)
             if not self.cap.isOpened():
                 self.status_update.emit("❌ 카메라를 열 수 없습니다.")
                 return
@@ -281,6 +281,9 @@ class PaymentGUI(QObject):
         # ===== RFID 관련 새로운 기능 =====
         self.setup_rfid_subscribers()
         self.rfid_payment_active = False
+        self.rfid_dialog = None
+        self.rfid_status_label = None
+        self._rfid_detected = False
         
         # ROS2 스핀을 위한 타이머 설정 (스레드 충돌 방지)
         self.ros_timer = QTimer()
@@ -528,9 +531,26 @@ class PaymentGUI(QObject):
             if "CARD_ID:" in rfid_data:
                 card_id = rfid_data.split("CARD_ID:")[1].split(",")[0]
                 print(f"💳 카드 ID: {card_id}")
-                
-                # 즉시 결제 처리
-                QTimer.singleShot(100, self.process_rfid_payment)
+                # 결제 다이얼로그가 열려있으면 다이얼로그를 닫고 이후 흐름에서 처리
+                if self.rfid_dialog is not None and self.rfid_dialog.isVisible():
+                    self._rfid_detected = True
+                    try:
+                        if self.rfid_status_label is not None:
+                            self.rfid_status_label.setText("✅ RFID 카드 인식 완료!")
+                            self.rfid_status_label.setStyleSheet("""
+                                QLabel {
+                                    font-size: 16px;
+                                    font-weight: bold;
+                                    color: #28a745;
+                                    padding: 10px;
+                                }
+                            """)
+                    except Exception:
+                        pass
+                    QTimer.singleShot(100, self.rfid_dialog.accept)
+                else:
+                    # 평소처럼 즉시 처리 (다이얼로그가 없을 때)
+                    QTimer.singleShot(100, self.process_rfid_payment)
             
         except Exception as e:
             print(f"❌ RFID 데이터 처리 오류: {e}")
@@ -619,7 +639,7 @@ class PaymentGUI(QObject):
             layout.setContentsMargins(40, 40, 40, 40)
             
             # 성공 아이콘 + 제목
-            title_label = QLabel("🎉 RFID 결제가 완료되었습니다!")
+            title_label = QLabel("RFID 결제가 완료되었습니다!")
             title_label.setAlignment(Qt.AlignCenter)
             title_label.setStyleSheet("""
                 QLabel {
@@ -634,15 +654,14 @@ class PaymentGUI(QObject):
             # 결제 정보 상세
             info_text = f"""
 💳 결제 방식: RFID 카드 결제
-📚 구매 도서: {len(self.cart)}권
 💰 총 결제 금액: ₩{self.total_amount:,}
-
-📦 재고가 자동으로 업데이트되었습니다.
-이용해 주셔서 감사합니다! 📖
+이용해 주셔서 감사합니다
             """
             
             info_label = QLabel(info_text)
             info_label.setAlignment(Qt.AlignCenter)
+            info_label.setWordWrap(True)
+            info_label.setMinimumHeight(50)
             info_label.setStyleSheet("""
                 QLabel {
                     font-size: 16px;
@@ -985,7 +1004,7 @@ class PaymentGUI(QObject):
         QMessageBox.information(
             self.dialog, 
             "추가 완료", 
-            f"'{cart_item.title}'이(가)\n장바구니에 추가되었습니다! 🛒"
+            f"'{cart_item.title}'이(가)\n장바구니에 추가되었습니다!"
         )
     
     def update_cart_display(self):
@@ -1108,13 +1127,14 @@ class PaymentGUI(QObject):
     
     def request_rfid_authentication(self):
         """RFID 카드 인증 요청"""
-        # RFID 인증 다이얼로그 생성
-        rfid_dialog = QDialog(self.dialog)
-        rfid_dialog.setWindowTitle("💳 RFID 카드 결제")
-        rfid_dialog.setFixedSize(450, 350)
-        rfid_dialog.setModal(True)
+        # RFID 인증 다이얼로그 생성 (인스턴스 보관)
+        self._rfid_detected = False
+        self.rfid_dialog = QDialog(self.dialog)
+        self.rfid_dialog.setWindowTitle("💳 RFID 카드 결제")
+        self.rfid_dialog.setFixedSize(450, 350)
+        self.rfid_dialog.setModal(True)
         
-        layout = QVBoxLayout(rfid_dialog)
+        layout = QVBoxLayout(self.rfid_dialog)
         layout.setSpacing(20)
         layout.setContentsMargins(30, 30, 30, 30)
         
@@ -1152,7 +1172,7 @@ RFID 카드를 리더기에 터치해주세요
         layout.addWidget(payment_info)
         
         # RFID 상태 표시
-        status_label = QLabel("🔄 RFID 카드를 기다리는 중...")
+        status_label = QLabel("RFID 카드를 기다리는 중...")
         status_label.setAlignment(Qt.AlignCenter)
         status_label.setStyleSheet("""
             QLabel {
@@ -1162,7 +1182,10 @@ RFID 카드를 리더기에 터치해주세요
                 padding: 10px;
             }
         """)
+        status_label.setMinimumHeight(20)
         layout.addWidget(status_label)
+        # 상태 라벨 보관해 콜백에서 업데이트할 수 있게 함
+        self.rfid_status_label = status_label
         
         # 버튼들
         button_layout = QHBoxLayout()
@@ -1181,49 +1204,25 @@ RFID 카드를 리더기에 터치해주세요
                 background: #7d8489;
             }
         """)
-        cancel_btn.clicked.connect(rfid_dialog.reject)
-        
-        # 임시 결제 완료 버튼 (실제로는 RFID 리더기에서 자동 처리)
-        simulate_btn = QPushButton("💳 결제 완료 (임시)")
-        simulate_btn.setStyleSheet("""
-            QPushButton {
-                background: #28a745;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 10px 20px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: #34ce57;
-            }
-        """)
-        
-        def simulate_rfid_success():
-            status_label.setText("✅ RFID 카드 인식 완료!")
-            status_label.setStyleSheet("""
-                QLabel {
-                    font-size: 16px;
-                    font-weight: bold;
-                    color: #28a745;
-                    padding: 10px;
-                }
-            """)
-            QTimer.singleShot(1000, rfid_dialog.accept)  # 1초 후 자동 닫기
-        
-        simulate_btn.clicked.connect(simulate_rfid_success)
-        
+        cancel_btn.clicked.connect(self.rfid_dialog.reject)
+
         button_layout.addWidget(cancel_btn)
-        button_layout.addWidget(simulate_btn)
         layout.addLayout(button_layout)
         
         # 다이얼로그 실행
-        if rfid_dialog.exec_() == QDialog.Accepted:
-            # RFID 인증 성공 시 결제 진행
-            print("✅ RFID 카드 결제 성공")
-            self.simulate_payment_success()
-        else:
-            print("❌ RFID 카드 결제가 취소되었습니다.")
+        result = self.rfid_dialog.exec_()
+        try:
+            if result == QDialog.Accepted:
+                print("✅ RFID 카드 결제 성공")
+                # 실제 결제 처리 수행
+                self.process_rfid_payment()
+            else:
+                print("❌ RFID 카드 결제가 취소되었습니다.")
+        finally:
+            # 참조 정리
+            self.rfid_dialog = None
+            self.rfid_status_label = None
+            self._rfid_detected = False
     
     def simulate_payment_success(self):
         """결제 성공 시뮬레이션 (임시)"""
@@ -1357,6 +1356,8 @@ RFID 카드를 리더기에 터치해주세요
             
             info_label = QLabel(info_text)
             info_label.setAlignment(Qt.AlignCenter)
+            info_label.setWordWrap(True)
+            info_label.setMinimumHeight(120)
             info_label.setStyleSheet("""
                 QLabel {
                     font-size: 14px;

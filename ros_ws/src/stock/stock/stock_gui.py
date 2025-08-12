@@ -94,7 +94,7 @@ class BarcodeScannerThread(QThread):
             # 🔧 Qt 충돌 방지를 위한 환경변수 설정
             os.environ.pop('QT_QPA_PLATFORM_PLUGIN_PATH', None)
             
-            self.vs = VideoStream(src=2).start()
+            self.vs = VideoStream(src=0).start()
             time.sleep(2.0)
             self.running = True
             self.status_update.emit("카메라가 준비되었습니다. 바코드를 비춰주세요.")

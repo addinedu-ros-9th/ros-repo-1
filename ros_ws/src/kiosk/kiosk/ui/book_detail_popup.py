@@ -25,9 +25,9 @@ class BookDetailPopup(QDialog):
         
         # 위치별 좌표 매핑 (waypoint.png 이미지 기준 - 778x416 크기)
         self.location_coordinates = {
-            'D5': (308, 526),   
-            'D7': (649, 527),  
-            'C8': (999, 507),
+            'D5': (315, 504),   
+            'D7': (593, 510),  
+            'C8': (877, 500),
         }
         
         self.init_ui()
